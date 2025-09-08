@@ -59,7 +59,6 @@ start_budget = 50_000_000               # Starting budget of your league, used t
 league_start_date = "2025-08-08"        # Start date of your league, used to filter activities, format: YYYY-MM-DD
 email = os.getenv("EMAIL_USER")         # Email to send recommendations to, can be the same as EMAIL_USER 
 
-Also laut ChatGPT Unicode mit Variation Selector-16
 # ---------------------------------------------------
 
 # Load environment variables and login to kickbase
