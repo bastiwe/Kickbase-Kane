@@ -1,9 +1,6 @@
-from kickbase_api.user_management import get_players_in_squad
+from kickbase_api.league import get_league_players_on_market
+from kickbase_api.user import get_players_in_squad
 from datetime import datetime, timedelta
-from kickbase_api.league_data import (
-    get_leagues_infos,
-    get_players_on_market,
-)
 from zoneinfo import ZoneInfo
 import pandas as pd
 import numpy as np
@@ -36,7 +33,6 @@ def live_data_predictions(today_df, model, features):
     return today_df_results
 
 
-# TODO Some players are not listed here, since they are missing in today_df results (never played for the team before)
 def join_current_squad(token, league_id, today_df_results):
     squad_players = get_players_in_squad(token, league_id)
 
@@ -62,14 +58,14 @@ def join_current_squad(token, league_id, today_df_results):
     # Keep only relevant columns
     squad_df = squad_df[["last_name", "team_name", "mv", "mv_change_yesterday", "predicted_mv_target", "s_11_prob"]]
 
-    return squad_df  # Debugging line to inspect the response structure
+    return squad_df 
 
 
 # TODO Add fail-safe check before player expires if the prob (starting 11) is still high, so no injuries or anything. if it dropped. dont bid / reccommend
 def join_current_market(token, league_id, today_df_results):
     """Join the live predictions with the current market data to get bid recommendations"""
 
-    players_on_market = get_players_on_market(token, league_id)
+    players_on_market = get_league_players_on_market(token, league_id)
 
     # players_on_market to DataFrame
     market_df = pd.DataFrame(players_on_market)
