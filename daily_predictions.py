@@ -108,4 +108,4 @@ print("\n=== Squad Recommendations ===")
 display(squad_recommendations_df)
 
 # Send email with recommendations
-send_mail(manager_budgets_df, market_recommendations_df, squad_recommendations_df, email)
+# send_mail(manager_budgets_df, market_recommendations_df, squad_recommendations_df, email)
