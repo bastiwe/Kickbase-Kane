@@ -28,5 +28,5 @@ jobs:
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
           KICK_USER: ${{ secrets.KICK_USER }}
           KICK_PASS: ${{ secrets.KICK_PASS }}
-        run: |
-          python daily_predictions_spaet.py
+        #run: |
+          #python daily_predictions_spaet.py
