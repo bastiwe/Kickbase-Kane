@@ -5,7 +5,7 @@ name: Run Daily Predictions Spaet
     #- cron: '45 21 * * *'  # Runs every day at 22:30 UTC
   workflow_dispatch:
 
-jobs:
+#jobs:
   run-daily-predictions:
     runs-on: ubuntu-latest
     steps:
