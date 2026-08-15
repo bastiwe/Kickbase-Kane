@@ -1,8 +1,8 @@
 name: Run Daily Predictions Spaet
 
-#on:
-  #schedule:
-    #- cron: '45 21 * * *'  # Runs every day at 22:30 UTC
+on:
+  schedule:
+    - cron: '45 21 * * *'  # Runs every day at 22:30 UTC
   workflow_dispatch:
 
 #jobs:
@@ -28,5 +28,5 @@ name: Run Daily Predictions Spaet
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
           KICK_USER: ${{ secrets.KICK_USER }}
           KICK_PASS: ${{ secrets.KICK_PASS }}
-        #run: |
-          #python daily_predictions_spaet.py
+        run: |
+          python daily_predictions_spaet.py
