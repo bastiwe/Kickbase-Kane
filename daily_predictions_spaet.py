@@ -56,8 +56,8 @@ pd.set_option("display.width", 1000)
 
 competition_ids = [1]                   # 1 = Bundesliga, 2 = 2. Bundesliga, 3 = La Liga
 league_name = "Die Spätzünder"          # Name of your league, must be exact match, can be done via env or hardcoded
-start_budget = 50_000_000               # Starting budget of your league, used to calculate current budgets of other managers
-league_start_date = "2025-09-03"        # Start date of your league, used to filter activities, format: YYYY-MM-DD
+start_budget = 80_000_000               # Starting budget of your league, used to calculate current budgets of other managers
+league_start_date = "2025-08-15"        # Start date of your league, used to filter activities, format: YYYY-MM-DD
 email = os.getenv("EMAIL_USER")         # Email to send recommendations to, can be the same as EMAIL_USER 
 # No Kane, no gain\u26BD\uFE0F
 # Die Spätzünder
@@ -108,4 +108,4 @@ print("\n=== Squad Recommendations ===")
 display(squad_recommendations_df)
 
 # Send email with recommendations
-# send_mail(manager_budgets_df, market_recommendations_df, squad_recommendations_df, email)
+send_mail(manager_budgets_df, market_recommendations_df, squad_recommendations_df, email)
