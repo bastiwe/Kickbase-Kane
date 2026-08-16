@@ -76,7 +76,7 @@ def add_recommendation_columns(df, is_market):
 
     return df
 
-def live_data_predictions(today_df, models, features):
+def live_data_predictions(today_df, models, features, history_df=None, season_start_date=None):
     """Make live data predictions for today_df using the trained model"""
 
     # Set features and copy df
@@ -86,6 +86,8 @@ def live_data_predictions(today_df, models, features):
     # Predict market value changes for all configured horizons
     for column, model in models.items():
         today_df_results[column] = np.round(model.predict(today_df_features), 2)
+
+    today_df_results = add_player_quality_signals(today_df_results, history_df, season_start_date)
 
     # Sort by predicted_mv_target descending
     today_df_results = today_df_results.sort_values("predicted_mv_target", ascending=False)
@@ -114,9 +116,72 @@ def live_data_predictions(today_df, models, features):
         "predicted_mv_target",
         "predicted_mv_target_3d",
         "predicted_mv_target_7d",
+        "last_season_points",
+        "last_season_avg_points",
+        "top_player_tag",
     ]]
 
     return today_df_results
+
+
+def add_player_quality_signals(today_df_results, history_df=None, season_start_date=None):
+    """Add last-season quality markers based on deduplicated matchday points."""
+
+    result = today_df_results.copy()
+    result["last_season_points"] = np.nan
+    result["last_season_avg_points"] = np.nan
+    result["top_player_tag"] = ""
+
+    if history_df is None or history_df.empty or not {"player_id", "md", "p"}.issubset(history_df.columns):
+        return result
+
+    history = history_df.copy()
+    history["md"] = pd.to_datetime(history["md"], errors="coerce")
+    history = history.dropna(subset=["player_id", "md", "p"])
+    if season_start_date:
+        season_start = pd.to_datetime(season_start_date)
+        history = history[(history["md"] < season_start) & (history["md"] >= season_start - pd.Timedelta(days=370))]
+
+    history = history.sort_values("md").drop_duplicates(["player_id", "md"], keep="last")
+    if history.empty:
+        return result
+
+    quality = (
+        history.groupby("player_id")
+        .agg(
+            last_season_points=("p", "sum"),
+            last_season_avg_points=("p", "mean"),
+            last_season_games=("p", "count"),
+        )
+        .reset_index()
+    )
+    quality = quality[quality["last_season_games"] >= 10]
+    if quality.empty:
+        return result
+
+    quality["quality_rank"] = quality["last_season_points"].rank(method="min", ascending=False)
+    enough_players_for_rank = len(quality) >= 50
+    quality["top_player_tag"] = np.select(
+        [
+            (quality["last_season_points"] >= 3000) | (enough_players_for_rank & (quality["quality_rank"] <= 10)),
+            (quality["last_season_points"] >= 2200)
+            | (enough_players_for_rank & (quality["quality_rank"] <= 30))
+            | ((quality["last_season_avg_points"] >= 110) & (quality["last_season_games"] >= 15)),
+        ],
+        ["Elite-Spieler", "Top-Spieler"],
+        default="",
+    )
+
+    quality = quality[[
+        "player_id",
+        "last_season_points",
+        "last_season_avg_points",
+        "top_player_tag",
+    ]]
+    result = result.drop(columns=["last_season_points", "last_season_avg_points", "top_player_tag"])
+    result = result.merge(quality, on="player_id", how="left")
+    result["top_player_tag"] = result["top_player_tag"].fillna("")
+    return result
 
 
 def join_current_squad(token, league_id, today_df_results, current_user_id=None):
@@ -162,6 +227,9 @@ def join_current_squad(token, league_id, today_df_results, current_user_id=None)
         "predicted_mv_target",
         "predicted_mv_target_3d",
         "predicted_mv_target_7d",
+        "last_season_points",
+        "last_season_avg_points",
+        "top_player_tag",
         "expected_change_pct",
         "expected_change_pct_3d",
         "expected_change_pct_7d",
@@ -206,15 +274,17 @@ def join_current_market(token, league_id, today_df_results, current_user_id=None
     bid_df = add_recommendation_columns(bid_df, is_market=True)
     own_open_bids_total = int(bid_df["has_open_bid"].sum())
 
-    # Drop weak recommendations from the market overview, but always keep your own open bids visible.
-    bid_df = bid_df[(bid_df["recommendation"] != "Watch") | (bid_df["has_open_bid"])]
+    has_top_player_tag = bid_df["top_player_tag"].fillna("").astype(str).ne("")
+    # Drop weak recommendations from the market overview, but always keep your own open bids and top players visible.
+    bid_df = bid_df[(bid_df["recommendation"] != "Watch") | (bid_df["has_open_bid"]) | has_top_player_tag]
 
-    # Sort own open bids first, then urgent expiring offers, then by expected absolute profit and relative upside.
+    # Sort own open bids first, then season stars, urgent expiring offers, and expected upside.
     bid_df["own_bid_rank"] = np.where(bid_df["has_open_bid"], 0, 1)
+    bid_df["top_player_rank"] = np.where(bid_df["top_player_tag"].fillna("").astype(str).ne(""), 0, 1)
     bid_df["risk_rank"] = bid_df["risk"].map({"Night expiry": 0, "Before MV update": 1}).fillna(2)
     bid_df = bid_df.sort_values(
-        ["own_bid_rank", "risk_rank", "predicted_mv_target", "expected_change_pct"],
-        ascending=[True, True, False, False],
+        ["own_bid_rank", "top_player_rank", "risk_rank", "predicted_mv_target", "expected_change_pct"],
+        ascending=[True, True, True, False, False],
     )
 
     # Keep only relevant columns
@@ -231,6 +301,9 @@ def join_current_market(token, league_id, today_df_results, current_user_id=None
         "predicted_mv_target",
         "predicted_mv_target_3d",
         "predicted_mv_target_7d",
+        "last_season_points",
+        "last_season_avg_points",
+        "top_player_tag",
         "expected_change_pct",
         "expected_change_pct_3d",
         "expected_change_pct_7d",

@@ -108,7 +108,7 @@ for prediction_column, target in prediction_targets.items():
     )
 
 # Make live data predictions
-live_predictions_df = live_data_predictions(today_df, models, features)
+live_predictions_df = live_data_predictions(today_df, models, features, proc_player_df, league_start_date)
 
 # Join with current available players on the market
 market_recommendations_df = join_current_market(token, league_id, live_predictions_df, current_user_id)

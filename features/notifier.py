@@ -21,6 +21,9 @@ COLUMN_LABELS = {
     "expected_change_pct": "Erw. %",
     "expected_change_pct_3d": "3T %",
     "expected_change_pct_7d": "7T %",
+    "top_player_tag": "Klasse",
+    "last_season_points": "Pkt. Vors.",
+    "last_season_avg_points": "Ø Pkt.",
     "mv_trend": "MW-Tendenz",
     "starter_rate": "LI %",
     "hours_to_exp": "Resth.",
@@ -59,6 +62,8 @@ DISPLAY_LABELS = {
     "trend_up": "steigend",
     "trend_flat": "gleich",
     "trend_down": "sinkend",
+    "Elite-Spieler": "Elite",
+    "Top-Spieler": "Top",
 }
 
 BADGE_STYLES = {
@@ -86,6 +91,8 @@ BADGE_STYLES = {
     "trend_up": ("#dcfce7", "#166534"),
     "trend_flat": ("#f3f4f6", "#374151"),
     "trend_down": ("#fee2e2", "#991b1b"),
+    "Elite-Spieler": ("#fef3c7", "#854d0e"),
+    "Top-Spieler": ("#e0f2fe", "#075985"),
 }
 
 POSITION_LABELS = {
@@ -155,6 +162,8 @@ def send_mail(budget_df, market_df, squad_df, email):
         return "-"
 
     def badge(value):
+        if value is None or str(value) == "":
+            return ""
         label = escape(DISPLAY_LABELS.get(str(value), str(value)))
         background, color = BADGE_STYLES.get(str(value), ("#f3f4f6", "#374151"))
         return (
@@ -320,14 +329,20 @@ def send_mail(budget_df, market_df, squad_df, email):
         market_rows = []
         if not market_df.empty and "position" in market_df:
             candidates = market_df.copy()
+            if "top_player_tag" not in candidates:
+                candidates["top_player_tag"] = ""
             if needed_positions:
-                candidates = candidates[candidates["position"].astype(str).isin([str(pos) for pos in needed_positions])]
+                position_match = candidates["position"].astype(str).isin([str(pos) for pos in needed_positions])
+                top_player_match = candidates["top_player_tag"].astype(str).ne("")
+                candidates = candidates[position_match | top_player_match]
             candidates["recommendation_rank"] = candidates["recommendation"].map({"Strong buy": 0, "Buy": 1}).fillna(2)
-            candidates = candidates.sort_values(["recommendation_rank", "predicted_mv_target"], ascending=[True, False]).head(4)
+            candidates["top_player_rank"] = candidates["top_player_tag"].astype(str).eq("").map({True: 1, False: 0})
+            candidates = candidates.sort_values(["top_player_rank", "recommendation_rank", "predicted_mv_target"], ascending=[True, True, False]).head(4)
             for _, row in candidates.iterrows():
+                top_label = f' {badge(row.get("top_player_tag"))}' if row.get("top_player_tag") else ""
                 market_rows.append(
                     f'<li><b>{escape(player_name(row))}</b> ({position_label(row.get("position"))}, {escape(str(row.get("team_name", "-")))}) '
-                    f'- {badge(row.get("recommendation", "Buy"))} '
+                    f'- {badge(row.get("recommendation", "Buy"))}{top_label} '
                     f'erwartet {colored_number(row.get("predicted_mv_target"), format_number(row.get("predicted_mv_target")))}'
                     '</li>'
                 )
@@ -422,7 +437,7 @@ def send_mail(budget_df, market_df, squad_df, email):
         result = result.drop(columns=["lineup_scope", "li_status", "ligainsider_url"], errors="ignore")
 
         for col in result.columns:
-            if col in {"recommendation", "risk"}:
+            if col in {"recommendation", "risk", "top_player_tag"}:
                 result[col] = result[col].map(badge)
             elif col == "mv_trend":
                 result[col] = result[col].map(trend_value)
@@ -436,7 +451,7 @@ def send_mail(budget_df, market_df, squad_df, email):
                 result[col] = result[col].map(lambda value: budget_value(value, format_number(value)))
             elif col == "Avg Overpay":
                 result[col] = result[col].map(lambda value: colored_number(value, format_number(value), positive_good=False))
-            elif col in {"mv", "max_bid", "Budget", "Team Value", "Max Negative", "recent_starts", "recent_apps"}:
+            elif col in {"mv", "max_bid", "Budget", "Team Value", "Max Negative", "recent_starts", "recent_apps", "last_season_points", "last_season_avg_points"}:
                 result[col] = result[col].map(format_number)
             elif col == "hours_to_exp":
                 result[col] = result[col].map(hours_value)
@@ -465,6 +480,8 @@ def send_mail(budget_df, market_df, squad_df, email):
                 row_style = "background:#ecfdf5;"
             elif bool(row.get("is_listed_for_sale", False)):
                 row_style = "background:#fff7ed;"
+            elif "Elite" in str(row.get("Klasse", "")):
+                row_style = "background:#fffbeb;"
             else:
                 row_style = "background:#fefefe;"
             cells = "".join(
@@ -492,6 +509,11 @@ def send_mail(budget_df, market_df, squad_df, email):
                 {badge("Strong buy")} erwartete Änderung >= 200.000 oder >= 2,00%;
                 {badge("Buy")} erwartete Änderung >= 75.000 oder >= 0,75%.
                 Schwächere Marktspieler werden ausgeblendet.
+            </p>
+            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
+                <b>Klasse:</b>
+                {badge("Elite-Spieler")} und {badge("Top-Spieler")} basieren auf deduplizierten Kickbase-Punkten der Vorsaison.
+                Elite-Marktspieler werden gold hinterlegt, damit langfristige Kaderverstärker nicht zwischen Trading-Käufen untergehen.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Max. Gebot:</b>
