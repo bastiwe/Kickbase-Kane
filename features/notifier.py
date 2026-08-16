@@ -17,9 +17,8 @@ COLUMN_LABELS = {
     "mv_change_yesterday": "Gestern",
     "predicted_mv_target": "Erw. MW",
     "expected_change_pct": "Erw. %",
+    "mv_trend": "MW-Tendenz",
     "starter_rate": "LI %",
-    "lineup_scope": "Basis",
-    "li_status": "LI-Signal",
     "hours_to_exp": "Resth.",
     "expires_at": "Ablauf",
     "risk": "Risiko",
@@ -51,6 +50,9 @@ DISPLAY_LABELS = {
     "LI-Fehler": "LI-Fehler",
     "Keine LI-Daten": "Keine LI-Daten",
     "Deaktiviert": "Deaktiviert",
+    "trend_up": "steigend",
+    "trend_flat": "gleich",
+    "trend_down": "sinkend",
 }
 
 BADGE_STYLES = {
@@ -74,6 +76,9 @@ BADGE_STYLES = {
     "LI-Fehler": ("#fee2e2", "#991b1b"),
     "Keine LI-Daten": ("#fef3c7", "#92400e"),
     "Deaktiviert": ("#f3f4f6", "#374151"),
+    "trend_up": ("#dcfce7", "#166534"),
+    "trend_flat": ("#f3f4f6", "#374151"),
+    "trend_down": ("#fee2e2", "#991b1b"),
 }
 
 POSITION_LABELS = {
@@ -229,6 +234,22 @@ def send_mail(budget_df, market_df, squad_df, email):
             f'{formatted}</span>'
         )
 
+    def trend_value(value):
+        if not isinstance(value, Number) or value != value:
+            return "-"
+        if value > 25_000:
+            symbol, label, key = "↑", "steigend", "trend_up"
+        elif value < -25_000:
+            symbol, label, key = "↓", "sinkend", "trend_down"
+        else:
+            symbol, label, key = "→", "gleich", "trend_flat"
+        background, color = BADGE_STYLES[key]
+        return (
+            f'<span title="{label}" style="display:inline-block;background:{background};color:{color};'
+            'font-weight:800;border-radius:999px;padding:3px 8px;white-space:nowrap;font-size:14px;line-height:1;">'
+            f'{symbol}</span>'
+        )
+
     def position_label(value):
         return POSITION_LABELS.get(value, POSITION_LABELS.get(str(value), "-"))
 
@@ -311,6 +332,10 @@ def send_mail(budget_df, market_df, squad_df, email):
 
     def prepare_df(df):
         result = df.copy()
+        if "predicted_mv_target" in result.columns:
+            insert_at = result.columns.get_loc("predicted_mv_target") + 1
+            result.insert(insert_at, "mv_trend", result["predicted_mv_target"])
+
         if {"starter_rate", "recent_starts", "recent_apps"}.issubset(result.columns):
             result["starter_rate"] = result.apply(
                 lambda row: starter_rate_value(
@@ -347,9 +372,13 @@ def send_mail(budget_df, market_df, squad_df, email):
             result.insert(1, "player_display", result.apply(player_display, axis=1))
             result = result.drop(columns=["first_name", "last_name", "image_url"], errors="ignore")
 
+        result = result.drop(columns=["lineup_scope", "li_status"], errors="ignore")
+
         for col in result.columns:
-            if col in {"recommendation", "risk", "lineup_scope", "li_status"}:
+            if col in {"recommendation", "risk"}:
                 result[col] = result[col].map(badge)
+            elif col == "mv_trend":
+                result[col] = result[col].map(trend_value)
             elif col == "expected_change_pct":
                 result[col] = result[col].map(lambda value: colored_number(value, format_percent(value)))
             elif col == "starter_rate" and not result[col].astype(str).str.contains("<span", regex=False).any():
@@ -375,7 +404,7 @@ def send_mail(budget_df, market_df, squad_df, email):
 
         return prepare_df(df).to_html(index=False, border=0, classes="dataframe", escape=False).replace(
             "<table",
-            '<table style="width:100%;min-width:1380px;border-collapse:collapse;font-size:12px;margin:16px 0 24px 0;table-layout:auto;"'
+            '<table style="width:100%;min-width:1260px;border-collapse:collapse;font-size:12px;margin:16px 0 24px 0;table-layout:auto;"'
         ).replace(
             "<th>",
             '<th style="background:#2c3e50;color:white;padding:6px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">'
@@ -403,6 +432,12 @@ def send_mail(budget_df, market_df, squad_df, email):
                 <b>Max. Gebot:</b>
                 Marktwert + 65% des erwarteten Upsides, danach auf sinnvolle Gebotsstufen aufgerundet
                 und mit kleinem Overbid versehen, um runde Konkurrenzgebote zu schlagen.
+            </p>
+            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
+                <b>MW-Tendenz:</b>
+                <span style="display:inline-block;background:#dcfce7;color:#166534;font-weight:800;border-radius:999px;padding:3px 8px;">↑</span> erwarteter Anstieg,
+                <span style="display:inline-block;background:#f3f4f6;color:#374151;font-weight:800;border-radius:999px;padding:3px 8px;">→</span> nahezu stabil,
+                <span style="display:inline-block;background:#fee2e2;color:#991b1b;font-weight:800;border-radius:999px;padding:3px 8px;">↓</span> erwarteter Rückgang.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Risiko:</b>
