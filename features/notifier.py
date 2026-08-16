@@ -13,6 +13,9 @@ def send_mail(budget_df, market_df, squad_df, email):
 
     EMAIL_ADDRESS = os.getenv("EMAIL_USER")
     EMAIL_PASSWORD = os.getenv("EMAIL_PASS")
+    if not EMAIL_ADDRESS or not EMAIL_PASSWORD:
+        print("\nEmail credentials are incomplete, skipping email sending.")
+        return
 
     # If it's 22:00 or later, show tomorrow's date; else today
     now = datetime.now(ZoneInfo("Europe/Berlin"))
@@ -81,10 +84,16 @@ def send_mail(budget_df, market_df, squad_df, email):
     </html>
     """, subtype="html")
 
-    # Send email via Gmail SMTP
-    with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
-        smtp.starttls()
-        smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-        smtp.send_message(msg)
-        
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
+            smtp.starttls()
+            smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            smtp.send_message(msg)
+    except smtplib.SMTPAuthenticationError:
+        print("\nEmail authentication failed, skipping email sending. Check EMAIL_USER and EMAIL_PASS.")
+        return
+    except smtplib.SMTPException as e:
+        print(f"\nEmail sending failed, skipping email sending: {e}")
+        return
+
     print("\nEmail sent successfully!")
