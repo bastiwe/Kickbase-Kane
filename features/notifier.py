@@ -195,6 +195,28 @@ def send_mail(budget_df, market_df, squad_df, email):
             '<tr style="background-color:#fefefe;">'
         )
 
+    action_legend = f"""
+        <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin:0 0 24px 0;">
+            <h3 style="color:#1f2933;margin:0 0 10px 0;font-size:16px;">Action legend</h3>
+            <p style="font-size:13px;color:#4b5563;margin:0 0 8px 0;">
+                The action is derived from the model's expected next-day market value change, both absolute and relative to the player's current market value.
+            </p>
+            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
+                <b>Market:</b>
+                {badge("Strong buy")} expected change >= 200.000 or >= 2.00%;
+                {badge("Buy")} expected change >= 75.000 or >= 0.75%.
+                Other market players are hidden as Watch.
+            </p>
+            <p style="font-size:13px;color:#374151;margin:0;">
+                <b>Squad:</b>
+                {badge("Sell")} expected change <= -200.000 or <= -2.00%;
+                {badge("Consider sell")} expected change <= -75.000 or <= -0.75%;
+                {badge("Keep")} expected change >= 100.000 or >= 1.00%;
+                {badge("Hold")} neutral range.
+            </p>
+        </div>
+    """
+
     # Set email content
     msg.set_content("Sorry, results only via html visible.", subtype="plain")
     msg.add_alternative(f"""\
@@ -209,6 +231,8 @@ def send_mail(budget_df, market_df, squad_df, email):
             <span style="display:inline-block;background:#fff4e5;color:#8a4b00;padding:8px 10px;border-radius:6px;margin:4px;font-size:13px;"><b>{squad_sell_count}</b> sell checks</span>
             <span style="display:inline-block;background:#eef2ff;color:#263a8b;padding:8px 10px;border-radius:6px;margin:4px;font-size:13px;">Top buying power: <b>{top_budget}</b></span>
         </div>
+
+        {action_legend}
 
         <h3 style="color: #2c3e50; margin-top: 30px;">Manager Budgets</h3>
         <p style="font-size: 14px; color: #333;">Estimated cash and buying power after visible transfers, points, login and achievement estimates.</p>
