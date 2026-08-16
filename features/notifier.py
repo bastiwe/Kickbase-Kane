@@ -8,23 +8,35 @@ import os
 
 COLUMN_LABELS = {
     "recommendation": "Action",
-    "player_display": "Player",
-    "last_name": "Player",
+    "player_display": "Spieler",
+    "last_name": "Spieler",
     "position": "Pos",
     "team_name": "Team",
-    "mv": "Market Value",
-    "max_bid": "Max Bid",
-    "mv_change_yesterday": "Yesterday",
-    "predicted_mv_target": "Expected Change",
-    "expected_change_pct": "Expected %",
-    "s_11_prob": "Lineup %",
-    "hours_to_exp": "Hours Left",
-    "risk": "Risk",
+    "mv": "Marktwert",
+    "max_bid": "Max. Gebot",
+    "mv_change_yesterday": "Gestern",
+    "predicted_mv_target": "Erwartete Änderung",
+    "expected_change_pct": "Erwartet %",
+    "s_11_prob": "Startelf %",
+    "hours_to_exp": "Reststunden",
+    "risk": "Risiko",
     "User": "Manager",
     "Budget": "Cash",
-    "Team Value": "Team Value",
-    "Max Negative": "Debt Limit",
-    "Available Budget": "Buying Power",
+    "Team Value": "Kaderwert",
+    "Max Negative": "Minuslimit",
+    "Available Budget": "Kaufkraft",
+}
+
+DISPLAY_LABELS = {
+    "Strong buy": "Top-Kauf",
+    "Buy": "Kaufen",
+    "Keep": "Behalten",
+    "Hold": "Halten",
+    "Consider sell": "Verkauf prüfen",
+    "Sell": "Verkaufen",
+    "Normal": "Normal",
+    "Expires soon": "Läuft bald ab",
+    "Low lineup prob": "Geringe Startelfchance",
 }
 
 BADGE_STYLES = {
@@ -40,14 +52,14 @@ BADGE_STYLES = {
 }
 
 POSITION_LABELS = {
-    1: "GK",
-    2: "DEF",
-    3: "MID",
-    4: "FWD",
-    "1": "GK",
-    "2": "DEF",
-    "3": "MID",
-    "4": "FWD",
+    1: "TW",
+    2: "ABW",
+    3: "MIT",
+    4: "ST",
+    "1": "TW",
+    "2": "ABW",
+    "3": "MIT",
+    "4": "ST",
 }
 
 FORMATIONS = [
@@ -93,7 +105,7 @@ def send_mail(budget_df, market_df, squad_df, email):
 
     def format_number(value):
         if isinstance(value, bool):
-            return "Yes" if value else "No"
+            return "Ja" if value else "Nein"
         if isinstance(value, Number) and not isinstance(value, bool):
             if value != value:
                 return "-"
@@ -106,7 +118,7 @@ def send_mail(budget_df, market_df, squad_df, email):
         return "-"
 
     def badge(value):
-        label = escape(str(value))
+        label = escape(DISPLAY_LABELS.get(str(value), str(value)))
         background, color = BADGE_STYLES.get(str(value), ("#f3f4f6", "#374151"))
         return (
             f'<span style="display:inline-block;background:{background};color:{color};'
@@ -196,7 +208,7 @@ def send_mail(budget_df, market_df, squad_df, email):
             missing_by_formation.append((name, missing_total, missing))
 
         best_options = sorted(missing_by_formation, key=lambda item: (item[1], item[0]))[:3]
-        possible_text = ", ".join(possible) if possible else "none yet"
+        possible_text = ", ".join(possible) if possible else "noch keine"
         counts_text = " / ".join(f"{POSITION_LABELS[pos]} {counts.get(pos, 0)}" for pos in [1, 2, 3, 4])
 
         needs = []
@@ -219,17 +231,17 @@ def send_mail(budget_df, market_df, squad_df, email):
                 market_rows.append(
                     f'<li><b>{escape(player_name(row))}</b> ({position_label(row.get("position"))}, {escape(str(row.get("team_name", "-")))}) '
                     f'- {badge(row.get("recommendation", "Buy"))} '
-                    f'expected {colored_number(row.get("predicted_mv_target"), format_number(row.get("predicted_mv_target")))}'
+                    f'erwartet {colored_number(row.get("predicted_mv_target"), format_number(row.get("predicted_mv_target")))}'
                     '</li>'
                 )
 
         option_rows = []
         for name, missing_total, missing in best_options:
             if missing_total == 0:
-                status = '<span style="color:#166534;font-weight:700;">complete</span>'
+                status = '<span style="color:#166534;font-weight:700;">vollständig möglich</span>'
             else:
                 missing_text = ", ".join(f"{amount} {POSITION_LABELS[pos]}" for pos, amount in missing.items() if amount)
-                status = f'<span style="color:#92400e;font-weight:700;">missing {missing_text}</span>'
+                status = f'<span style="color:#92400e;font-weight:700;">es fehlen {missing_text}</span>'
             option_rows.append(f"<li><b>{name}</b>: {status}</li>")
 
         market_html = (
@@ -237,18 +249,18 @@ def send_mail(budget_df, market_df, squad_df, email):
             + "".join(market_rows)
             + "</ul>"
             if market_rows else
-            '<p style="font-size:13px;color:#6b7280;margin:8px 0 0 0;">No direct market fit among current buy recommendations.</p>'
+            '<p style="font-size:13px;color:#6b7280;margin:8px 0 0 0;">Keine direkte Ergänzung unter den aktuellen Kaufempfehlungen.</p>'
         )
 
         return f"""
             <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin:0 0 24px 0;">
-                <h3 style="color:#1f2933;margin:0 0 10px 0;font-size:16px;">Lineup planner</h3>
+                <h3 style="color:#1f2933;margin:0 0 10px 0;font-size:16px;">Aufstellungsplaner</h3>
                 <p style="font-size:13px;color:#4b5563;margin:0 0 8px 0;">
-                    Squad positions: <b>{counts_text}</b>. Possible formations with current squad: <b>{possible_text}</b>.
+                    Kaderpositionen: <b>{counts_text}</b>. Mögliche Formationen mit aktuellem Kader: <b>{possible_text}</b>.
                 </p>
-                <p style="font-size:13px;color:#374151;margin:0 0 6px 0;"><b>Closest formations:</b></p>
+                <p style="font-size:13px;color:#374151;margin:0 0 6px 0;"><b>Nächstliegende Formationen:</b></p>
                 <ul style="margin:0 0 10px 18px;padding:0;font-size:13px;color:#374151;">{''.join(option_rows)}</ul>
-                <p style="font-size:13px;color:#374151;margin:0 0 4px 0;"><b>Useful market complements:</b></p>
+                <p style="font-size:13px;color:#374151;margin:0 0 4px 0;"><b>Sinnvolle Markt-Ergänzungen:</b></p>
                 {market_html}
             </div>
         """
@@ -302,7 +314,7 @@ def send_mail(budget_df, market_df, squad_df, email):
 
     def style_df(df):
         if df.empty:
-            return '<p style="font-size:14px;color:#555;">No matching players today.</p>'
+            return '<p style="font-size:14px;color:#555;">Heute gibt es keine passenden Spieler.</p>'
 
         return prepare_df(df).to_html(index=False, border=0, classes="dataframe", escape=False).replace(
             "<table",
@@ -320,22 +332,22 @@ def send_mail(budget_df, market_df, squad_df, email):
 
     action_legend = f"""
         <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin:0 0 24px 0;">
-            <h3 style="color:#1f2933;margin:0 0 10px 0;font-size:16px;">Action legend</h3>
+            <h3 style="color:#1f2933;margin:0 0 10px 0;font-size:16px;">Action-Legende</h3>
             <p style="font-size:13px;color:#4b5563;margin:0 0 8px 0;">
-                The action is derived from the model's expected next-day market value change, both absolute and relative to the player's current market value.
+                Die Action ergibt sich aus der vom Modell erwarteten Marktwertänderung für den nächsten Tag, absolut und relativ zum aktuellen Marktwert.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
-                <b>Market:</b>
-                {badge("Strong buy")} expected change >= 200.000 or >= 2.00%;
-                {badge("Buy")} expected change >= 75.000 or >= 0.75%.
-                Other market players are hidden as Watch.
+                <b>Markt:</b>
+                {badge("Strong buy")} erwartete Änderung >= 200.000 oder >= 2,00%;
+                {badge("Buy")} erwartete Änderung >= 75.000 oder >= 0,75%.
+                Schwächere Marktspieler werden ausgeblendet.
             </p>
             <p style="font-size:13px;color:#374151;margin:0;">
-                <b>Squad:</b>
-                {badge("Sell")} expected change <= -200.000 or <= -2.00%;
-                {badge("Consider sell")} expected change <= -75.000 or <= -0.75%;
-                {badge("Keep")} expected change >= 100.000 or >= 1.00%;
-                {badge("Hold")} neutral range.
+                <b>Eigener Kader:</b>
+                {badge("Sell")} erwartete Änderung <= -200.000 oder <= -2,00%;
+                {badge("Consider sell")} erwartete Änderung <= -75.000 oder <= -0,75%;
+                {badge("Keep")} erwartete Änderung >= 100.000 oder >= 1,00%;
+                {badge("Hold")} neutraler Bereich.
             </p>
         </div>
     """
@@ -348,37 +360,37 @@ def send_mail(budget_df, market_df, squad_df, email):
     <body style="font-family: Arial, sans-serif; background-color: #f4f6f8; margin: 0; padding: 20px;">
         <div style="max-width: 1120px; margin: auto; background: #ffffff; padding: 22px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); overflow-x: auto;">
         
-        <h2 style="color: #1f2933; text-align: center; margin-top: 0;">Kickbase Report for {today}</h2>
+        <h2 style="color: #1f2933; text-align: center; margin-top: 0;">Kickbase Report für {today}</h2>
         
         <div style="display:block;margin:16px 0 24px 0;">
-            <span style="display:inline-block;background:#edf7ed;color:#1f6f3d;padding:8px 10px;border-radius:6px;margin:4px;font-size:13px;"><b>{market_buy_count}</b> strong buys</span>
-            <span style="display:inline-block;background:#fff4e5;color:#8a4b00;padding:8px 10px;border-radius:6px;margin:4px;font-size:13px;"><b>{squad_sell_count}</b> sell checks</span>
-            <span style="display:inline-block;background:#eef2ff;color:#263a8b;padding:8px 10px;border-radius:6px;margin:4px;font-size:13px;">Top buying power: <b>{top_budget}</b></span>
+            <span style="display:inline-block;background:#edf7ed;color:#1f6f3d;padding:8px 10px;border-radius:6px;margin:4px;font-size:13px;"><b>{market_buy_count}</b> Top-Käufe</span>
+            <span style="display:inline-block;background:#fff4e5;color:#8a4b00;padding:8px 10px;border-radius:6px;margin:4px;font-size:13px;"><b>{squad_sell_count}</b> Verkaufschecks</span>
+            <span style="display:inline-block;background:#eef2ff;color:#263a8b;padding:8px 10px;border-radius:6px;margin:4px;font-size:13px;">Höchste Kaufkraft: <b>{top_budget}</b></span>
         </div>
 
         {action_legend}
 
         {lineup_advice}
 
-        <h3 style="color: #2c3e50; margin-top: 30px;">Manager Budgets</h3>
-        <p style="font-size: 14px; color: #333;">Estimated cash and buying power after visible transfers, points, login and achievement estimates.</p>
+        <h3 style="color: #2c3e50; margin-top: 30px;">Manager-Budgets</h3>
+        <p style="font-size: 14px; color: #333;">Geschätztes Cash und Kaufkraft nach sichtbaren Transfers, Punkten sowie geschätzten Login- und Achievement-Boni.</p>
         {style_df(budget_df)}
 
-        <h3 style="color: #2c3e50; margin-top: 30px;">Current Market Predictions</h3>
-        <p style="font-size: 14px; color: #333;">Players with a positive expected next-day value change. Max Bid keeps roughly 35% of the predicted upside as margin.</p>
+        <h3 style="color: #2c3e50; margin-top: 30px;">Aktuelle Markt-Empfehlungen</h3>
+        <p style="font-size: 14px; color: #333;">Spieler mit positiver erwarteter Marktwertänderung für den nächsten Tag. Das maximale Gebot lässt grob 35% des prognostizierten Upsides als Puffer.</p>
 
         {style_df(market_df)}
 
-        <h3 style="color: #2c3e50; margin-top: 30px;">Your Squad Predictions</h3>
-        <p style="font-size: 14px; color: #333;">Your squad sorted by predicted value change, including sell and hold signals.</p>
+        <h3 style="color: #2c3e50; margin-top: 30px;">Dein Kader</h3>
+        <p style="font-size: 14px; color: #333;">Dein Kader sortiert nach prognostizierter Marktwertänderung, inklusive Verkaufs- und Haltesignalen.</p>
 
         {style_df(squad_df)}
 
-        <p style="margin-top: 20px; font-size: 14px;">Best regards, <br><b>Your KickAdvisor Bot</b></p>
+        <p style="margin-top: 20px; font-size: 14px;">Viele Grüße<br><b>Dein KickAdvisor Bot</b></p>
         
         <hr style="border:none;border-top:1px solid #eee;margin:20px 0;">
         <p style="font-size: 11px; color: gray; text-align: center;">
-            This email was generated by the 
+            Diese E-Mail wurde generiert vom 
             <a href="https://github.com/LennardFe/Kickbase-Trading-Advisor" 
             style="color: #888; text-decoration: none; font-weight: bold;">
             Kickbase Trading Advisor
