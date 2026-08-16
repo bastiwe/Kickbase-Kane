@@ -135,7 +135,6 @@ def discover_team_urls(season):
     for overview_url in (
         f"{BASE_URL}/bundesliga/spieltage/saison-{season}/",
         f"{BASE_URL}/bundesliga/transfers/",
-        f"{BASE_URL}/bundesliga/",
     ):
         try:
             parser = parse_page(overview_url)
