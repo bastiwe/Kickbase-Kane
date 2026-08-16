@@ -15,13 +15,13 @@ COLUMN_LABELS = {
     "mv": "Marktwert",
     "max_bid": "Max. Gebot",
     "mv_change_yesterday": "Gestern",
-    "predicted_mv_target": "Erwartete Änderung",
-    "expected_change_pct": "Erwartet %",
+    "predicted_mv_target": "Erw. MW",
+    "expected_change_pct": "Erw. %",
     "starter_rate": "Startquote",
     "recent_starts": "Starts",
     "recent_apps": "Kader",
     "lineup_scope": "Basis",
-    "hours_to_exp": "Reststunden",
+    "hours_to_exp": "Resth.",
     "expires_at": "Ablauf",
     "risk": "Risiko",
     "User": "Manager",
@@ -200,8 +200,10 @@ def send_mail(budget_df, market_df, squad_df, email):
             day_label = expires_at.strftime("%d.%m.")
         return f"{day_label} {expires_at:%H:%M}"
 
-    def starter_rate_value(value):
+    def starter_rate_value(value, starts=None, apps=None):
         formatted = format_percent(value) if isinstance(value, Number) and value == value else "-"
+        if isinstance(starts, Number) and starts == starts and isinstance(apps, Number) and apps == apps:
+            formatted = f"{formatted} ({format_number(starts)}/{format_number(apps)})"
         if not isinstance(value, Number) or value != value:
             return formatted
         if value >= 80:
@@ -298,6 +300,17 @@ def send_mail(budget_df, market_df, squad_df, email):
 
     def prepare_df(df):
         result = df.copy()
+        if {"starter_rate", "recent_starts", "recent_apps"}.issubset(result.columns):
+            result["starter_rate"] = result.apply(
+                lambda row: starter_rate_value(
+                    row.get("starter_rate"),
+                    row.get("recent_starts"),
+                    row.get("recent_apps"),
+                ),
+                axis=1,
+            )
+            result = result.drop(columns=["recent_starts", "recent_apps"], errors="ignore")
+
         if {"first_name", "last_name"}.issubset(result.columns):
             def player_display(row):
                 first_name = "" if row.get("first_name") != row.get("first_name") else str(row.get("first_name", ""))
@@ -316,7 +329,7 @@ def send_mail(budget_df, market_df, squad_df, email):
                         'background:#e5e7eb;vertical-align:middle;margin-right:10px;"></span>'
                     )
                 return (
-                    '<div style="white-space:nowrap;display:flex;align-items:center;">'
+                    '<div style="display:flex;align-items:center;min-width:145px;">'
                     f'{image}<span style="font-weight:600;color:#1f2933;">{name}</span></div>'
                 )
 
@@ -328,7 +341,7 @@ def send_mail(budget_df, market_df, squad_df, email):
                 result[col] = result[col].map(badge)
             elif col == "expected_change_pct":
                 result[col] = result[col].map(lambda value: colored_number(value, format_percent(value)))
-            elif col == "starter_rate":
+            elif col == "starter_rate" and not result[col].astype(str).str.contains("<span", regex=False).any():
                 result[col] = result[col].map(starter_rate_value)
             elif col in {"mv_change_yesterday", "predicted_mv_target"}:
                 result[col] = result[col].map(lambda value: colored_number(value, format_number(value)))
@@ -351,13 +364,13 @@ def send_mail(budget_df, market_df, squad_df, email):
 
         return prepare_df(df).to_html(index=False, border=0, classes="dataframe", escape=False).replace(
             "<table",
-            '<table style="width:100%;border-collapse:collapse;font-size:13px;margin:16px 0 24px 0;"'
+            '<table style="width:100%;border-collapse:collapse;font-size:12px;margin:16px 0 24px 0;table-layout:auto;"'
         ).replace(
             "<th>",
-            '<th style="background:#2c3e50;color:white;padding:8px;text-align:left;border-bottom:1px solid #ddd;">'
+            '<th style="background:#2c3e50;color:white;padding:6px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">'
         ).replace(
             "<td>",
-            '<td style="padding:8px;border-bottom:1px solid #eee;">'
+            '<td style="padding:6px;border-bottom:1px solid #eee;vertical-align:middle;">'
         ).replace(
             '<tr style="text-align: right;">',
             '<tr style="background-color:#fefefe;">'
@@ -408,7 +421,7 @@ def send_mail(budget_df, market_df, squad_df, email):
     msg.add_alternative(f"""\
     <html>
     <body style="font-family: Arial, sans-serif; background-color: #f4f6f8; margin: 0; padding: 20px;">
-        <div style="max-width: 1120px; margin: auto; background: #ffffff; padding: 22px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); overflow-x: auto;">
+        <div style="max-width: 1280px; margin: auto; background: #ffffff; padding: 18px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); overflow-x: auto;">
         
         <h2 style="color: #1f2933; text-align: center; margin-top: 0;">Kickbase Report für {today}</h2>
         
