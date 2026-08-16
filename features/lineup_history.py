@@ -448,10 +448,25 @@ def summarize_payload_keys(payload):
         keys = list(data.keys())[:12]
         if "lineups" in data and isinstance(data["lineups"], dict):
             keys.append(f"lineups:{list(data['lineups'].keys())[:12]}")
+        for side in ("home", "away"):
+            if side in data:
+                keys.append(f"{side}:{summarize_node(data[side])}")
         return keys
     if isinstance(data, list):
         return [f"list[{len(data)}]"]
     return [type(data).__name__]
+
+
+def summarize_node(node):
+    node = unwrap_field_result(node)
+    if isinstance(node, dict):
+        return list(node.keys())[:12]
+    if isinstance(node, list):
+        first_type = type(node[0]).__name__ if node else "empty"
+        if node and isinstance(node[0], dict):
+            return f"list[{len(node)}]:{list(node[0].keys())[:12]}"
+        return f"list[{len(node)}]:{first_type}"
+    return type(node).__name__
 
 
 def unwrap_field_result(value):
@@ -469,6 +484,8 @@ def collect_lineup_entries(
     in_starters=False,
     in_squad=False,
 ):
+    node = unwrap_field_result(node)
+
     if isinstance(node, dict):
         node_team = extract_team_name(node) or current_team
         local_home = extract_team_name(node.get("home") or node.get("home_team")) or home_team
@@ -494,7 +511,7 @@ def collect_lineup_entries(
             child_team = node_team
             is_home_lineup = key_lower in {"home", "hometeam", "home_team", "homelineup", "home_lineup"}
             is_away_lineup = key_lower in {"away", "awayteam", "away_team", "awaylineup", "away_lineup"}
-            is_top_level_lineup_side = key_lower in {"home", "away"} and looks_like_lineup_side(value)
+            is_top_level_lineup_side = key_lower in {"home", "away"}
             if key_lower in {"home", "hometeam", "home_team", "homelineup", "home_lineup", "homebench", "home_bench"}:
                 child_team = local_home or node_team
             elif key_lower in {"away", "awayteam", "away_team", "awaylineup", "away_lineup", "awaybench", "away_bench"}:
@@ -541,6 +558,10 @@ def collect_lineup_entries(
                 in_starters=in_starters,
                 in_squad=in_squad,
             )
+    elif isinstance(node, str) and (in_squad or in_starters):
+        name = node.strip()
+        if name:
+            entries.append({"name": name, "team_name": current_team, "started": in_starters})
 
 
 def looks_like_lineup_side(value):
