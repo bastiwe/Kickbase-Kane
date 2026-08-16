@@ -442,18 +442,33 @@ def send_mail(budget_df, market_df, squad_df, email):
         if df.empty:
             return '<p style="font-size:14px;color:#555;">Heute gibt es keine passenden Spieler.</p>'
 
-        return prepare_df(df).to_html(index=False, border=0, classes="dataframe", escape=False).replace(
-            "<table",
-            '<table style="width:100%;min-width:1260px;border-collapse:collapse;font-size:12px;margin:16px 0 24px 0;table-layout:auto;"'
-        ).replace(
-            "<th>",
-            '<th style="background:#2c3e50;color:white;padding:6px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">'
-        ).replace(
-            "<td>",
-            '<td style="padding:6px;border-bottom:1px solid #eee;vertical-align:middle;">'
-        ).replace(
-            '<tr style="text-align: right;">',
-            '<tr style="background-color:#fefefe;">'
+        result = prepare_df(df)
+        hidden_cols = {"has_open_bid", "is_listed_for_sale"}
+        visible_cols = [col for col in result.columns if col not in hidden_cols]
+        header_html = "".join(
+            '<th style="background:#2c3e50;color:white;padding:6px;text-align:left;'
+            f'border-bottom:1px solid #ddd;white-space:nowrap;">{escape(str(col))}</th>'
+            for col in visible_cols
+        )
+        rows = []
+        for _, row in result.iterrows():
+            if bool(row.get("has_open_bid", False)):
+                row_style = "background:#ecfdf5;"
+            elif bool(row.get("is_listed_for_sale", False)):
+                row_style = "background:#fff7ed;"
+            else:
+                row_style = "background:#fefefe;"
+            cells = "".join(
+                '<td style="padding:6px;border-bottom:1px solid #eee;vertical-align:middle;">'
+                f'{"" if row.get(col) is None else row.get(col)}</td>'
+                for col in visible_cols
+            )
+            rows.append(f'<tr style="{row_style}">{cells}</tr>')
+
+        return (
+            '<table style="width:100%;min-width:1260px;border-collapse:collapse;font-size:12px;'
+            f'margin:16px 0 24px 0;table-layout:auto;"><thead><tr>{header_html}</tr></thead>'
+            f'<tbody>{"".join(rows)}</tbody></table>'
         )
 
     action_legend = f"""
@@ -496,6 +511,13 @@ def send_mail(budget_df, market_df, squad_df, email):
                 <b>Kaderlimits:</b>
                 Maximal 16 Spieler insgesamt und maximal 3 Spieler pro Verein.
                 Gelb markiert 2/3 bei einem Verein, rot markiert volle Limits.
+            </p>
+            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
+                <b>Zeilenfarben:</b>
+                <span style="display:inline-block;background:#ecfdf5;color:#166534;font-weight:700;border-radius:6px;padding:3px 7px;">grün</span>
+                bedeutet: Du hast aktuell ein Gebot auf den Marktspieler platziert.
+                <span style="display:inline-block;background:#fff7ed;color:#92400e;font-weight:700;border-radius:6px;padding:3px 7px;">orange</span>
+                bedeutet: Der Kaderspieler ist aktuell zum Transfer angeboten.
             </p>
             <p style="font-size:13px;color:#374151;margin:0;">
                 <b>Eigener Kader:</b>

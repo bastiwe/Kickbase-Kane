@@ -30,6 +30,15 @@ def get_username(token):
 
     return username
 
+def get_user_id(token):
+    """Gets the user id of the logged-in user."""
+
+    url = f"{BASE_URL}/user/settings"
+    data = get_json_with_token(url, token)
+
+    user = data.get("u", {})
+    return user.get("i") or user.get("id") or user.get("ui")
+
 def get_players_in_squad(token, league_id):
     """Gets the players in the user's squad for a given league."""
 

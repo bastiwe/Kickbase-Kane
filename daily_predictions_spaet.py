@@ -2,7 +2,7 @@ from features.predictions.predictions import live_data_predictions, join_current
 from features.predictions.preprocessing import preprocess_player_data, split_data
 from features.predictions.modeling import train_model, evaluate_model
 from kickbase_api.league import get_league_id
-from kickbase_api.user import login
+from kickbase_api.user import get_user_id, login
 from features.notifier import send_mail
 from features.predictions.data_handler import (
     create_player_data_table,
@@ -69,6 +69,7 @@ USERNAME = os.getenv("KICK_USER") # DO NOT CHANGE THIS, YOU MUST SET THOSE IN GI
 PASSWORD = os.getenv("KICK_PASS") # DO NOT CHANGE THIS, YOU MUST SET THOSE IN GITHUB SECRETS OR A .env FILE
 token = login(USERNAME, PASSWORD)
 print("\nLogged in to Kickbase.")
+current_user_id = get_user_id(token)
 
 # Get league ID
 league_id = get_league_id(token, league_name)
@@ -99,10 +100,10 @@ print(f"\nModel evaluation:\nSigns correct: {signs_percent:.2f}%\nRMSE: {rmse:.2
 live_predictions_df = live_data_predictions(today_df, model, features)
 
 # Join with current available players on the market
-market_recommendations_df = join_current_market(token, league_id, live_predictions_df)
+market_recommendations_df = join_current_market(token, league_id, live_predictions_df, current_user_id)
 
 # Join with current players on the team
-squad_recommendations_df = join_current_squad(token, league_id, live_predictions_df)
+squad_recommendations_df = join_current_squad(token, league_id, live_predictions_df, current_user_id)
 
 market_recommendations_df, squad_recommendations_df = enrich_reports_with_ligainsider_signals(
     market_recommendations_df,

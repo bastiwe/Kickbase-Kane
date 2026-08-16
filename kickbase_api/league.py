@@ -66,7 +66,7 @@ def get_league_activities(token, league_id, league_start_date):
 
     return trading, login, achievements
 
-def get_league_players_on_market(token, league_id):
+def get_league_players_on_market(token, league_id, current_user_id=None):
     """Get all players currently available on the market in the league."""
 
     url = f"{BASE_URL}/leagues/{league_id}/market"
@@ -79,9 +79,61 @@ def get_league_players_on_market(token, league_id):
             'id': player.get('i'),
             'prob': player.get('prob'),
             "exp": player.get("exs"),
+            "has_open_bid": has_user_market_offer(player, current_user_id),
+            "is_own_listing": is_user_market_listing(player, current_user_id),
         })
 
     return result
+
+def has_user_market_offer(item, current_user_id=None):
+    """Best-effort detection for bids placed by the logged-in user."""
+
+    explicit_fields = ("hasBid", "has_bid", "bidPlaced", "ownBid", "ownOffer", "uob", "hb")
+    for field in explicit_fields:
+        if field in item and bool(item.get(field)):
+            return True
+
+    if current_user_id is None:
+        return False
+
+    current_user_id = str(current_user_id)
+    offer_keys = ("of", "ofs", "offers", "bids")
+    for key in offer_keys:
+        offers = item.get(key)
+        if isinstance(offers, dict):
+            offers = offers.values()
+        if not isinstance(offers, list):
+            continue
+        for offer in offers:
+            if not isinstance(offer, dict):
+                continue
+            offer_user = offer.get("ui") or offer.get("u") or offer.get("userId") or offer.get("user_id")
+            if offer_user is not None and str(offer_user) == current_user_id:
+                return True
+    return False
+
+def is_user_market_listing(item, current_user_id=None):
+    """Best-effort detection for players listed for sale by the logged-in user."""
+
+    explicit_fields = ("isOwn", "is_own", "own", "mine", "isMine", "selling")
+    for field in explicit_fields:
+        if field in item and bool(item.get(field)):
+            return True
+
+    if current_user_id is None:
+        return False
+
+    current_user_id = str(current_user_id)
+    seller_fields = ("ui", "u", "sellerId", "seller_id", "ownerId", "owner_id", "usr")
+    for field in seller_fields:
+        if item.get(field) is not None and str(item.get(field)) == current_user_id:
+            return True
+
+    seller = item.get("seller") or item.get("owner")
+    if isinstance(seller, dict):
+        seller_id = seller.get("i") or seller.get("id") or seller.get("ui")
+        return seller_id is not None and str(seller_id) == current_user_id
+    return False
 
 def get_league_ranking(token, league_id):
     """Get the overall league ranking."""

@@ -94,10 +94,20 @@ def live_data_predictions(today_df, model, features):
     return today_df_results
 
 
-def join_current_squad(token, league_id, today_df_results):
+def join_current_squad(token, league_id, today_df_results, current_user_id=None):
     squad_players = get_players_in_squad(token, league_id)
+    players_on_market = get_league_players_on_market(token, league_id, current_user_id)
+    listed_player_ids = {
+        str(player.get("id"))
+        for player in players_on_market
+        if player.get("is_own_listing") and player.get("id") is not None
+    }
 
     squad_df = pd.DataFrame(squad_players["it"])
+    if not squad_df.empty and "i" in squad_df:
+        squad_df["is_listed_for_sale"] = squad_df["i"].astype(str).isin(listed_player_ids)
+    else:
+        squad_df["is_listed_for_sale"] = False
 
     # Join squad_df ("i") with today_df ("player_id")
     squad_df = (
@@ -115,15 +125,16 @@ def join_current_squad(token, league_id, today_df_results):
     squad_df = squad_df.sort_values("predicted_mv_target", ascending=True)
 
     # Keep only relevant columns
-    squad_df = squad_df[["recommendation", "first_name", "last_name", "image_url", "position", "team_name", "mv", "mv_change_yesterday", "predicted_mv_target", "expected_change_pct"]]
+    squad_df = squad_df[["recommendation", "first_name", "last_name", "image_url", "position", "team_name", "mv", "mv_change_yesterday", "predicted_mv_target", "expected_change_pct", "is_listed_for_sale"]]
+    print(f"Kickbase own transfer listings detected: {int(squad_df['is_listed_for_sale'].sum())}.")
 
     return squad_df 
 
 
-def join_current_market(token, league_id, today_df_results):
+def join_current_market(token, league_id, today_df_results, current_user_id=None):
     """Join the live predictions with the current market data to get bid recommendations"""
 
-    players_on_market = get_league_players_on_market(token, league_id)
+    players_on_market = get_league_players_on_market(token, league_id, current_user_id)
 
     # players_on_market to DataFrame
     market_df = pd.DataFrame(players_on_market)
@@ -164,7 +175,8 @@ def join_current_market(token, league_id, today_df_results):
     )
 
     # Keep only relevant columns
-    bid_df = bid_df[["recommendation", "first_name", "last_name", "image_url", "position", "team_name", "mv", "max_bid", "mv_change_yesterday", "predicted_mv_target", "expected_change_pct", "hours_to_exp", "expires_at", "risk"]]
+    bid_df = bid_df[["recommendation", "first_name", "last_name", "image_url", "position", "team_name", "mv", "max_bid", "mv_change_yesterday", "predicted_mv_target", "expected_change_pct", "hours_to_exp", "expires_at", "risk", "has_open_bid"]]
+    print(f"Kickbase own open bids detected: {int(bid_df['has_open_bid'].sum())}.")
 
     return bid_df
 
