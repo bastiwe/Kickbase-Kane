@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from email.message import EmailMessage
+from html import escape
 from numbers import Number
 from zoneinfo import ZoneInfo
 import smtplib
@@ -7,6 +8,7 @@ import os
 
 COLUMN_LABELS = {
     "recommendation": "Action",
+    "player_display": "Player",
     "last_name": "Player",
     "team_name": "Team",
     "mv": "Market Value",
@@ -68,6 +70,31 @@ def send_mail(budget_df, market_df, squad_df, email):
 
     def prepare_df(df):
         result = df.copy()
+        if {"first_name", "last_name"}.issubset(result.columns):
+            def player_display(row):
+                first_name = "" if row.get("first_name") != row.get("first_name") else str(row.get("first_name", ""))
+                last_name = "" if row.get("last_name") != row.get("last_name") else str(row.get("last_name", ""))
+                name = escape(f"{first_name} {last_name}".strip() or "-")
+                image_url = row.get("image_url")
+                if image_url == image_url and image_url:
+                    image = (
+                        f'<img src="{escape(str(image_url), quote=True)}" alt="{name}" '
+                        'width="42" height="42" '
+                        'style="width:42px;height:42px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:10px;background:#e5e7eb;">'
+                    )
+                else:
+                    image = (
+                        '<span style="display:inline-block;width:42px;height:42px;border-radius:50%;'
+                        'background:#e5e7eb;vertical-align:middle;margin-right:10px;"></span>'
+                    )
+                return (
+                    '<div style="white-space:nowrap;display:flex;align-items:center;">'
+                    f'{image}<span style="font-weight:600;color:#1f2933;">{name}</span></div>'
+                )
+
+            result.insert(1, "player_display", result.apply(player_display, axis=1))
+            result = result.drop(columns=["first_name", "last_name", "image_url"], errors="ignore")
+
         for col in result.columns:
             if col == "expected_change_pct":
                 result[col] = result[col].map(format_percent)

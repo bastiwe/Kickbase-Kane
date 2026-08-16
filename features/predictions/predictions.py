@@ -69,7 +69,7 @@ def live_data_predictions(today_df, model, features):
     today_df_results = today_df_results.dropna(subset=["mv"])
 
     # Keep only relevant columns
-    today_df_results = today_df_results[["player_id", "first_name", "last_name", "position", "team_name", "date", "mv_change_1d", "mv_trend_1d", "mv", "predicted_mv_target"]]
+    today_df_results = today_df_results[["player_id", "first_name", "last_name", "image_url", "position", "team_name", "date", "mv_change_1d", "mv_trend_1d", "mv", "predicted_mv_target"]]
 
     return today_df_results
 
@@ -100,7 +100,7 @@ def join_current_squad(token, league_id, today_df_results):
     squad_df = squad_df.sort_values("predicted_mv_target", ascending=True)
 
     # Keep only relevant columns
-    squad_df = squad_df[["recommendation", "last_name", "team_name", "mv", "mv_change_yesterday", "predicted_mv_target", "expected_change_pct", "s_11_prob"]]
+    squad_df = squad_df[["recommendation", "first_name", "last_name", "image_url", "team_name", "mv", "mv_change_yesterday", "predicted_mv_target", "expected_change_pct", "s_11_prob"]]
 
     return squad_df 
 
@@ -150,6 +150,6 @@ def join_current_market(token, league_id, today_df_results):
     bid_df = bid_df.sort_values(["predicted_mv_target", "expected_change_pct"], ascending=False)
 
     # Keep only relevant columns
-    bid_df = bid_df[["recommendation", "last_name", "team_name", "mv", "max_bid", "mv_change_yesterday", "predicted_mv_target", "expected_change_pct", "s_11_prob", "hours_to_exp", "risk"]]
+    bid_df = bid_df[["recommendation", "first_name", "last_name", "image_url", "team_name", "mv", "max_bid", "mv_change_yesterday", "predicted_mv_target", "expected_change_pct", "s_11_prob", "hours_to_exp", "risk"]]
 
     return bid_df

@@ -24,6 +24,8 @@ def create_player_data_table():
         first_name TEXT,
         last_name TEXT,
         position TEXT,
+        image_url TEXT,
+        team_image_url TEXT,
         md DATE,
         date DATE,
         p REAL,

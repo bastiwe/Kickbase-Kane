@@ -1,4 +1,4 @@
-from kickbase_api.config import BASE_URL, get_json_with_token
+from kickbase_api.config import BASE_URL, get_cdn_url, get_json_with_token
 from kickbase_api.others import get_all_teams
 from datetime import datetime, timedelta
 
@@ -48,7 +48,9 @@ def get_player_info(token, competition_id, player_id):
         "team_name": data.get("tn"),    
         "first_name": data.get("fn"),   
         "last_name": data.get("ln"),    
-        "position": data.get("pos")     
+        "position": data.get("pos"),
+        "image_url": get_cdn_url(data.get("pim")),
+        "team_image_url": get_cdn_url(data.get("tim")),
     }
 
     return player_info
