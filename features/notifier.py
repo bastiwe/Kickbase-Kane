@@ -26,6 +26,18 @@ COLUMN_LABELS = {
     "Available Budget": "Buying Power",
 }
 
+BADGE_STYLES = {
+    "Strong buy": ("#dcfce7", "#166534"),
+    "Buy": ("#e0f2fe", "#075985"),
+    "Keep": ("#dcfce7", "#166534"),
+    "Hold": ("#f3f4f6", "#374151"),
+    "Consider sell": ("#fef3c7", "#92400e"),
+    "Sell": ("#fee2e2", "#991b1b"),
+    "Normal": ("#f3f4f6", "#374151"),
+    "Expires soon": ("#ffedd5", "#9a3412"),
+    "Low lineup prob": ("#fee2e2", "#991b1b"),
+}
+
 def send_mail(budget_df, market_df, squad_df, email):
     """Sends an email with the provided DataFrames as HTML tables."""
 
@@ -68,6 +80,58 @@ def send_mail(budget_df, market_df, squad_df, email):
             return f"{value:.2f}%"
         return "-"
 
+    def badge(value):
+        label = escape(str(value))
+        background, color = BADGE_STYLES.get(str(value), ("#f3f4f6", "#374151"))
+        return (
+            f'<span style="display:inline-block;background:{background};color:{color};'
+            'font-weight:700;border-radius:999px;padding:4px 9px;white-space:nowrap;">'
+            f'{label}</span>'
+        )
+
+    def colored_number(value, formatted, positive_good=True):
+        if not isinstance(value, Number) or value != value or value == 0:
+            return formatted
+        is_good = value > 0 if positive_good else value < 0
+        color = "#166534" if is_good else "#991b1b"
+        background = "#f0fdf4" if is_good else "#fef2f2"
+        return (
+            f'<span style="display:inline-block;background:{background};color:{color};'
+            'font-weight:700;border-radius:6px;padding:3px 7px;white-space:nowrap;">'
+            f'{formatted}</span>'
+        )
+
+    def budget_value(value, formatted):
+        if not isinstance(value, Number) or value != value:
+            return formatted
+        if value >= 120_000_000:
+            background, color = "#dcfce7", "#166534"
+        elif value >= 100_000_000:
+            background, color = "#fef3c7", "#92400e"
+        else:
+            background, color = "#fee2e2", "#991b1b"
+        return (
+            f'<span style="display:inline-block;background:{background};color:{color};'
+            'font-weight:700;border-radius:6px;padding:3px 7px;white-space:nowrap;">'
+            f'{formatted}</span>'
+        )
+
+    def hours_value(value):
+        formatted = f"{value:.1f}" if isinstance(value, Number) and value == value else "-"
+        if not isinstance(value, Number) or value != value:
+            return formatted
+        if value <= 3:
+            background, color = "#fee2e2", "#991b1b"
+        elif value <= 12:
+            background, color = "#ffedd5", "#9a3412"
+        else:
+            return formatted
+        return (
+            f'<span style="display:inline-block;background:{background};color:{color};'
+            'font-weight:700;border-radius:6px;padding:3px 7px;white-space:nowrap;">'
+            f'{formatted}</span>'
+        )
+
     def prepare_df(df):
         result = df.copy()
         if {"first_name", "last_name"}.issubset(result.columns):
@@ -96,12 +160,18 @@ def send_mail(budget_df, market_df, squad_df, email):
             result = result.drop(columns=["first_name", "last_name", "image_url"], errors="ignore")
 
         for col in result.columns:
-            if col == "expected_change_pct":
-                result[col] = result[col].map(format_percent)
-            elif col in {"mv", "max_bid", "mv_change_yesterday", "predicted_mv_target", "Budget", "Team Value", "Max Negative", "Available Budget"}:
+            if col in {"recommendation", "risk"}:
+                result[col] = result[col].map(badge)
+            elif col == "expected_change_pct":
+                result[col] = result[col].map(lambda value: colored_number(value, format_percent(value)))
+            elif col in {"mv_change_yesterday", "predicted_mv_target"}:
+                result[col] = result[col].map(lambda value: colored_number(value, format_number(value)))
+            elif col == "Available Budget":
+                result[col] = result[col].map(lambda value: budget_value(value, format_number(value)))
+            elif col in {"mv", "max_bid", "Budget", "Team Value", "Max Negative"}:
                 result[col] = result[col].map(format_number)
             elif col == "hours_to_exp":
-                result[col] = result[col].map(lambda value: f"{value:.1f}" if isinstance(value, Number) and value == value else "-")
+                result[col] = result[col].map(hours_value)
             elif col == "s_11_prob":
                 result[col] = result[col].map(lambda value: format_number(value) if value == value else "-")
 
