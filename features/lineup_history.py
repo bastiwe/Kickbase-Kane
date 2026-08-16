@@ -82,7 +82,8 @@ def fetch_recent_starter_history(api_key):
     league = os.getenv("BIGBALLS_LEAGUE", "bundesliga")
     lookback_days = positive_int_env("BIGBALLS_LOOKBACK_DAYS", 120)
     match_limit = positive_int_env("BIGBALLS_MATCH_LIMIT", 80)
-    since = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+    now = datetime.now(timezone.utc)
+    since = now - timedelta(days=lookback_days)
 
     matches = get_finished_matches(api_key, league, match_limit)
     if not matches:
@@ -98,12 +99,16 @@ def fetch_recent_starter_history(api_key):
         kickoff = parse_datetime(match.get("kickoff_utc") or match.get("date") or match.get("start_time"))
         if kickoff and kickoff < since:
             continue
+        if kickoff and kickoff > now:
+            continue
 
         match_id = match.get("id")
         if not match_id:
             continue
 
         lineup_payload = get_lineups(api_key, match_id)
+        if not lineup_payload:
+            continue
         entries = extract_lineup_entries(lineup_payload, match)
         if entries:
             lineup_match_count += 1
@@ -141,6 +146,30 @@ def fetch_recent_starter_history(api_key):
 
 
 def get_finished_matches(api_key, league, limit):
+    matches = get_sdk_style_matches(api_key, league, limit)
+    if matches:
+        return matches
+
+    matches = get_stored_finished_matches(api_key, league, limit)
+    if matches:
+        return matches
+
+    return []
+
+
+def get_sdk_style_matches(api_key, league, limit):
+    """Mirror Big Balls SDK client.matches.list({ sport, league, limit })."""
+
+    params = {
+        "sport": "football",
+        "league": league,
+        "limit": min(limit, 200),
+    }
+    data = request_json(api_key, "/matches", params=params)
+    return data.get("data", []) if isinstance(data, dict) else []
+
+
+def get_stored_finished_matches(api_key, league, limit):
     params = {
         "sport": "football",
         "league": league,
@@ -148,11 +177,6 @@ def get_finished_matches(api_key, league, limit):
         "limit": min(limit, 200),
     }
     data = request_json(api_key, "/stored/matches", params=params)
-    matches = data.get("data", []) if isinstance(data, dict) else []
-    if matches:
-        return matches
-
-    data = request_json(api_key, "/matches", params=params)
     return data.get("data", []) if isinstance(data, dict) else []
 
 
@@ -183,7 +207,13 @@ def discover_league_key(api_key, preferred_league):
 
 
 def get_lineups(api_key, match_id):
-    return request_json(api_key, f"/stored/matches/{match_id}/lineups")
+    try:
+        return request_json(api_key, f"/stored/matches/{match_id}/lineups")
+    except requests.HTTPError as e:
+        status_code = e.response.status_code if e.response is not None else None
+        if status_code in {404, 422}:
+            return None
+        raise
 
 
 def request_json(api_key, path, params=None):
