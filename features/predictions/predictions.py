@@ -47,9 +47,10 @@ def add_recommendation_columns(df, is_market):
         df["max_bid"] = raw_max_bid.map(psychological_bid).astype(int)
         df["risk"] = np.select(
             [
+                df["expires_overnight"],
                 df["expires_before_mv_update"],
             ],
-            ["Before MV update"],
+            ["Night expiry", "Before MV update"],
             default="Normal"
         )
     else:
@@ -135,15 +136,17 @@ def join_current_market(token, league_id, today_df_results):
 
     # exp contains seconds until expiration
     bid_df["hours_to_exp"] = np.round((bid_df["exp"] / 3600), 2)
+    now = datetime.now(ZoneInfo("Europe/Berlin"))
+    bid_df["expires_at"] = bid_df["exp"].map(lambda seconds: now + timedelta(seconds=float(seconds)))
 
     # check if current sysdate + hours_to_exp is after the next 22:00
-    now = datetime.now(ZoneInfo("Europe/Berlin"))
     next_22 = now.replace(hour=22, minute=0, second=0, microsecond=0)
     if now >= next_22:
         next_22 += timedelta(days=1)
     diff = np.round((next_22 - now).total_seconds() / 3600, 2)
 
     bid_df["expires_before_mv_update"] = bid_df["hours_to_exp"] < diff
+    bid_df["expires_overnight"] = bid_df["expires_at"].map(is_night_expiry)
 
     # Rename mv_change_1d to mv_change_yesterday for better understanding
     bid_df = bid_df.rename(columns={"mv_change_1d": "mv_change_yesterday"})
@@ -153,10 +156,23 @@ def join_current_market(token, league_id, today_df_results):
     # Drop weak recommendations from the market overview.
     bid_df = bid_df[bid_df["recommendation"] != "Watch"]
 
-    # Sort by expected absolute profit, then relative upside.
-    bid_df = bid_df.sort_values(["predicted_mv_target", "expected_change_pct"], ascending=False)
+    # Sort urgent expiring offers first, then by expected absolute profit and relative upside.
+    bid_df["risk_rank"] = bid_df["risk"].map({"Night expiry": 0, "Before MV update": 1}).fillna(2)
+    bid_df = bid_df.sort_values(
+        ["risk_rank", "predicted_mv_target", "expected_change_pct"],
+        ascending=[True, False, False],
+    )
 
     # Keep only relevant columns
-    bid_df = bid_df[["recommendation", "first_name", "last_name", "image_url", "position", "team_name", "mv", "max_bid", "mv_change_yesterday", "predicted_mv_target", "expected_change_pct", "hours_to_exp", "risk"]]
+    bid_df = bid_df[["recommendation", "first_name", "last_name", "image_url", "position", "team_name", "mv", "max_bid", "mv_change_yesterday", "predicted_mv_target", "expected_change_pct", "hours_to_exp", "expires_at", "risk"]]
 
     return bid_df
+
+
+def is_night_expiry(expires_at):
+    """Return True when an offer expires between 22:00 and 09:00 Berlin time."""
+
+    if pd.isna(expires_at):
+        return False
+    hour = expires_at.astimezone(ZoneInfo("Europe/Berlin")).hour
+    return hour >= 22 or hour < 9

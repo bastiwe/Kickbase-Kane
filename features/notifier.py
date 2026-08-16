@@ -22,6 +22,7 @@ COLUMN_LABELS = {
     "recent_apps": "Kader",
     "lineup_scope": "Basis",
     "hours_to_exp": "Reststunden",
+    "expires_at": "Ablauf",
     "risk": "Risiko",
     "User": "Manager",
     "Budget": "Cash",
@@ -39,6 +40,7 @@ DISPLAY_LABELS = {
     "Sell": "Verkaufen",
     "Normal": "Normal",
     "Before MV update": "Vor MW-Update",
+    "Night expiry": "Nacht-Ablauf",
     "Aktueller Verein": "Aktueller Verein",
     "Gesamt": "Gesamt",
 }
@@ -52,6 +54,7 @@ BADGE_STYLES = {
     "Sell": ("#fee2e2", "#991b1b"),
     "Normal": ("#f3f4f6", "#374151"),
     "Before MV update": ("#ffedd5", "#9a3412"),
+    "Night expiry": ("#fee2e2", "#991b1b"),
     "Aktueller Verein": ("#dcfce7", "#166534"),
     "Gesamt": ("#eef2ff", "#3730a3"),
 }
@@ -173,6 +176,23 @@ def send_mail(budget_df, market_df, squad_df, email):
             'font-weight:700;border-radius:6px;padding:3px 7px;white-space:nowrap;">'
             f'{formatted}</span>'
         )
+
+    def expiry_value(value):
+        if value is None or value != value:
+            return "-"
+        try:
+            expires_at = value.astimezone(ZoneInfo("Europe/Berlin"))
+        except AttributeError:
+            return escape(str(value))
+
+        today_date = now.date()
+        if expires_at.date() == today_date:
+            day_label = "Heute"
+        elif expires_at.date() == (today_date + timedelta(days=1)):
+            day_label = "Morgen"
+        else:
+            day_label = expires_at.strftime("%d.%m.")
+        return f"{day_label} {expires_at:%H:%M}"
 
     def starter_rate_value(value):
         formatted = format_percent(value) if isinstance(value, Number) and value == value else "-"
@@ -312,6 +332,8 @@ def send_mail(budget_df, market_df, squad_df, email):
                 result[col] = result[col].map(format_number)
             elif col == "hours_to_exp":
                 result[col] = result[col].map(hours_value)
+            elif col == "expires_at":
+                result[col] = result[col].map(expiry_value)
             elif col == "position":
                 result[col] = result[col].map(position_label)
 
@@ -356,6 +378,7 @@ def send_mail(budget_df, market_df, squad_df, email):
                 <b>Risiko:</b>
                 {badge("Before MV update")} bedeutet, dass das Angebot vor der nächsten Marktwert-Neuberechnung um 22:00 Uhr abläuft.
                 Dann kaufst du noch ohne den neuen Marktwert zu kennen.
+                {badge("Night expiry")} bedeutet, dass das Angebot zwischen 22:00 Uhr und 09:00 Uhr ausläuft; solche Gebote solltest du am Vorabend erledigen.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Startquote:</b>
