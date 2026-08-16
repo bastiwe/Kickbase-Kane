@@ -198,7 +198,7 @@ def parse_page(url):
 
 def extract_page_signals(parser):
     text = "\n".join(parser.text_parts)
-    prediction_text = before_marker(text, ["KADER", "ZUR DETAILANSICHT KADER", "ERGEBNISSE", "NEWS"])
+    prediction_text = extract_prediction_section(text)
 
     predicted = set()
     known = set()
@@ -217,6 +217,15 @@ def extract_page_signals(parser):
             unavailable.add(status_word)
 
     return {"predicted": predicted, "known": known, "unavailable_markers": unavailable}
+
+
+def extract_prediction_section(text):
+    start = find_marker(text, ["VORAUSSICHTLICHE AUFSTELLUNG"])
+    if start < 0:
+        return before_marker(text, ["AKTUELLE THEMEN", "DEIN TIPP:", "ERGEBNISSE", "## KADER", "\nKADER "])
+
+    section = text[start:]
+    return before_marker(section, ["AKTUELLE THEMEN", "DEIN TIPP:", "ERGEBNISSE", "## KADER", "\nKADER "])
 
 
 def resolve_player_signal(player, page_signal):
@@ -281,6 +290,12 @@ def before_marker(text, markers):
     upper_text = text.upper()
     positions = [upper_text.find(marker) for marker in markers if upper_text.find(marker) > 0]
     return text[: min(positions)] if positions else text
+
+
+def find_marker(text, markers):
+    upper_text = text.upper()
+    positions = [upper_text.find(marker) for marker in markers if upper_text.find(marker) >= 0]
+    return min(positions) if positions else -1
 
 
 def is_probable_player_name(text):
