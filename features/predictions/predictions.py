@@ -48,9 +48,8 @@ def add_recommendation_columns(df, is_market):
         df["risk"] = np.select(
             [
                 df["expiring_today"],
-                df["s_11_prob"].notna() & (df["s_11_prob"] < 25),
             ],
-            ["Expires soon", "Low lineup prob"],
+            ["Expires soon"],
             default="Normal"
         )
     else:
@@ -105,11 +104,6 @@ def join_current_squad(token, league_id, today_df_results):
         .drop(columns=["i"])
     )
 
-    # Rename prob to s_11_prob for better understanding
-    if "prob" not in squad_df.columns:
-        squad_df["prob"] = np.nan  # Placeholder for non-pro users
-    squad_df = squad_df.rename(columns={"prob": "s_11_prob"})
-
     # Rename mv_change_1d to mv_change_yesterday for better understanding
     squad_df = squad_df.rename(columns={"mv_change_1d": "mv_change_yesterday"})
 
@@ -120,12 +114,11 @@ def join_current_squad(token, league_id, today_df_results):
     squad_df = squad_df.sort_values("predicted_mv_target", ascending=True)
 
     # Keep only relevant columns
-    squad_df = squad_df[["recommendation", "first_name", "last_name", "image_url", "position", "team_name", "mv", "mv_change_yesterday", "predicted_mv_target", "expected_change_pct", "s_11_prob"]]
+    squad_df = squad_df[["recommendation", "first_name", "last_name", "image_url", "position", "team_name", "mv", "mv_change_yesterday", "predicted_mv_target", "expected_change_pct"]]
 
     return squad_df 
 
 
-# TODO Add fail-safe check before player expires if the prob (starting 11) is still high, so no injuries or anything. if it dropped. dont bid / reccommend
 def join_current_market(token, league_id, today_df_results):
     """Join the live predictions with the current market data to get bid recommendations"""
 
@@ -153,11 +146,6 @@ def join_current_market(token, league_id, today_df_results):
     # If hours_to_exp < diff then it expires today
     bid_df["expiring_today"] = bid_df["hours_to_exp"] < diff
 
-    # Rename prob to s_11_prob for better understanding
-    if "prob" not in bid_df.columns:
-        bid_df["prob"] = np.nan  # Placeholder for non-pro users
-    bid_df = bid_df.rename(columns={"prob": "s_11_prob"})
-
     # Rename mv_change_1d to mv_change_yesterday for better understanding
     bid_df = bid_df.rename(columns={"mv_change_1d": "mv_change_yesterday"})
 
@@ -170,6 +158,6 @@ def join_current_market(token, league_id, today_df_results):
     bid_df = bid_df.sort_values(["predicted_mv_target", "expected_change_pct"], ascending=False)
 
     # Keep only relevant columns
-    bid_df = bid_df[["recommendation", "first_name", "last_name", "image_url", "position", "team_name", "mv", "max_bid", "mv_change_yesterday", "predicted_mv_target", "expected_change_pct", "s_11_prob", "hours_to_exp", "risk"]]
+    bid_df = bid_df[["recommendation", "first_name", "last_name", "image_url", "position", "team_name", "mv", "max_bid", "mv_change_yesterday", "predicted_mv_target", "expected_change_pct", "hours_to_exp", "risk"]]
 
     return bid_df

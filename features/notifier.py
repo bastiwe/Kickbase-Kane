@@ -17,7 +17,6 @@ COLUMN_LABELS = {
     "mv_change_yesterday": "Gestern",
     "predicted_mv_target": "Erwartete Änderung",
     "expected_change_pct": "Erwartet %",
-    "s_11_prob": "Startelf %",
     "hours_to_exp": "Reststunden",
     "risk": "Risiko",
     "User": "Manager",
@@ -36,7 +35,6 @@ DISPLAY_LABELS = {
     "Sell": "Verkaufen",
     "Normal": "Normal",
     "Expires soon": "Läuft bald ab",
-    "Low lineup prob": "Geringe Startelfchance",
 }
 
 BADGE_STYLES = {
@@ -48,7 +46,6 @@ BADGE_STYLES = {
     "Sell": ("#fee2e2", "#991b1b"),
     "Normal": ("#f3f4f6", "#374151"),
     "Expires soon": ("#ffedd5", "#9a3412"),
-    "Low lineup prob": ("#fee2e2", "#991b1b"),
 }
 
 POSITION_LABELS = {
@@ -163,22 +160,6 @@ def send_mail(budget_df, market_df, squad_df, email):
             background, color = "#ffedd5", "#9a3412"
         else:
             return formatted
-        return (
-            f'<span style="display:inline-block;background:{background};color:{color};'
-            'font-weight:700;border-radius:6px;padding:3px 7px;white-space:nowrap;">'
-            f'{formatted}</span>'
-        )
-
-    def lineup_probability(value):
-        formatted = format_number(value) if isinstance(value, Number) and value == value else "-"
-        if not isinstance(value, Number) or value != value:
-            return formatted
-        if value >= 70:
-            background, color = "#dcfce7", "#166534"
-        elif value >= 40:
-            background, color = "#fef3c7", "#92400e"
-        else:
-            background, color = "#fee2e2", "#991b1b"
         return (
             f'<span style="display:inline-block;background:{background};color:{color};'
             'font-weight:700;border-radius:6px;padding:3px 7px;white-space:nowrap;">'
@@ -305,8 +286,6 @@ def send_mail(budget_df, market_df, squad_df, email):
                 result[col] = result[col].map(format_number)
             elif col == "hours_to_exp":
                 result[col] = result[col].map(hours_value)
-            elif col == "s_11_prob":
-                result[col] = result[col].map(lineup_probability)
             elif col == "position":
                 result[col] = result[col].map(position_label)
 
