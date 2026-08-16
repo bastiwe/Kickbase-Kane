@@ -24,6 +24,7 @@ COLUMN_LABELS = {
     "risk": "Risiko",
     "User": "Manager",
     "Budget": "Cash",
+    "Avg Overpay": "Ø Overpay",
     "Team Value": "Kaderwert",
     "Max Negative": "Minuslimit",
     "Available Budget": "Kaufkraft",
@@ -427,6 +428,8 @@ def send_mail(budget_df, market_df, squad_df, email):
                 result[col] = result[col].map(lambda value: colored_number(value, format_number(value)))
             elif col == "Available Budget":
                 result[col] = result[col].map(lambda value: budget_value(value, format_number(value)))
+            elif col == "Avg Overpay":
+                result[col] = result[col].map(lambda value: colored_number(value, format_number(value), positive_good=False))
             elif col in {"mv", "max_bid", "Budget", "Team Value", "Max Negative", "recent_starts", "recent_apps"}:
                 result[col] = result[col].map(format_number)
             elif col == "hours_to_exp":
@@ -487,6 +490,11 @@ def send_mail(budget_df, market_df, squad_df, email):
                 <b>Max. Gebot:</b>
                 Marktwert + 65% des erwarteten Upsides, danach auf sinnvolle Gebotsstufen aufgerundet
                 und mit kleinem Overbid versehen, um runde Konkurrenzgebote zu schlagen.
+            </p>
+            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
+                <b>Ø Overpay:</b>
+                Durchschnitt aus gezahltem Transferpreis minus Marktwert zum Transferdatum für Käufe seit Saisonstart.
+                Positive Werte bedeuten im Schnitt über Marktwert gekauft, negative Werte bedeuten unter Marktwert gekauft.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>MW-Tendenz:</b>

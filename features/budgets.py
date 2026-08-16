@@ -10,6 +10,7 @@ from kickbase_api.manager import (
 )
 from kickbase_api.others import get_achievement_reward
 import pandas as pd
+import sqlite3
 
 def calc_manager_budgets(token, league_id, league_start_date, start_budget):
     """Calculate manager budgets based on activities, bonuses, and team performance."""
@@ -64,6 +65,7 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget):
 
     # Initial cash budgets. Use all managers, not only users that already have transfer activities.
     budgets = {manager_name: start_budget for manager_name, _ in managers}
+    average_overpay = calc_average_overpay_by_manager(activities_df, league_start_date)
 
     for _, row in activities_df.iterrows():
         byr, slr, trp = row.get("byr"), row.get("slr"), row.get("trp", 0)
@@ -84,6 +86,11 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget):
             print(f"Warning: Skipping invalid activity row {row}: {e}")
 
     budget_df = pd.DataFrame(list(budgets.items()), columns=["User", "Budget"])
+    overpay_df = pd.DataFrame(
+        list(average_overpay.items()),
+        columns=["User", "Avg Overpay"]
+    )
+    budget_df = budget_df.merge(overpay_df, on="User", how="left")
 
     # Merge performance bonuses
     budget_df = budget_df.merge(
@@ -127,6 +134,88 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget):
     budget_df.sort_values("Available Budget", ascending=False, inplace=True, ignore_index=True)
 
     return budget_df
+
+def calc_average_overpay_by_manager(activities_df, league_start_date):
+    """Calculate average paid price above market value for current-season buys."""
+
+    if activities_df.empty or not {"byr", "pi", "trp"}.issubset(activities_df.columns):
+        return {}
+
+    market_values = load_market_values_for_overpay()
+    if market_values.empty:
+        print("Warning: Could not calculate average overpay because no market values are available.")
+        return {}
+
+    season_trades = activities_df.copy()
+    season_trades = season_trades[season_trades["dt"].fillna("") >= league_start_date]
+    season_trades = season_trades[season_trades["byr"].notna()]
+    if season_trades.empty:
+        return {}
+
+    rows = []
+    for _, trade in season_trades.iterrows():
+        buyer = trade.get("byr")
+        player_id = trade.get("pi")
+        price = first_number(trade.get("trp"), trade.get("prc"))
+        market_value = first_number(trade.get("mv"), trade.get("mvo"))
+        if market_value is None:
+            market_value = lookup_market_value(market_values, player_id, trade.get("dt"))
+        if not buyer or player_id is None or price is None or market_value is None:
+            continue
+        rows.append({"User": buyer, "Overpay": price - market_value})
+
+    if not rows:
+        return {}
+
+    overpay_df = pd.DataFrame(rows)
+    return overpay_df.groupby("User")["Overpay"].mean().round(0).to_dict()
+
+def load_market_values_for_overpay():
+    try:
+        with sqlite3.connect("player_data_total.db") as conn:
+            return pd.read_sql_query(
+                """
+                SELECT player_id, date, mv
+                FROM player_data_1d
+                WHERE mv IS NOT NULL
+                """,
+                conn,
+                parse_dates=["date"],
+            )
+    except Exception as e:
+        print(f"Warning: Could not load market values for overpay calculation: {e}")
+        return pd.DataFrame(columns=["player_id", "date", "mv"])
+
+def lookup_market_value(market_values, player_id, activity_date):
+    if player_id is None or not activity_date:
+        return None
+
+    try:
+        player_id = int(player_id)
+        activity_date = pd.to_datetime(activity_date, utc=True).tz_convert(None).normalize()
+    except Exception:
+        return None
+
+    player_values = market_values[market_values["player_id"] == player_id].copy()
+    if player_values.empty:
+        return None
+
+    player_values["date"] = pd.to_datetime(player_values["date"]).dt.normalize()
+    values_until_trade = player_values[player_values["date"] <= activity_date].sort_values("date")
+    if values_until_trade.empty:
+        return None
+    value = values_until_trade.iloc[-1]["mv"]
+    return None if pd.isna(value) else float(value)
+
+def first_number(*values):
+    for value in values:
+        if value is None or pd.isna(value):
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return None
 
 def calc_achievement_bonus_by_points(token, league_id, username, anchor_achievement_bonus):
     """Estimate achievement bonus for a user based on their total points compared to anchor user."""

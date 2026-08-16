@@ -58,11 +58,12 @@ def get_league_activities(token, league_id, league_start_date):
     login = [entry for entry in filtered_activities if entry.get("t") == 22]
     achievements = [entry for entry in filtered_activities if entry.get("t") == 26]
     trade = [entry for entry in filtered_activities if entry.get("t") == 15]
-    trading = [
-        {k: entry["data"].get(k) for k in ["byr", "slr", "pi", "pn", "tid", "trp"]}
-        for entry in trade
-        if entry.get("t") == 15
-    ]
+    trading = []
+    for entry in trade:
+        data = entry.get("data", {})
+        item = {k: data.get(k) for k in ["byr", "slr", "pi", "pn", "tid", "trp", "mv", "mvo", "prc"]}
+        item["dt"] = entry.get("dt")
+        trading.append(item)
 
     return trading, login, achievements
 

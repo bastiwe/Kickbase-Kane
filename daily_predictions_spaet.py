@@ -74,17 +74,17 @@ current_user_id = get_user_id(token)
 # Get league ID
 league_id = get_league_id(token, league_name)
 
-# Calculate (estimated) budgets of all managers in the league
-manager_budgets_df = calc_manager_budgets(token, league_id, league_start_date, start_budget)
-print("\n=== Manager Budgets ===")
-display(manager_budgets_df)
-
 # Data handling
 create_player_data_table()
 reload_data = check_if_data_reload_needed()
 save_player_data_to_db(token, competition_ids, last_mv_values, last_pfm_values, reload_data)
 player_df = load_player_data_from_db()
 print("\nData loaded from database.")
+
+# Calculate (estimated) budgets of all managers in the league
+manager_budgets_df = calc_manager_budgets(token, league_id, league_start_date, start_budget)
+print("\n=== Manager Budgets ===")
+display(manager_budgets_df)
 
 # Preprocess the data and spit the data
 proc_player_df, today_df = preprocess_player_data(player_df)
