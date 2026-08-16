@@ -40,8 +40,12 @@ features = [
     "mv_trend_7d", "market_divergence"
 ]
 
-# what column to learn and predict on
-target = "mv_target_clipped"
+# what columns to learn and predict on
+prediction_targets = {
+    "predicted_mv_target": "mv_target_clipped",
+    "predicted_mv_target_3d": "mv_target_3d_clipped",
+    "predicted_mv_target_7d": "mv_target_7d_clipped",
+}
 
 # Set dot as thousands separator for better readability
 pd.options.display.float_format = lambda x: '{:,.0f}'.format(x).replace(',', '.')
@@ -84,18 +88,25 @@ save_player_data_to_db(token, competition_ids, last_mv_values, last_pfm_values, 
 player_df = load_player_data_from_db()
 print("\nData loaded from database.")
 
-# Preprocess the data and spit the data
+# Preprocess the data and split the data
 proc_player_df, today_df = preprocess_player_data(player_df)
-X_train, X_test, y_train, y_test = split_data(proc_player_df, features, target)
 print("\nData preprocessed.")
 
-# Train and evaluate the model
-model = train_model(X_train, y_train)
-signs_percent, rmse, mae, r2 = evaluate_model(model, X_test, y_test)
-print(f"\nModel evaluation:\nSigns correct: {signs_percent:.2f}%\nRMSE: {rmse:.2f}\nMAE: {mae:.2f}\nR2: {r2:.2f}")
+# Train and evaluate the models
+models = {}
+print("\nModel evaluation:")
+for prediction_column, target in prediction_targets.items():
+    X_train, X_test, y_train, y_test = split_data(proc_player_df, features, target)
+    model = train_model(X_train, y_train)
+    models[prediction_column] = model
+    signs_percent, rmse, mae, r2 = evaluate_model(model, X_test, y_test)
+    print(
+        f"{prediction_column}: "
+        f"Signs correct: {signs_percent:.2f}% | RMSE: {rmse:.2f} | MAE: {mae:.2f} | R2: {r2:.2f}"
+    )
 
 # Make live data predictions
-live_predictions_df = live_data_predictions(today_df, model, features)
+live_predictions_df = live_data_predictions(today_df, models, features)
 
 # Join with current available players on the market
 market_recommendations_df = join_current_market(token, league_id, live_predictions_df)

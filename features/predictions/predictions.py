@@ -33,6 +33,16 @@ def add_recommendation_columns(df, is_market):
         np.round((df["predicted_mv_target"] / df["mv"]) * 100, 2),
         0
     )
+    df["expected_change_pct_3d"] = np.where(
+        df["mv"] > 0,
+        np.round((df["predicted_mv_target_3d"] / df["mv"]) * 100, 2),
+        0
+    )
+    df["expected_change_pct_7d"] = np.where(
+        df["mv"] > 0,
+        np.round((df["predicted_mv_target_7d"] / df["mv"]) * 100, 2),
+        0
+    )
 
     if is_market:
         df["recommendation"] = np.select(
@@ -66,15 +76,16 @@ def add_recommendation_columns(df, is_market):
 
     return df
 
-def live_data_predictions(today_df, model, features):
+def live_data_predictions(today_df, models, features):
     """Make live data predictions for today_df using the trained model"""
 
     # Set features and copy df
     today_df_features = today_df[features]
     today_df_results = today_df.copy()
 
-    # Predict mv_target
-    today_df_results["predicted_mv_target"] = np.round(model.predict(today_df_features), 2)
+    # Predict market value changes for all configured horizons
+    for column, model in models.items():
+        today_df_results[column] = np.round(model.predict(today_df_features), 2)
 
     # Sort by predicted_mv_target descending
     today_df_results = today_df_results.sort_values("predicted_mv_target", ascending=False)
@@ -89,7 +100,21 @@ def live_data_predictions(today_df, model, features):
     today_df_results = today_df_results.dropna(subset=["mv"])
 
     # Keep only relevant columns
-    today_df_results = today_df_results[["player_id", "first_name", "last_name", "image_url", "position", "team_name", "date", "mv_change_1d", "mv_trend_1d", "mv", "predicted_mv_target"]]
+    today_df_results = today_df_results[[
+        "player_id",
+        "first_name",
+        "last_name",
+        "image_url",
+        "position",
+        "team_name",
+        "date",
+        "mv_change_1d",
+        "mv_trend_1d",
+        "mv",
+        "predicted_mv_target",
+        "predicted_mv_target_3d",
+        "predicted_mv_target_7d",
+    ]]
 
     return today_df_results
 
@@ -125,7 +150,23 @@ def join_current_squad(token, league_id, today_df_results, current_user_id=None)
     squad_df = squad_df.sort_values("predicted_mv_target", ascending=True)
 
     # Keep only relevant columns
-    squad_df = squad_df[["recommendation", "first_name", "last_name", "image_url", "position", "team_name", "mv", "mv_change_yesterday", "predicted_mv_target", "expected_change_pct", "is_listed_for_sale"]]
+    squad_df = squad_df[[
+        "recommendation",
+        "first_name",
+        "last_name",
+        "image_url",
+        "position",
+        "team_name",
+        "mv",
+        "mv_change_yesterday",
+        "predicted_mv_target",
+        "predicted_mv_target_3d",
+        "predicted_mv_target_7d",
+        "expected_change_pct",
+        "expected_change_pct_3d",
+        "expected_change_pct_7d",
+        "is_listed_for_sale",
+    ]]
     print(f"Kickbase own transfer listings detected: {int(squad_df['is_listed_for_sale'].sum())}.")
 
     return squad_df 
@@ -175,7 +216,27 @@ def join_current_market(token, league_id, today_df_results, current_user_id=None
     )
 
     # Keep only relevant columns
-    bid_df = bid_df[["recommendation", "first_name", "last_name", "image_url", "position", "team_name", "mv", "max_bid", "mv_change_yesterday", "predicted_mv_target", "expected_change_pct", "hours_to_exp", "expires_at", "risk", "has_open_bid"]]
+    bid_df = bid_df[[
+        "recommendation",
+        "first_name",
+        "last_name",
+        "image_url",
+        "position",
+        "team_name",
+        "mv",
+        "max_bid",
+        "mv_change_yesterday",
+        "predicted_mv_target",
+        "predicted_mv_target_3d",
+        "predicted_mv_target_7d",
+        "expected_change_pct",
+        "expected_change_pct_3d",
+        "expected_change_pct_7d",
+        "hours_to_exp",
+        "expires_at",
+        "risk",
+        "has_open_bid",
+    ]]
     print(f"Kickbase own open bids detected: {int(bid_df['has_open_bid'].sum())}.")
 
     return bid_df

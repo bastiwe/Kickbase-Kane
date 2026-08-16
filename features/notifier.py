@@ -15,8 +15,12 @@ COLUMN_LABELS = {
     "mv": "Marktwert",
     "max_bid": "Max. Gebot",
     "mv_change_yesterday": "Gestern",
-    "predicted_mv_target": "Erw. MW",
+    "predicted_mv_target": "Erw. 1T",
+    "predicted_mv_target_3d": "Erw. 3T",
+    "predicted_mv_target_7d": "Erw. 7T",
     "expected_change_pct": "Erw. %",
+    "expected_change_pct_3d": "3T %",
+    "expected_change_pct_7d": "7T %",
     "mv_trend": "MW-Tendenz",
     "starter_rate": "LI %",
     "hours_to_exp": "Resth.",
@@ -420,11 +424,11 @@ def send_mail(budget_df, market_df, squad_df, email):
                 result[col] = result[col].map(badge)
             elif col == "mv_trend":
                 result[col] = result[col].map(trend_value)
-            elif col == "expected_change_pct":
+            elif col in {"expected_change_pct", "expected_change_pct_3d", "expected_change_pct_7d"}:
                 result[col] = result[col].map(lambda value: colored_number(value, format_percent(value)))
             elif col == "starter_rate" and not result[col].astype(str).str.contains("<span", regex=False).any():
                 result[col] = result[col].map(starter_rate_value)
-            elif col in {"mv_change_yesterday", "predicted_mv_target"}:
+            elif col in {"mv_change_yesterday", "predicted_mv_target", "predicted_mv_target_3d", "predicted_mv_target_7d"}:
                 result[col] = result[col].map(lambda value: colored_number(value, format_number(value)))
             elif col == "Available Budget":
                 result[col] = result[col].map(lambda value: budget_value(value, format_number(value)))
@@ -469,7 +473,7 @@ def send_mail(budget_df, market_df, squad_df, email):
             rows.append(f'<tr style="{row_style}">{cells}</tr>')
 
         return (
-            '<table style="width:100%;min-width:1260px;border-collapse:collapse;font-size:12px;'
+            '<table style="width:100%;min-width:1460px;border-collapse:collapse;font-size:12px;'
             f'margin:16px 0 24px 0;table-layout:auto;"><thead><tr>{header_html}</tr></thead>'
             f'<tbody>{"".join(rows)}</tbody></table>'
         )
@@ -479,6 +483,7 @@ def send_mail(budget_df, market_df, squad_df, email):
             <h3 style="color:#1f2933;margin:0 0 10px 0;font-size:16px;">Action-Legende</h3>
             <p style="font-size:13px;color:#4b5563;margin:0 0 8px 0;">
                 Die Action ergibt sich aus der vom Modell erwarteten Marktwertänderung für den nächsten Tag, absolut und relativ zum aktuellen Marktwert.
+                Erw. 1T, Erw. 3T und Erw. 7T zeigen die geschätzte Änderung für morgen, drei Tage und sieben Tage.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Markt:</b>

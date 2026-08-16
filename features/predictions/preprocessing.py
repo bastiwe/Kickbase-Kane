@@ -25,9 +25,13 @@ def preprocess_player_data(df):
     )
     df["days_to_next"] = (df["next_md"] - df["date"]).dt.days
 
-    # 3. Next day market value
+    # 3. Future market value targets
     df["mv_next_day"] = df.groupby("player_id")["mv"].shift(-1)
     df["mv_target"] = df["mv_next_day"] - df["mv"]
+    df["mv_next_3d"] = df.groupby("player_id")["mv"].shift(-3)
+    df["mv_target_3d"] = df["mv_next_3d"] - df["mv"]
+    df["mv_next_7d"] = df.groupby("player_id")["mv"].shift(-7)
+    df["mv_target_7d"] = df["mv_next_7d"] - df["mv"]
     df = df[df["mv"] != 0.0]
 
     # 4. Feature engineering 
@@ -47,14 +51,14 @@ def preprocess_player_data(df):
     ## League-wide market context
     df["market_divergence"] = (df["mv"] / df.groupby("md")["mv"].transform("mean")).rolling(3).mean()
 
-    # 5. Clip outliers in mv_target
-    Q1 = df["mv_target"].quantile(0.25)
-    Q3 = df["mv_target"].quantile(0.75)
-    IQR = Q3 - Q1
-    lower_bound = Q1 - 2.5 * IQR
-    upper_bound = Q3 + 2.5 * IQR
-
-    df["mv_target_clipped"] = df["mv_target"].clip(lower_bound, upper_bound)
+    # 5. Clip outliers in target columns
+    for target_col in ["mv_target", "mv_target_3d", "mv_target_7d"]:
+        Q1 = df[target_col].quantile(0.25)
+        Q3 = df[target_col].quantile(0.75)
+        IQR = Q3 - Q1
+        lower_bound = Q1 - 2.5 * IQR
+        upper_bound = Q3 + 2.5 * IQR
+        df[f"{target_col}_clipped"] = df[target_col].clip(lower_bound, upper_bound)
 
     # 6. Fill missing values
     df = df.fillna({
@@ -85,6 +89,8 @@ def preprocess_player_data(df):
 
 def split_data(df, features, target):
     """Split the data into training and testing sets based on date to avoid data leakage"""
+
+    df = df.dropna(subset=features + [target])
 
     # Sort by date
     df = df.sort_values("date").reset_index(drop=True)
