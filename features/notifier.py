@@ -238,11 +238,11 @@ def send_mail(budget_df, market_df, squad_df, email):
         if not isinstance(value, Number) or value != value:
             return "-"
         if value > 25_000:
-            symbol, label, key = "↑", "steigend", "trend_up"
+            symbol, label, key = "↑", "besser als gestern", "trend_up"
         elif value < -25_000:
-            symbol, label, key = "↓", "sinkend", "trend_down"
+            symbol, label, key = "↓", "schwächer als gestern", "trend_down"
         else:
-            symbol, label, key = "→", "gleich", "trend_flat"
+            symbol, label, key = "→", "ähnlich wie gestern", "trend_flat"
         background, color = BADGE_STYLES[key]
         return (
             f'<span title="{label}" style="display:inline-block;background:{background};color:{color};'
@@ -332,9 +332,9 @@ def send_mail(budget_df, market_df, squad_df, email):
 
     def prepare_df(df):
         result = df.copy()
-        if "predicted_mv_target" in result.columns:
+        if {"predicted_mv_target", "mv_change_yesterday"}.issubset(result.columns):
             insert_at = result.columns.get_loc("predicted_mv_target") + 1
-            result.insert(insert_at, "mv_trend", result["predicted_mv_target"])
+            result.insert(insert_at, "mv_trend", result["predicted_mv_target"] - result["mv_change_yesterday"])
 
         if {"starter_rate", "recent_starts", "recent_apps"}.issubset(result.columns):
             result["starter_rate"] = result.apply(
@@ -435,9 +435,9 @@ def send_mail(budget_df, market_df, squad_df, email):
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>MW-Tendenz:</b>
-                <span style="display:inline-block;background:#dcfce7;color:#166534;font-weight:800;border-radius:999px;padding:3px 8px;">↑</span> erwarteter Anstieg,
-                <span style="display:inline-block;background:#f3f4f6;color:#374151;font-weight:800;border-radius:999px;padding:3px 8px;">→</span> nahezu stabil,
-                <span style="display:inline-block;background:#fee2e2;color:#991b1b;font-weight:800;border-radius:999px;padding:3px 8px;">↓</span> erwarteter Rückgang.
+                <span style="display:inline-block;background:#dcfce7;color:#166534;font-weight:800;border-radius:999px;padding:3px 8px;">↑</span> Prognose besser als gestrige Änderung,
+                <span style="display:inline-block;background:#f3f4f6;color:#374151;font-weight:800;border-radius:999px;padding:3px 8px;">→</span> ähnlich wie gestern,
+                <span style="display:inline-block;background:#fee2e2;color:#991b1b;font-weight:800;border-radius:999px;padding:3px 8px;">↓</span> Prognose schwächer als gestern.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Risiko:</b>
