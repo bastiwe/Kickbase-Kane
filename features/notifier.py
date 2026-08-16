@@ -364,15 +364,23 @@ def send_mail(budget_df, market_df, squad_df, email):
                         '<span style="display:inline-block;width:42px;height:42px;border-radius:50%;'
                         'background:#e5e7eb;vertical-align:middle;margin-right:10px;"></span>'
                     )
-                return (
+                content = (
                     '<div style="display:flex;align-items:center;min-width:145px;">'
                     f'{image}<span style="font-weight:600;color:#1f2933;">{name}</span></div>'
                 )
+                ligainsider_url = row.get("ligainsider_url")
+                if ligainsider_url == ligainsider_url and ligainsider_url:
+                    return (
+                        f'<a href="{escape(str(ligainsider_url), quote=True)}" '
+                        'style="text-decoration:none;color:inherit;" target="_blank">'
+                        f"{content}</a>"
+                    )
+                return content
 
             result.insert(1, "player_display", result.apply(player_display, axis=1))
             result = result.drop(columns=["first_name", "last_name", "image_url"], errors="ignore")
 
-        result = result.drop(columns=["lineup_scope", "li_status"], errors="ignore")
+        result = result.drop(columns=["lineup_scope", "li_status", "ligainsider_url"], errors="ignore")
 
         for col in result.columns:
             if col in {"recommendation", "risk"}:

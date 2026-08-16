@@ -10,7 +10,7 @@ import requests
 
 BASE_URL = "https://www.ligainsider.de"
 DEFAULT_SEASON = "2026-2027"
-SIGNAL_COLUMNS = ["starter_rate", "lineup_scope", "li_status"]
+SIGNAL_COLUMNS = ["starter_rate", "lineup_scope", "li_status", "ligainsider_url"]
 
 TEAM_ALIASES = {
     "bayern": "bayern munchen",
@@ -130,7 +130,7 @@ def fetch_ligainsider_signals(dataframes):
                 if player_rate is not None:
                     player_rates_found += 1
 
-            signal = resolve_player_signal(player, page_signal, player_rate)
+            signal = resolve_player_signal(player, page_signal, player_rate, player_page_url)
             if signal:
                 matched += 1
                 if signal["li_status"] == "Startelf":
@@ -316,15 +316,35 @@ def parse_bundesliga_starter_rate(text):
     return float(rates[target_index].replace(",", "."))
 
 
-def resolve_player_signal(player, page_signal, player_rate=None):
+def resolve_player_signal(player, page_signal, player_rate=None, player_url=None):
     candidates = player["aliases"]
     if player_rate is not None:
-        return {"starter_rate": player_rate, "lineup_scope": "LI-Bundesliga", "li_status": "Startelfquote"}
+        return {
+            "starter_rate": player_rate,
+            "lineup_scope": "LI-Bundesliga",
+            "li_status": "Startelfquote",
+            "ligainsider_url": player_url,
+        }
     if any(candidate in page_signal["predicted"] for candidate in candidates):
-        return {"starter_rate": 90, "lineup_scope": "LI-Startelf", "li_status": "Startelf"}
+        return {
+            "starter_rate": 90,
+            "lineup_scope": "LI-Startelf",
+            "li_status": "Startelf",
+            "ligainsider_url": player_url,
+        }
     if any(candidate in page_signal["known"] for candidate in candidates):
-        return {"starter_rate": 35, "lineup_scope": "LI-Kader", "li_status": "Kader"}
-    return {"starter_rate": None, "lineup_scope": "Nicht gefunden", "li_status": "Kein Treffer"}
+        return {
+            "starter_rate": 35,
+            "lineup_scope": "LI-Kader",
+            "li_status": "Kader",
+            "ligainsider_url": player_url,
+        }
+    return {
+        "starter_rate": None,
+        "lineup_scope": "Nicht gefunden",
+        "li_status": "Kein Treffer",
+        "ligainsider_url": player_url,
+    }
 
 
 def collect_report_players_by_team(dataframes):
@@ -354,6 +374,7 @@ def add_signal_columns(df, signals):
     result["starter_rate"] = keys.map(lambda key: signals.get(key, {}).get("starter_rate"))
     result["lineup_scope"] = keys.map(lambda key: signals.get(key, {}).get("lineup_scope", "Nicht gefunden"))
     result["li_status"] = keys.map(lambda key: signals.get(key, {}).get("li_status", "Kein Treffer"))
+    result["ligainsider_url"] = keys.map(lambda key: signals.get(key, {}).get("ligainsider_url"))
     return order_signal_columns(result)
 
 
@@ -365,6 +386,7 @@ def add_empty_signal_columns(df, scope):
     result["starter_rate"] = None
     result["lineup_scope"] = scope
     result["li_status"] = scope
+    result["ligainsider_url"] = None
     return order_signal_columns(result)
 
 
