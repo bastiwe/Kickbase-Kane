@@ -130,22 +130,30 @@ def fetch_ligainsider_signals(dataframes):
 
 
 def discover_team_urls(season):
-    parser = parse_page(f"{BASE_URL}/bundesliga/")
-    urls = {}
+    urls = fallback_team_urls(season)
 
-    for href, text in parser.links:
-        if "/bundesliga/team/" not in href:
+    for overview_url in (
+        f"{BASE_URL}/bundesliga/spieltage/saison-{season}/",
+        f"{BASE_URL}/bundesliga/transfers/",
+        f"{BASE_URL}/bundesliga/",
+    ):
+        try:
+            parser = parse_page(overview_url)
+        except requests.RequestException as e:
+            status = getattr(getattr(e, "response", None), "status_code", "request failed")
+            print(f"LigaInsider overview skipped: {overview_url} returned {status}.")
             continue
-        if f"/saison-{season}/" not in href:
-            continue
-        url = urljoin(BASE_URL, href)
-        candidates = {normalize_team_name(text), normalize_team_name(team_slug_from_url(url))}
-        for candidate in candidates:
-            if candidate:
-                urls.setdefault(candidate, url)
 
-    for key, url in fallback_team_urls(season).items():
-        urls.setdefault(key, url)
+        for href, text in parser.links:
+            if "/bundesliga/team/" not in href:
+                continue
+            if f"/saison-{season}/" not in href:
+                continue
+            url = urljoin(BASE_URL, href)
+            candidates = {normalize_team_name(text), normalize_team_name(team_slug_from_url(url))}
+            for candidate in candidates:
+                if candidate:
+                    urls[candidate] = url
     return urls
 
 
@@ -291,7 +299,7 @@ def team_slug_from_url(url):
 
 def normalize_team_name(name):
     key = normalize_name(name)
-    key = re.sub(r"\b(fc|sc|sv|vfl|vfb|tsg|1|04|07)\b", " ", key)
+    key = re.sub(r"\b(fc|sc|sv|vfl|vfb|tsg|fsv|sport club|1|04|07)\b", " ", key)
     key = " ".join(key.split())
     return TEAM_ALIASES.get(key, TEAM_ALIASES.get(normalize_name(name), key))
 
