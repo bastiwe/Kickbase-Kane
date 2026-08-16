@@ -43,6 +43,9 @@ DISPLAY_LABELS = {
     "Night expiry": "Nacht-Ablauf",
     "Aktueller Verein": "Aktueller Verein",
     "Gesamt": "Gesamt",
+    "Kein API-Key": "Kein API-Key",
+    "API-Fehler": "API-Fehler",
+    "Keine Daten": "Keine Daten",
 }
 
 BADGE_STYLES = {
@@ -57,6 +60,9 @@ BADGE_STYLES = {
     "Night expiry": ("#fee2e2", "#991b1b"),
     "Aktueller Verein": ("#dcfce7", "#166534"),
     "Gesamt": ("#eef2ff", "#3730a3"),
+    "Kein API-Key": ("#f3f4f6", "#374151"),
+    "API-Fehler": ("#fee2e2", "#991b1b"),
+    "Keine Daten": ("#fef3c7", "#92400e"),
 }
 
 POSITION_LABELS = {

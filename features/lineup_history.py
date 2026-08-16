@@ -7,6 +7,7 @@ import pandas as pd
 import requests
 
 BASE_URL = "https://api.bigballsdata.com/v1"
+LINEUP_COLUMNS = ["starter_rate", "recent_starts", "recent_apps", "lineup_scope"]
 
 TEAM_ALIASES = {
     "bayern munich": "bayern munchen",
@@ -62,17 +63,17 @@ def enrich_reports_with_bigballs_lineups(market_df, squad_df):
     api_key = os.getenv("BIGBALLS_API_KEY") or os.getenv("BBS_API_KEY")
     if not api_key:
         print("\nNo BIGBALLS_API_KEY or BBS_API_KEY provided, skipping lineup history.")
-        return market_df, squad_df
+        return add_empty_history_columns(market_df, "Kein API-Key"), add_empty_history_columns(squad_df, "Kein API-Key")
 
     try:
         history = fetch_recent_starter_history(api_key)
     except Exception as e:
         print(f"\nWarning: Could not fetch Big Balls lineup history: {e}")
-        return market_df, squad_df
+        return add_empty_history_columns(market_df, "API-Fehler"), add_empty_history_columns(squad_df, "API-Fehler")
 
     if not history:
         print("\nNo Big Balls lineup history found, skipping lineup history.")
-        return market_df, squad_df
+        return add_empty_history_columns(market_df, "Keine Daten"), add_empty_history_columns(squad_df, "Keine Daten")
 
     return add_history_columns(market_df, history), add_history_columns(squad_df, history)
 
@@ -84,7 +85,14 @@ def fetch_recent_starter_history(api_key):
     since = datetime.now(timezone.utc) - timedelta(days=lookback_days)
 
     matches = get_finished_matches(api_key, league, match_limit)
+    if not matches:
+        discovered_league = discover_league_key(api_key, league)
+        if discovered_league and discovered_league != league:
+            print(f"\nBig Balls: using discovered league key '{discovered_league}' instead of '{league}'.")
+            matches = get_finished_matches(api_key, discovered_league, match_limit)
+
     history = {}
+    lineup_match_count = 0
 
     for match in matches:
         kickoff = parse_datetime(match.get("kickoff_utc") or match.get("date") or match.get("start_time"))
@@ -97,6 +105,8 @@ def fetch_recent_starter_history(api_key):
 
         lineup_payload = get_lineups(api_key, match_id)
         entries = extract_lineup_entries(lineup_payload, match)
+        if entries:
+            lineup_match_count += 1
         per_match = {}
 
         for entry in entries:
@@ -123,6 +133,10 @@ def fetch_recent_starter_history(api_key):
                 if stat["started"]:
                     team_history["starts"] += 1
 
+    print(
+        f"\nBig Balls lineup history: {len(matches)} matches checked, "
+        f"{lineup_match_count} with lineup entries, {len(history)} players matched by name."
+    )
     return history
 
 
@@ -134,7 +148,38 @@ def get_finished_matches(api_key, league, limit):
         "limit": min(limit, 200),
     }
     data = request_json(api_key, "/stored/matches", params=params)
+    matches = data.get("data", []) if isinstance(data, dict) else []
+    if matches:
+        return matches
+
+    data = request_json(api_key, "/matches", params=params)
     return data.get("data", []) if isinstance(data, dict) else []
+
+
+def discover_league_key(api_key, preferred_league):
+    data = request_json(api_key, "/leagues", params={"sport": "football"})
+    leagues = data.get("data", []) if isinstance(data, dict) else []
+    preferred = normalize_name(preferred_league)
+
+    candidates = []
+    for league in leagues:
+        if not isinstance(league, dict):
+            continue
+        values = [
+            league.get("key"),
+            league.get("slug"),
+            league.get("id"),
+            league.get("name"),
+            league.get("display_name"),
+            league.get("displayName"),
+        ]
+        text = " ".join(normalize_name(value) for value in values if value)
+        if preferred and preferred in text:
+            return league.get("key") or league.get("slug") or league.get("id")
+        if "bundesliga" in text and "2 bundesliga" not in text:
+            candidates.append(league.get("key") or league.get("slug") or league.get("id"))
+
+    return next((candidate for candidate in candidates if candidate), None)
 
 
 def get_lineups(api_key, match_id):
@@ -144,7 +189,7 @@ def get_lineups(api_key, match_id):
 def request_json(api_key, path, params=None):
     response = requests.get(
         f"{BASE_URL}{path}",
-        headers={"Authorization": f"Bearer {api_key}"},
+        headers={"Authorization": f"Bearer {api_key}", "x-api-key": api_key},
         params=params,
         timeout=20,
     )
@@ -284,11 +329,26 @@ def add_history_columns(df, history):
     result["starter_rate"] = rows.map(lambda item: item["starter_rate"])
     result["lineup_scope"] = rows.map(lambda item: item["scope"])
 
-    lineup_cols = ["starter_rate", "recent_starts", "recent_apps", "lineup_scope"]
-    other_cols = [col for col in result.columns if col not in lineup_cols]
+    return order_lineup_columns(result)
+
+
+def add_empty_history_columns(df, scope):
+    if df.empty:
+        return df
+
+    result = df.copy()
+    result["starter_rate"] = None
+    result["recent_starts"] = None
+    result["recent_apps"] = None
+    result["lineup_scope"] = scope
+    return order_lineup_columns(result)
+
+
+def order_lineup_columns(result):
+    other_cols = [col for col in result.columns if col not in LINEUP_COLUMNS]
     if "expected_change_pct" in other_cols:
         insert_at = other_cols.index("expected_change_pct") + 1
-        ordered_cols = other_cols[:insert_at] + lineup_cols + other_cols[insert_at:]
+        ordered_cols = other_cols[:insert_at] + LINEUP_COLUMNS + other_cols[insert_at:]
         return result[ordered_cols]
 
     return result
