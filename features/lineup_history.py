@@ -73,6 +73,14 @@ def enrich_reports_with_bigballs_lineups(market_df, squad_df):
 
     if not history:
         print("\nNo Big Balls lineup history found, skipping lineup history.")
+        try:
+            history = fetch_club_form_history_for_reports(api_key, [market_df, squad_df])
+        except Exception as e:
+            print(f"\nWarning: Could not fetch Big Balls club-form fallback: {e}")
+            return add_empty_history_columns(market_df, "API-Fehler"), add_empty_history_columns(squad_df, "API-Fehler")
+
+    if not history:
+        print("\nNo Big Balls club-form fallback found, skipping lineup history.")
         return add_empty_history_columns(market_df, "Keine Daten"), add_empty_history_columns(squad_df, "Keine Daten")
 
     return add_history_columns(market_df, history), add_history_columns(squad_df, history)
@@ -231,6 +239,146 @@ def get_lineups(api_key, match_id):
         raise
 
 
+def fetch_club_form_history_for_reports(api_key, dataframes):
+    players = collect_report_players(dataframes)
+    limit = positive_int_env("BIGBALLS_PLAYER_FORM_LIMIT", 40)
+    history = {}
+    searched_count = 0
+    form_count = 0
+
+    for player in players[:limit]:
+        searched_count += 1
+        candidates = search_players(api_key, player["full_name"])
+        candidate = select_player_candidate(candidates, player)
+        if not candidate:
+            continue
+
+        form = get_player_club_form(api_key, candidate.get("id"))
+        stats = extract_club_form_stats(form)
+        if not stats:
+            continue
+
+        form_count += 1
+        player_key = normalize_name(player["full_name"])
+        team_key = normalize_team_name(player.get("team_name"))
+        player_history = {
+            "total": stats,
+            "teams": {},
+        }
+        if team_key:
+            player_history["teams"][team_key] = stats
+        history[player_key] = player_history
+
+    print(
+        f"Big Balls club-form fallback: {searched_count} report players checked, "
+        f"{form_count} with usable form stats."
+    )
+    return history
+
+
+def collect_report_players(dataframes):
+    players = []
+    seen = set()
+    for df in dataframes:
+        if df.empty or not {"first_name", "last_name"}.issubset(df.columns):
+            continue
+        for _, row in df.iterrows():
+            full_name = f"{row.get('first_name', '')} {row.get('last_name', '')}".strip()
+            key = normalize_name(full_name)
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            players.append({"full_name": full_name, "team_name": row.get("team_name")})
+    return players
+
+
+def search_players(api_key, name):
+    data = request_json(api_key, "/players", params={"name": name, "sport": "football"})
+    return data.get("data", []) if isinstance(data, dict) else []
+
+
+def select_player_candidate(candidates, player):
+    target_name = normalize_name(player["full_name"])
+    target_last_name = normalize_name(player["full_name"]).split()[-1]
+    target_team = normalize_team_name(player.get("team_name"))
+
+    fallback = None
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        candidate_name = normalize_name(extract_player_name(candidate))
+        candidate_team = normalize_team_name(extract_player_team_name(candidate))
+        if candidate_name == target_name and (not target_team or not candidate_team or candidate_team == target_team):
+            return candidate
+        if candidate_name.split()[-1:] == [target_last_name] and fallback is None:
+            fallback = candidate
+
+    return fallback
+
+
+def get_player_club_form(api_key, player_id):
+    if not player_id:
+        return None
+    try:
+        return request_json(api_key, f"/players/{player_id}/club-form", params={"sport": "football"})
+    except requests.HTTPError as e:
+        status_code = e.response.status_code if e.response is not None else None
+        if status_code in {404, 422}:
+            return None
+        raise
+
+
+def extract_club_form_stats(payload):
+    if not payload:
+        return None
+
+    data = payload.get("data", payload) if isinstance(payload, dict) else payload
+
+    best = None
+    for node in walk_nodes(data):
+        if not isinstance(node, dict):
+            continue
+        apps = first_number(node, ["appearances", "apps", "matches", "games", "played"])
+        starts = first_number(node, ["starts", "started", "starting_appearances", "lineups"])
+        minutes = first_number(node, ["minutes", "mins", "minutes_played", "playing_time"])
+        if not apps:
+            continue
+        if starts is None and minutes is not None:
+            starts = min(apps, round(minutes / 90))
+        if starts is None:
+            continue
+        starter_rate = round((starts / apps) * 100, 0) if apps else None
+        best = {"starts": starts, "apps": apps, "starter_rate": starter_rate, "scope": "Club-Form"}
+        break
+
+    return best
+
+
+def walk_nodes(node):
+    yield node
+    if isinstance(node, dict):
+        for value in node.values():
+            yield from walk_nodes(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from walk_nodes(item)
+
+
+def first_number(node, keys):
+    for key in keys:
+        value = node.get(key)
+        if isinstance(value, dict):
+            value = value.get("value")
+        if isinstance(value, (int, float)):
+            return value
+        if isinstance(value, str):
+            try:
+                return float(value)
+            except ValueError:
+                continue
+    return None
+
+
 def request_json(api_key, path, params=None):
     response = requests.get(
         f"{BASE_URL}{path}",
@@ -350,6 +498,11 @@ def extract_player_name(node):
     if direct_name:
         return direct_name
 
+    first_name = node.get("first_name") or node.get("firstName") or node.get("given_name") or node.get("givenName")
+    last_name = node.get("last_name") or node.get("lastName") or node.get("family_name") or node.get("familyName")
+    if first_name or last_name:
+        return f"{first_name or ''} {last_name or ''}".strip()
+
     for key in ("player", "athlete"):
         nested = node.get(key)
         if isinstance(nested, dict):
@@ -453,7 +606,7 @@ def format_history(history, scope):
     starts = history.get("starts")
     apps = history.get("apps")
     starter_rate = round((starts / apps) * 100, 0) if apps else None
-    return {"starts": starts, "apps": apps, "starter_rate": starter_rate, "scope": scope}
+    return {"starts": starts, "apps": apps, "starter_rate": starter_rate, "scope": history.get("scope", scope)}
 
 
 def empty_history():

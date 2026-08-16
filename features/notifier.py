@@ -43,6 +43,7 @@ DISPLAY_LABELS = {
     "Night expiry": "Nacht-Ablauf",
     "Aktueller Verein": "Aktueller Verein",
     "Gesamt": "Gesamt",
+    "Club-Form": "Club-Form",
     "Kein API-Key": "Kein API-Key",
     "API-Fehler": "API-Fehler",
     "Keine Daten": "Keine Daten",
@@ -60,6 +61,7 @@ BADGE_STYLES = {
     "Night expiry": ("#fee2e2", "#991b1b"),
     "Aktueller Verein": ("#dcfce7", "#166534"),
     "Gesamt": ("#eef2ff", "#3730a3"),
+    "Club-Form": ("#e0f2fe", "#075985"),
     "Kein API-Key": ("#f3f4f6", "#374151"),
     "API-Fehler": ("#fee2e2", "#991b1b"),
     "Keine Daten": ("#fef3c7", "#92400e"),
@@ -403,6 +405,7 @@ def send_mail(budget_df, market_df, squad_df, email):
                 <b>Startquote:</b>
                 Optional aus Big Balls Sports Data berechnet. Sie zeigt, wie oft ein Spieler in den zuletzt gefundenen bestätigten Lineups gestartet ist.
                 Die Basis <b>Aktueller Verein</b> nutzt nur Lineups des aktuellen Kickbase-Teams; <b>Gesamt</b> ist der Fallback, wenn ein Spielername gefunden wurde, aber der Verein nicht sicher passt.
+                <b>Club-Form</b> ist eine Näherung aus Big-Balls-Saisonform: geschätzte Starts aus Minuten geteilt durch Einsätze.
                 Die Spalte erscheint nur, wenn <code>BIGBALLS_API_KEY</code> oder <code>BBS_API_KEY</code> gesetzt ist und passende Daten gefunden werden.
             </p>
             <p style="font-size:13px;color:#374151;margin:0;">
