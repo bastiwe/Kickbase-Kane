@@ -1,8 +1,28 @@
 from datetime import datetime, timedelta
 from email.message import EmailMessage
+from numbers import Number
 from zoneinfo import ZoneInfo
 import smtplib
 import os
+
+COLUMN_LABELS = {
+    "recommendation": "Action",
+    "last_name": "Player",
+    "team_name": "Team",
+    "mv": "Market Value",
+    "max_bid": "Max Bid",
+    "mv_change_yesterday": "Yesterday",
+    "predicted_mv_target": "Expected Change",
+    "expected_change_pct": "Expected %",
+    "s_11_prob": "Lineup %",
+    "hours_to_exp": "Hours Left",
+    "risk": "Risk",
+    "User": "Manager",
+    "Budget": "Cash",
+    "Team Value": "Team Value",
+    "Max Negative": "Debt Limit",
+    "Available Budget": "Buying Power",
+}
 
 def send_mail(budget_df, market_df, squad_df, email):
     """Sends an email with the provided DataFrames as HTML tables."""
@@ -28,11 +48,45 @@ def send_mail(budget_df, market_df, squad_df, email):
     msg["From"] = EMAIL_ADDRESS
     msg["To"] = email
 
-    # Styling function for DataFrames
+    market_buy_count = int((market_df.get("recommendation") == "Strong buy").sum()) if "recommendation" in market_df else 0
+    squad_sell_count = int(squad_df.get("recommendation", []).isin(["Sell", "Consider sell"]).sum()) if "recommendation" in squad_df else 0
+    top_budget = budget_df.iloc[0]["User"] if not budget_df.empty and "User" in budget_df else "-"
+
+    def format_number(value):
+        if isinstance(value, bool):
+            return "Yes" if value else "No"
+        if isinstance(value, Number) and not isinstance(value, bool):
+            if value != value:
+                return "-"
+            return f"{value:,.0f}".replace(",", ".")
+        return value
+
+    def format_percent(value):
+        if isinstance(value, Number) and value == value:
+            return f"{value:.2f}%"
+        return "-"
+
+    def prepare_df(df):
+        result = df.copy()
+        for col in result.columns:
+            if col == "expected_change_pct":
+                result[col] = result[col].map(format_percent)
+            elif col in {"mv", "max_bid", "mv_change_yesterday", "predicted_mv_target", "Budget", "Team Value", "Max Negative", "Available Budget"}:
+                result[col] = result[col].map(format_number)
+            elif col == "hours_to_exp":
+                result[col] = result[col].map(lambda value: f"{value:.1f}" if isinstance(value, Number) and value == value else "-")
+            elif col == "s_11_prob":
+                result[col] = result[col].map(lambda value: format_number(value) if value == value else "-")
+
+        return result.rename(columns=COLUMN_LABELS)
+
     def style_df(df):
-        return df.to_html(index=False, border=0, classes="dataframe", escape=False).replace(
+        if df.empty:
+            return '<p style="font-size:14px;color:#555;">No matching players today.</p>'
+
+        return prepare_df(df).to_html(index=False, border=0, classes="dataframe", escape=False).replace(
             "<table",
-            '<table style="width:100%;border-collapse:collapse;font-size:13px;margin:20px 0;"'
+            '<table style="width:100%;border-collapse:collapse;font-size:13px;margin:16px 0 24px 0;"'
         ).replace(
             "<th>",
             '<th style="background:#2c3e50;color:white;padding:8px;text-align:left;border-bottom:1px solid #ddd;">'
@@ -48,24 +102,28 @@ def send_mail(budget_df, market_df, squad_df, email):
     msg.set_content("Sorry, results only via html visible.", subtype="plain")
     msg.add_alternative(f"""\
     <html>
-    <body style="font-family: Arial, sans-serif; background-color: #f9f9f9; margin: 0; padding: 20px;">
-        <div style="max-width: 1000px; margin: auto; background: #ffffff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); overflow-x: auto;">
+    <body style="font-family: Arial, sans-serif; background-color: #f4f6f8; margin: 0; padding: 20px;">
+        <div style="max-width: 1120px; margin: auto; background: #ffffff; padding: 22px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); overflow-x: auto;">
         
-        <h2 style="color: #2c3e50; text-align: center; margin-top: 0;">Kickbase Report for {today}</h2>
+        <h2 style="color: #1f2933; text-align: center; margin-top: 0;">Kickbase Report for {today}</h2>
         
-        <p style="font-size: 14px; color: #333;">Greetings!</p>
+        <div style="display:block;margin:16px 0 24px 0;">
+            <span style="display:inline-block;background:#edf7ed;color:#1f6f3d;padding:8px 10px;border-radius:6px;margin:4px;font-size:13px;"><b>{market_buy_count}</b> strong buys</span>
+            <span style="display:inline-block;background:#fff4e5;color:#8a4b00;padding:8px 10px;border-radius:6px;margin:4px;font-size:13px;"><b>{squad_sell_count}</b> sell checks</span>
+            <span style="display:inline-block;background:#eef2ff;color:#263a8b;padding:8px 10px;border-radius:6px;margin:4px;font-size:13px;">Top buying power: <b>{top_budget}</b></span>
+        </div>
 
         <h3 style="color: #2c3e50; margin-top: 30px;">Manager Budgets</h3>
-        <p style="font-size: 14px; color: #333;">Here are the current budgets of all managers in your league:</p>
+        <p style="font-size: 14px; color: #333;">Estimated cash and buying power after visible transfers, points, login and achievement estimates.</p>
         {style_df(budget_df)}
 
         <h3 style="color: #2c3e50; margin-top: 30px;">Current Market Predictions</h3>
-        <p style="font-size: 14px; color: #333;">The following table shows all available players with a substantial positive predicted market value for the next day:</p>
+        <p style="font-size: 14px; color: #333;">Players with a positive expected next-day value change. Max Bid keeps roughly 35% of the predicted upside as margin.</p>
 
         {style_df(market_df)}
 
         <h3 style="color: #2c3e50; margin-top: 30px;">Your Squad Predictions</h3>
-        <p style="font-size: 14px; color: #333;">Here are the predicted market values for all players currently in your squad:</p>
+        <p style="font-size: 14px; color: #333;">Your squad sorted by predicted value change, including sell and hold signals.</p>
 
         {style_df(squad_df)}
 

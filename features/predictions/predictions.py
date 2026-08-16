@@ -5,6 +5,47 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import numpy as np
 
+def add_recommendation_columns(df, is_market):
+    """Add trading-oriented columns to make the predictions easier to act on."""
+
+    df = df.copy()
+    df["expected_change_pct"] = np.where(
+        df["mv"] > 0,
+        np.round((df["predicted_mv_target"] / df["mv"]) * 100, 2),
+        0
+    )
+
+    if is_market:
+        df["recommendation"] = np.select(
+            [
+                (df["expected_change_pct"] >= 2.0) | (df["predicted_mv_target"] >= 200_000),
+                (df["expected_change_pct"] >= 0.75) | (df["predicted_mv_target"] >= 75_000),
+            ],
+            ["Strong buy", "Buy"],
+            default="Watch"
+        )
+        df["max_bid"] = np.round(df["mv"] + (df["predicted_mv_target"].clip(lower=0) * 0.65), 0)
+        df["risk"] = np.select(
+            [
+                df["expiring_today"],
+                df["s_11_prob"].notna() & (df["s_11_prob"] < 25),
+            ],
+            ["Expires soon", "Low lineup prob"],
+            default="Normal"
+        )
+    else:
+        df["recommendation"] = np.select(
+            [
+                (df["expected_change_pct"] <= -2.0) | (df["predicted_mv_target"] <= -200_000),
+                (df["expected_change_pct"] <= -0.75) | (df["predicted_mv_target"] <= -75_000),
+                (df["expected_change_pct"] >= 1.0) | (df["predicted_mv_target"] >= 100_000),
+            ],
+            ["Sell", "Consider sell", "Keep"],
+            default="Hold"
+        )
+
+    return df
+
 def live_data_predictions(today_df, model, features):
     """Make live data predictions for today_df using the trained model"""
 
@@ -55,8 +96,11 @@ def join_current_squad(token, league_id, today_df_results):
     # Rename "mv_x" to "mv" for better understanding
     squad_df = squad_df.rename(columns={"mv_x": "mv"})
 
+    squad_df = add_recommendation_columns(squad_df, is_market=False)
+    squad_df = squad_df.sort_values("predicted_mv_target", ascending=True)
+
     # Keep only relevant columns
-    squad_df = squad_df[["last_name", "team_name", "mv", "mv_change_yesterday", "predicted_mv_target", "s_11_prob"]]
+    squad_df = squad_df[["recommendation", "last_name", "team_name", "mv", "mv_change_yesterday", "predicted_mv_target", "expected_change_pct", "s_11_prob"]]
 
     return squad_df 
 
@@ -82,16 +126,12 @@ def join_current_market(token, league_id, today_df_results):
     # check if current sysdate + hours_to_exp is after the next 22:00
     now = datetime.now(ZoneInfo("Europe/Berlin"))
     next_22 = now.replace(hour=22, minute=0, second=0, microsecond=0)
+    if now >= next_22:
+        next_22 += timedelta(days=1)
     diff = np.round((next_22 - now).total_seconds() / 3600, 2)
 
     # If hours_to_exp < diff then it expires today
     bid_df["expiring_today"] = bid_df["hours_to_exp"] < diff
-
-    # Drop rows where predicted_mv_target is less than 5000
-    bid_df = bid_df[bid_df["predicted_mv_target"] > 5000]
-
-    # Sort by predicted_mv_target descending
-    bid_df = bid_df.sort_values("predicted_mv_target", ascending=False)
 
     # Rename prob to s_11_prob for better understanding
     if "prob" not in bid_df.columns:
@@ -101,7 +141,15 @@ def join_current_market(token, league_id, today_df_results):
     # Rename mv_change_1d to mv_change_yesterday for better understanding
     bid_df = bid_df.rename(columns={"mv_change_1d": "mv_change_yesterday"})
 
+    bid_df = add_recommendation_columns(bid_df, is_market=True)
+
+    # Drop weak recommendations from the market overview.
+    bid_df = bid_df[bid_df["recommendation"] != "Watch"]
+
+    # Sort by expected absolute profit, then relative upside.
+    bid_df = bid_df.sort_values(["predicted_mv_target", "expected_change_pct"], ascending=False)
+
     # Keep only relevant columns
-    bid_df = bid_df[["last_name", "team_name", "mv", "mv_change_yesterday", "predicted_mv_target", "s_11_prob", "hours_to_exp", "expiring_today"]]
+    bid_df = bid_df[["recommendation", "last_name", "team_name", "mv", "max_bid", "mv_change_yesterday", "predicted_mv_target", "expected_change_pct", "s_11_prob", "hours_to_exp", "risk"]]
 
     return bid_df
