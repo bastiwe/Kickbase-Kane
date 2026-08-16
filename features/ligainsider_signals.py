@@ -110,6 +110,8 @@ def fetch_ligainsider_signals(dataframes):
     fetched = 0
     matched = 0
     starters = 0
+    player_pages_checked = 0
+    player_rates_found = 0
 
     for team_key, players in players_by_team.items():
         url = team_urls.get(team_key)
@@ -120,7 +122,15 @@ def fetch_ligainsider_signals(dataframes):
         fetched += 1
         page_signal = extract_page_signals(parser)
         for player in players:
-            signal = resolve_player_signal(player, page_signal)
+            player_page_url = resolve_player_url(player, page_signal)
+            player_rate = None
+            if player_page_url:
+                player_pages_checked += 1
+                player_rate = fetch_player_starter_rate(player_page_url)
+                if player_rate is not None:
+                    player_rates_found += 1
+
+            signal = resolve_player_signal(player, page_signal, player_rate)
             if signal:
                 matched += 1
                 if signal["li_status"] == "Startelf":
@@ -130,7 +140,8 @@ def fetch_ligainsider_signals(dataframes):
 
     print(
         f"\nLigaInsider signals: {fetched} team pages checked, "
-        f"{matched} report players matched, {starters} projected starters."
+        f"{matched} report players matched, {starters} projected starters, "
+        f"{player_rates_found}/{player_pages_checked} player Bundesliga starter rates found."
     )
     return signals
 
@@ -209,12 +220,17 @@ def extract_page_signals(parser):
 
     predicted = set()
     known = set()
+    player_urls = {}
     unavailable = set()
 
-    for _, link_text in parser.links:
+    for href, link_text in parser.links:
         if is_probable_player_name(link_text):
             aliases = player_name_aliases(link_text)
             known.update(aliases)
+            player_url = ligainsider_player_url(href)
+            if player_url:
+                for alias in aliases:
+                    player_urls.setdefault(alias, player_url)
             if any(contains_name_alias(normalized_prediction_text, alias) for alias in aliases):
                 predicted.update(aliases)
 
@@ -223,7 +239,12 @@ def extract_page_signals(parser):
         if status_word in lowered:
             unavailable.add(status_word)
 
-    return {"predicted": predicted, "known": known, "unavailable_markers": unavailable}
+    return {
+        "predicted": predicted,
+        "known": known,
+        "player_urls": player_urls,
+        "unavailable_markers": unavailable,
+    }
 
 
 def extract_prediction_section(text):
@@ -251,8 +272,54 @@ def contains_name_alias(text, alias):
     return re.search(rf"(^| ){re.escape(alias)}($| )", text) is not None
 
 
-def resolve_player_signal(player, page_signal):
+def ligainsider_player_url(href):
+    if not href:
+        return None
+    if "/bundesliga/team/" in href:
+        return None
+    if not re.search(r"_\d+/?$", href):
+        return None
+    return urljoin(BASE_URL, href)
+
+
+def resolve_player_url(player, page_signal):
+    for candidate in player["aliases"]:
+        url = page_signal.get("player_urls", {}).get(candidate)
+        if url:
+            return url
+    return None
+
+
+def fetch_player_starter_rate(url):
+    try:
+        parser = parse_page(url)
+    except requests.RequestException:
+        return None
+    time.sleep(float(os.getenv("LIGAINSIDER_REQUEST_DELAY", "0.4")))
+    return parse_bundesliga_starter_rate("\n".join(parser.text_parts))
+
+
+def parse_bundesliga_starter_rate(text):
+    section = after_marker(text, ["EINSATZQUOTE"])
+    if not section:
+        return None
+
+    section = before_marker(section, ["LIGA-RANKING", "DATEN POWERED", "NEWS"])
+    rates = re.findall(r"STARTELF:\s*([0-9]+(?:[,.][0-9]+)?)%", section.upper())
+    if not rates:
+        return None
+
+    if "BUNDESLIGA" not in section.upper():
+        return None
+
+    target_index = 1 if len(rates) > 1 else 0
+    return float(rates[target_index].replace(",", "."))
+
+
+def resolve_player_signal(player, page_signal, player_rate=None):
     candidates = player["aliases"]
+    if player_rate is not None:
+        return {"starter_rate": player_rate, "lineup_scope": "LI-Bundesliga", "li_status": "Startelfquote"}
     if any(candidate in page_signal["predicted"] for candidate in candidates):
         return {"starter_rate": 90, "lineup_scope": "LI-Startelf", "li_status": "Startelf"}
     if any(candidate in page_signal["known"] for candidate in candidates):
@@ -313,6 +380,11 @@ def before_marker(text, markers):
     upper_text = text.upper()
     positions = [upper_text.find(marker) for marker in markers if upper_text.find(marker) > 0]
     return text[: min(positions)] if positions else text
+
+
+def after_marker(text, markers):
+    start = find_marker(text, markers)
+    return text[start:] if start >= 0 else ""
 
 
 def find_marker(text, markers):

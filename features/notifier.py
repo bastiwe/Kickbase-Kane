@@ -42,7 +42,9 @@ DISPLAY_LABELS = {
     "Night expiry": "Nacht-Ablauf",
     "LI-Startelf": "LI-Startelf",
     "LI-Kader": "LI-Kader",
+    "LI-Bundesliga": "LI-Bundesliga",
     "Startelf": "Startelf",
+    "Startelfquote": "Startelfquote",
     "Kader": "Kader",
     "Nicht gefunden": "Nicht gefunden",
     "Kein Treffer": "Kein Treffer",
@@ -63,7 +65,9 @@ BADGE_STYLES = {
     "Night expiry": ("#fee2e2", "#991b1b"),
     "LI-Startelf": ("#dcfce7", "#166534"),
     "LI-Kader": ("#fef3c7", "#92400e"),
+    "LI-Bundesliga": ("#dcfce7", "#166534"),
     "Startelf": ("#dcfce7", "#166534"),
+    "Startelfquote": ("#dcfce7", "#166534"),
     "Kader": ("#fef3c7", "#92400e"),
     "Nicht gefunden": ("#f3f4f6", "#374151"),
     "Kein Treffer": ("#f3f4f6", "#374151"),
@@ -408,10 +412,10 @@ def send_mail(budget_df, market_df, squad_df, email):
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>LI-Signal:</b>
-                Optional aus den öffentlich sichtbaren LigaInsider-Teamseiten abgeleitet.
-                {badge("LI-Startelf")} bedeutet: Spieler wurde in der öffentlichen voraussichtlichen Aufstellung gefunden.
-                {badge("LI-Kader")} bedeutet: Spieler wurde auf der Teamseite gefunden, aber nicht eindeutig in der Startelf-Zone.
-                Die Prozentzahl ist eine eigene grobe Ableitung, keine offizielle LigaInsider-ProZone-Wahrscheinlichkeit.
+                Bevorzugt aus der öffentlichen LigaInsider-Spielerseite im Bereich Einsatzquote abgeleitet.
+                {badge("LI-Bundesliga")} bedeutet: LI % ist die historische Startelfquote nur im Bundesliga-Wettbewerb.
+                Falls keine Spielerseite/Quote gefunden wird, bleibt {badge("LI-Startelf")} oder {badge("LI-Kader")} als Teamseiten-Fallback.
+                Das ist eine Historienquote, keine offizielle Kickbase- oder LigaInsider-Prognose für den nächsten Spieltag.
             </p>
             <p style="font-size:13px;color:#374151;margin:0;">
                 <b>Eigener Kader:</b>
