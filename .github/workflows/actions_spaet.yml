@@ -48,5 +48,7 @@ jobs:
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
           KICK_USER: ${{ secrets.KICK_USER }}
           KICK_PASS: ${{ secrets.KICK_PASS }}
+          BIGBALLS_API_KEY: ${{ secrets.BIGBALLS_API_KEY }}
+          BBS_API_KEY: ${{ secrets.BBS_API_KEY }}
         run: |
           python daily_predictions_spaet.py

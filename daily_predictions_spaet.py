@@ -11,6 +11,7 @@ from features.predictions.data_handler import (
     load_player_data_from_db,
 )
 from features.budgets import calc_manager_budgets
+from features.lineup_history import enrich_reports_with_bigballs_lineups
 from IPython.display import display
 from dotenv import load_dotenv
 import os, pandas as pd
@@ -99,11 +100,18 @@ live_predictions_df = live_data_predictions(today_df, model, features)
 
 # Join with current available players on the market
 market_recommendations_df = join_current_market(token, league_id, live_predictions_df)
-print("\n=== Market Recommendations ===")
-display(market_recommendations_df)
 
 # Join with current players on the team
 squad_recommendations_df = join_current_squad(token, league_id, live_predictions_df)
+
+market_recommendations_df, squad_recommendations_df = enrich_reports_with_bigballs_lineups(
+    market_recommendations_df,
+    squad_recommendations_df,
+)
+
+print("\n=== Market Recommendations ===")
+display(market_recommendations_df)
+
 print("\n=== Squad Recommendations ===")
 display(squad_recommendations_df)
 

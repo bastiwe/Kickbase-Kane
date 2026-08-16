@@ -17,6 +17,9 @@ COLUMN_LABELS = {
     "mv_change_yesterday": "Gestern",
     "predicted_mv_target": "Erwartete Änderung",
     "expected_change_pct": "Erwartet %",
+    "starter_rate": "Startquote",
+    "recent_starts": "Starts",
+    "recent_apps": "Kader",
     "hours_to_exp": "Reststunden",
     "risk": "Risiko",
     "User": "Manager",
@@ -166,6 +169,22 @@ def send_mail(budget_df, market_df, squad_df, email):
             f'{formatted}</span>'
         )
 
+    def starter_rate_value(value):
+        formatted = format_percent(value) if isinstance(value, Number) and value == value else "-"
+        if not isinstance(value, Number) or value != value:
+            return formatted
+        if value >= 80:
+            background, color = "#dcfce7", "#166534"
+        elif value >= 50:
+            background, color = "#fef3c7", "#92400e"
+        else:
+            background, color = "#fee2e2", "#991b1b"
+        return (
+            f'<span style="display:inline-block;background:{background};color:{color};'
+            'font-weight:700;border-radius:6px;padding:3px 7px;white-space:nowrap;">'
+            f'{formatted}</span>'
+        )
+
     def position_label(value):
         return POSITION_LABELS.get(value, POSITION_LABELS.get(str(value), "-"))
 
@@ -278,11 +297,13 @@ def send_mail(budget_df, market_df, squad_df, email):
                 result[col] = result[col].map(badge)
             elif col == "expected_change_pct":
                 result[col] = result[col].map(lambda value: colored_number(value, format_percent(value)))
+            elif col == "starter_rate":
+                result[col] = result[col].map(starter_rate_value)
             elif col in {"mv_change_yesterday", "predicted_mv_target"}:
                 result[col] = result[col].map(lambda value: colored_number(value, format_number(value)))
             elif col == "Available Budget":
                 result[col] = result[col].map(lambda value: budget_value(value, format_number(value)))
-            elif col in {"mv", "max_bid", "Budget", "Team Value", "Max Negative"}:
+            elif col in {"mv", "max_bid", "Budget", "Team Value", "Max Negative", "recent_starts", "recent_apps"}:
                 result[col] = result[col].map(format_number)
             elif col == "hours_to_exp":
                 result[col] = result[col].map(hours_value)
@@ -330,6 +351,11 @@ def send_mail(budget_df, market_df, squad_df, email):
                 <b>Risiko:</b>
                 {badge("Before MV update")} bedeutet, dass das Angebot vor der nächsten Marktwert-Neuberechnung um 22:00 Uhr abläuft.
                 Dann kaufst du noch ohne den neuen Marktwert zu kennen.
+            </p>
+            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
+                <b>Startquote:</b>
+                Optional aus Big Balls Sports Data berechnet. Sie zeigt, wie oft ein Spieler in den zuletzt gefundenen bestätigten Lineups gestartet ist.
+                Die Spalte erscheint nur, wenn <code>BIGBALLS_API_KEY</code> oder <code>BBS_API_KEY</code> gesetzt ist und passende Daten gefunden werden.
             </p>
             <p style="font-size:13px;color:#374151;margin:0;">
                 <b>Eigener Kader:</b>
