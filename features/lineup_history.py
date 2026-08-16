@@ -88,7 +88,7 @@ def enrich_reports_with_bigballs_lineups(market_df, squad_df):
 
 def fetch_recent_starter_history(api_key):
     league = os.getenv("BIGBALLS_LEAGUE", "bundesliga")
-    lookback_days = positive_int_env("BIGBALLS_LOOKBACK_DAYS", 120)
+    lookback_days = positive_int_env("BIGBALLS_LOOKBACK_DAYS", 430)
     match_limit = positive_int_env("BIGBALLS_MATCH_LIMIT", 80)
     now = datetime.now(timezone.utc)
     since = now - timedelta(days=lookback_days)
@@ -162,7 +162,7 @@ def fetch_recent_starter_history(api_key):
 
 
 def get_finished_matches(api_key, league, limit):
-    matches = get_sdk_style_matches(api_key, league, limit)
+    matches = get_last_season_stored_matches(api_key, league, limit)
     if matches:
         return matches
 
@@ -170,7 +170,31 @@ def get_finished_matches(api_key, league, limit):
     if matches:
         return matches
 
+    matches = get_sdk_style_matches(api_key, league, limit)
+    if matches:
+        return matches
+
     return []
+
+
+def get_last_season_stored_matches(api_key, league, limit):
+    matches = []
+    for season in get_history_seasons():
+        remaining = limit - len(matches)
+        if remaining <= 0:
+            break
+        matches.extend(get_stored_finished_matches(api_key, league, remaining, season=season))
+    return matches[:limit]
+
+
+def get_history_seasons():
+    configured = os.getenv("BIGBALLS_HISTORY_SEASONS")
+    if configured:
+        return [int(value.strip()) for value in configured.split(",") if value.strip().isdigit()]
+
+    today = datetime.now(timezone.utc)
+    season_start_year = today.year - 1 if today.month >= 7 else today.year - 2
+    return [season_start_year + 1, season_start_year]
 
 
 def get_sdk_style_matches(api_key, league, limit):
@@ -185,13 +209,16 @@ def get_sdk_style_matches(api_key, league, limit):
     return data.get("data", []) if isinstance(data, dict) else []
 
 
-def get_stored_finished_matches(api_key, league, limit):
+def get_stored_finished_matches(api_key, league, limit, season=None):
     params = {
         "sport": "football",
         "league": league,
         "status": "finished",
         "limit": min(limit, 200),
+        "sort": "desc",
     }
+    if season:
+        params["season"] = season
     data = request_json(api_key, "/stored/matches", params=params)
     return data.get("data", []) if isinstance(data, dict) else []
 
@@ -393,7 +420,7 @@ def request_json(api_key, path, params=None):
 def extract_lineup_entries(payload, match=None):
     data = payload.get("data", payload) if isinstance(payload, dict) else payload
     if isinstance(data, dict) and "lineups" in data:
-        data = data["lineups"]
+        data = unwrap_field_result(data["lineups"])
     entries = []
     match = match or {}
     home_team = extract_team_name(match.get("home") or match.get("home_team"))
@@ -413,6 +440,12 @@ def summarize_payload_keys(payload):
     if isinstance(data, list):
         return [f"list[{len(data)}]"]
     return [type(data).__name__]
+
+
+def unwrap_field_result(value):
+    if isinstance(value, dict) and "value" in value:
+        return value["value"]
+    return value
 
 
 def collect_lineup_entries(
