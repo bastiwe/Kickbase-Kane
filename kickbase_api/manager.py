@@ -26,16 +26,19 @@ def get_manager_performance(token, league_id, manager_id, manager_name):
     url = f"{BASE_URL}/leagues/{league_id}/managers/{manager_id}/performance"
     data = get_json_with_token(url, token)
     
-    # Look for season ID "34" (current season 2025/2026)
-    tp_value = 0
-    for season in data["it"]:
-        if season["sid"] == "34":
-            tp_value = season["tp"]
-            break
+    seasons = data.get("it", [])
+    if not seasons:
+        print(f"Warning: No performance data found for {manager_name}")
+        tp_value = 0
     else:
-        # Fallback to first season if sid "34" not found
-        tp_value = data["it"][0]["tp"]
-        print(f"Warning: Season ID '34' not found for {manager_name}, using first season")
+        def season_id(season):
+            try:
+                return int(season.get("sid", 0))
+            except (TypeError, ValueError):
+                return 0
+
+        current_season = max(seasons, key=season_id)
+        tp_value = current_season.get("tp", 0)
     
 
     return {

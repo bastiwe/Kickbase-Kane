@@ -62,18 +62,22 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget):
         perf_df["point_bonus"] = []
         perf_df["Team Value"] = []
 
-    # Initial budgets from activities
-    budgets = {user: start_budget for user in set(activities_df["byr"].dropna().unique())
-                                          .union(set(activities_df["slr"].dropna().unique()))}
+    # Initial cash budgets. Use all managers, not only users that already have transfer activities.
+    budgets = {manager_name: start_budget for manager_name, _ in managers}
 
     for _, row in activities_df.iterrows():
         byr, slr, trp = row.get("byr"), row.get("slr"), row.get("trp", 0)
+        trp = 0 if pd.isna(trp) else trp
         try:
             if pd.isna(byr) and pd.notna(slr):
+                budgets.setdefault(slr, start_budget)
                 budgets[slr] += trp
             elif pd.isna(slr) and pd.notna(byr):
+                budgets.setdefault(byr, start_budget)
                 budgets[byr] -= trp
             elif pd.notna(byr) and pd.notna(slr):
+                budgets.setdefault(byr, start_budget)
+                budgets.setdefault(slr, start_budget)
                 budgets[byr] -= trp
                 budgets[slr] += trp
         except KeyError as e:
@@ -113,11 +117,11 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget):
     except Exception as e:
         print(f"Warning: Could not sync own budget: {e}")
 
-    # TODO check if this also applies if the user has positiv budget, currently only tested with negative budget
-    budget_df["Max Negative"] = (budget_df["Team Value"].fillna(0) + budget_df["Budget"]) * -0.33
+    # Kickbase buying power is cash plus the amount a manager may go into debt.
+    budget_df["Max Negative"] = budget_df["Team Value"].fillna(0) * -0.33
 
     # Calculate available budget
-    budget_df["Available Budget"] = (budget_df["Max Negative"].fillna(0) - budget_df["Budget"]) * -1
+    budget_df["Available Budget"] = budget_df["Budget"] - budget_df["Max Negative"].fillna(0)
 
     # Sort by available budget ascending
     budget_df.sort_values("Available Budget", ascending=False, inplace=True, ignore_index=True)
