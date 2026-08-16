@@ -10,6 +10,7 @@ COLUMN_LABELS = {
     "recommendation": "Action",
     "player_display": "Player",
     "last_name": "Player",
+    "position": "Pos",
     "team_name": "Team",
     "mv": "Market Value",
     "max_bid": "Max Bid",
@@ -37,6 +38,30 @@ BADGE_STYLES = {
     "Expires soon": ("#ffedd5", "#9a3412"),
     "Low lineup prob": ("#fee2e2", "#991b1b"),
 }
+
+POSITION_LABELS = {
+    1: "GK",
+    2: "DEF",
+    3: "MID",
+    4: "FWD",
+    "1": "GK",
+    "2": "DEF",
+    "3": "MID",
+    "4": "FWD",
+}
+
+FORMATIONS = [
+    ("4-4-2", {1: 1, 2: 4, 3: 4, 4: 2}),
+    ("3-4-3", {1: 1, 2: 3, 3: 4, 4: 3}),
+    ("5-3-2", {1: 1, 2: 5, 3: 3, 4: 2}),
+    ("5-4-1", {1: 1, 2: 5, 3: 4, 4: 1}),
+    ("3-6-1", {1: 1, 2: 3, 3: 6, 4: 1}),
+    ("4-2-4", {1: 1, 2: 4, 3: 2, 4: 4}),
+    ("4-3-3", {1: 1, 2: 4, 3: 3, 4: 3}),
+    ("3-5-2", {1: 1, 2: 3, 3: 5, 4: 2}),
+    ("4-5-1", {1: 1, 2: 4, 3: 5, 4: 1}),
+    ("5-2-3", {1: 1, 2: 5, 3: 2, 4: 3}),
+]
 
 def send_mail(budget_df, market_df, squad_df, email):
     """Sends an email with the provided DataFrames as HTML tables."""
@@ -132,6 +157,102 @@ def send_mail(budget_df, market_df, squad_df, email):
             f'{formatted}</span>'
         )
 
+    def lineup_probability(value):
+        formatted = format_number(value) if isinstance(value, Number) and value == value else "-"
+        if not isinstance(value, Number) or value != value:
+            return formatted
+        if value >= 70:
+            background, color = "#dcfce7", "#166534"
+        elif value >= 40:
+            background, color = "#fef3c7", "#92400e"
+        else:
+            background, color = "#fee2e2", "#991b1b"
+        return (
+            f'<span style="display:inline-block;background:{background};color:{color};'
+            'font-weight:700;border-radius:6px;padding:3px 7px;white-space:nowrap;">'
+            f'{formatted}</span>'
+        )
+
+    def position_label(value):
+        return POSITION_LABELS.get(value, POSITION_LABELS.get(str(value), "-"))
+
+    def player_name(row):
+        first_name = "" if row.get("first_name") != row.get("first_name") else str(row.get("first_name", ""))
+        last_name = "" if row.get("last_name") != row.get("last_name") else str(row.get("last_name", ""))
+        return f"{first_name} {last_name}".strip() or "-"
+
+    def build_lineup_advice():
+        if squad_df.empty or "position" not in squad_df:
+            return ""
+
+        counts = {pos: int((squad_df["position"].astype(str) == str(pos)).sum()) for pos in [1, 2, 3, 4]}
+        possible = []
+        missing_by_formation = []
+        for name, required in FORMATIONS:
+            missing = {pos: max(0, required[pos] - counts.get(pos, 0)) for pos in required}
+            missing_total = sum(missing.values())
+            if missing_total == 0:
+                possible.append(name)
+            missing_by_formation.append((name, missing_total, missing))
+
+        best_options = sorted(missing_by_formation, key=lambda item: (item[1], item[0]))[:3]
+        possible_text = ", ".join(possible) if possible else "none yet"
+        counts_text = " / ".join(f"{POSITION_LABELS[pos]} {counts.get(pos, 0)}" for pos in [1, 2, 3, 4])
+
+        needs = []
+        for _, _, missing in best_options:
+            for pos, amount in missing.items():
+                needs.extend([pos] * amount)
+        needed_positions = []
+        for pos in [1, 2, 3, 4]:
+            if pos in needs:
+                needed_positions.append(pos)
+
+        market_rows = []
+        if not market_df.empty and "position" in market_df:
+            candidates = market_df.copy()
+            if needed_positions:
+                candidates = candidates[candidates["position"].astype(str).isin([str(pos) for pos in needed_positions])]
+            candidates["recommendation_rank"] = candidates["recommendation"].map({"Strong buy": 0, "Buy": 1}).fillna(2)
+            candidates = candidates.sort_values(["recommendation_rank", "predicted_mv_target"], ascending=[True, False]).head(4)
+            for _, row in candidates.iterrows():
+                market_rows.append(
+                    f'<li><b>{escape(player_name(row))}</b> ({position_label(row.get("position"))}, {escape(str(row.get("team_name", "-")))}) '
+                    f'- {badge(row.get("recommendation", "Buy"))} '
+                    f'expected {colored_number(row.get("predicted_mv_target"), format_number(row.get("predicted_mv_target")))}'
+                    '</li>'
+                )
+
+        option_rows = []
+        for name, missing_total, missing in best_options:
+            if missing_total == 0:
+                status = '<span style="color:#166534;font-weight:700;">complete</span>'
+            else:
+                missing_text = ", ".join(f"{amount} {POSITION_LABELS[pos]}" for pos, amount in missing.items() if amount)
+                status = f'<span style="color:#92400e;font-weight:700;">missing {missing_text}</span>'
+            option_rows.append(f"<li><b>{name}</b>: {status}</li>")
+
+        market_html = (
+            '<ul style="margin:8px 0 0 18px;padding:0;font-size:13px;color:#374151;">'
+            + "".join(market_rows)
+            + "</ul>"
+            if market_rows else
+            '<p style="font-size:13px;color:#6b7280;margin:8px 0 0 0;">No direct market fit among current buy recommendations.</p>'
+        )
+
+        return f"""
+            <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin:0 0 24px 0;">
+                <h3 style="color:#1f2933;margin:0 0 10px 0;font-size:16px;">Lineup planner</h3>
+                <p style="font-size:13px;color:#4b5563;margin:0 0 8px 0;">
+                    Squad positions: <b>{counts_text}</b>. Possible formations with current squad: <b>{possible_text}</b>.
+                </p>
+                <p style="font-size:13px;color:#374151;margin:0 0 6px 0;"><b>Closest formations:</b></p>
+                <ul style="margin:0 0 10px 18px;padding:0;font-size:13px;color:#374151;">{''.join(option_rows)}</ul>
+                <p style="font-size:13px;color:#374151;margin:0 0 4px 0;"><b>Useful market complements:</b></p>
+                {market_html}
+            </div>
+        """
+
     def prepare_df(df):
         result = df.copy()
         if {"first_name", "last_name"}.issubset(result.columns):
@@ -173,7 +294,9 @@ def send_mail(budget_df, market_df, squad_df, email):
             elif col == "hours_to_exp":
                 result[col] = result[col].map(hours_value)
             elif col == "s_11_prob":
-                result[col] = result[col].map(lambda value: format_number(value) if value == value else "-")
+                result[col] = result[col].map(lineup_probability)
+            elif col == "position":
+                result[col] = result[col].map(position_label)
 
         return result.rename(columns=COLUMN_LABELS)
 
@@ -216,6 +339,7 @@ def send_mail(budget_df, market_df, squad_df, email):
             </p>
         </div>
     """
+    lineup_advice = build_lineup_advice()
 
     # Set email content
     msg.set_content("Sorry, results only via html visible.", subtype="plain")
@@ -233,6 +357,8 @@ def send_mail(budget_df, market_df, squad_df, email):
         </div>
 
         {action_legend}
+
+        {lineup_advice}
 
         <h3 style="color: #2c3e50; margin-top: 30px;">Manager Budgets</h3>
         <p style="font-size: 14px; color: #333;">Estimated cash and buying power after visible transfers, points, login and achievement estimates.</p>
