@@ -342,6 +342,11 @@ def send_mail(budget_df, market_df, squad_df, email):
                 {badge("Buy")} erwartete Änderung >= 75.000 oder >= 0,75%.
                 Schwächere Marktspieler werden ausgeblendet.
             </p>
+            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
+                <b>Max. Gebot:</b>
+                Marktwert + 65% des erwarteten Upsides, danach auf sinnvolle Gebotsstufen aufgerundet
+                und mit kleinem Overbid versehen, um runde Konkurrenzgebote zu schlagen.
+            </p>
             <p style="font-size:13px;color:#374151;margin:0;">
                 <b>Eigener Kader:</b>
                 {badge("Sell")} erwartete Änderung <= -200.000 oder <= -2,00%;

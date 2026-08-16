@@ -5,6 +5,25 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import numpy as np
 
+def psychological_bid(value):
+    """Round a bid up to common thresholds and add a small overbid amount."""
+
+    if pd.isna(value) or value <= 0:
+        return 0
+
+    if value < 1_000_000:
+        step, overbid = 10_000, 1_000
+    elif value < 5_000_000:
+        step, overbid = 50_000, 1_000
+    elif value < 15_000_000:
+        step, overbid = 100_000, 11_000
+    elif value < 30_000_000:
+        step, overbid = 250_000, 11_000
+    else:
+        step, overbid = 500_000, 11_000
+
+    return (np.ceil(value / step) * step) + overbid
+
 def add_recommendation_columns(df, is_market):
     """Add trading-oriented columns to make the predictions easier to act on."""
 
@@ -24,7 +43,8 @@ def add_recommendation_columns(df, is_market):
             ["Strong buy", "Buy"],
             default="Watch"
         )
-        df["max_bid"] = np.round(df["mv"] + (df["predicted_mv_target"].clip(lower=0) * 0.65), 0)
+        raw_max_bid = df["mv"] + (df["predicted_mv_target"].clip(lower=0) * 0.65)
+        df["max_bid"] = raw_max_bid.map(psychological_bid).astype(int)
         df["risk"] = np.select(
             [
                 df["expiring_today"],
