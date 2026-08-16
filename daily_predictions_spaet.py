@@ -1,4 +1,9 @@
-from features.predictions.predictions import live_data_predictions, join_current_market, join_current_squad
+from features.predictions.predictions import (
+    enrich_market_decisions_with_context,
+    live_data_predictions,
+    join_current_market,
+    join_current_squad,
+)
 from features.predictions.preprocessing import preprocess_player_data, split_data
 from features.predictions.modeling import train_model, evaluate_model
 from kickbase_api.league import get_league_id
@@ -117,6 +122,10 @@ market_recommendations_df = join_current_market(token, league_id, live_predictio
 squad_recommendations_df = join_current_squad(token, league_id, live_predictions_df, current_user_id)
 
 market_recommendations_df, squad_recommendations_df = enrich_reports_with_ligainsider_signals(
+    market_recommendations_df,
+    squad_recommendations_df,
+)
+market_recommendations_df = enrich_market_decisions_with_context(
     market_recommendations_df,
     squad_recommendations_df,
 )

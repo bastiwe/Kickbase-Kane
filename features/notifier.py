@@ -8,6 +8,9 @@ import os
 
 COLUMN_LABELS = {
     "recommendation": "Action",
+    "buy_type": "Kaufart",
+    "buy_priority": "Priorität",
+    "team_limit_warning": "Limit",
     "player_display": "Spieler",
     "last_name": "Spieler",
     "position": "Pos",
@@ -64,6 +67,13 @@ DISPLAY_LABELS = {
     "trend_down": "sinkend",
     "Elite-Spieler": "Elite",
     "Top-Spieler": "Top",
+    "Kader-Kauf": "Kader-Kauf",
+    "Trading-Kauf": "Trading-Kauf",
+    "Hoch": "Hoch",
+    "Mittel": "Mittel",
+    "Niedrig": "Niedrig",
+    "Vereinslimit voll": "Limit voll",
+    "füllt 3/3": "füllt 3/3",
 }
 
 BADGE_STYLES = {
@@ -93,6 +103,13 @@ BADGE_STYLES = {
     "trend_down": ("#fee2e2", "#991b1b"),
     "Elite-Spieler": ("#fef3c7", "#854d0e"),
     "Top-Spieler": ("#e0f2fe", "#075985"),
+    "Kader-Kauf": ("#dcfce7", "#166534"),
+    "Trading-Kauf": ("#eef2ff", "#3730a3"),
+    "Hoch": ("#dcfce7", "#166534"),
+    "Mittel": ("#fef3c7", "#92400e"),
+    "Niedrig": ("#f3f4f6", "#374151"),
+    "Vereinslimit voll": ("#fee2e2", "#991b1b"),
+    "füllt 3/3": ("#ffedd5", "#9a3412"),
 }
 
 POSITION_LABELS = {
@@ -437,7 +454,7 @@ def send_mail(budget_df, market_df, squad_df, email):
         result = result.drop(columns=["lineup_scope", "li_status", "ligainsider_url"], errors="ignore")
 
         for col in result.columns:
-            if col in {"recommendation", "risk", "top_player_tag"}:
+            if col in {"recommendation", "risk", "top_player_tag", "buy_type", "buy_priority", "team_limit_warning"}:
                 result[col] = result[col].map(badge)
             elif col == "mv_trend":
                 result[col] = result[col].map(trend_value)
@@ -467,7 +484,7 @@ def send_mail(budget_df, market_df, squad_df, email):
             return '<p style="font-size:14px;color:#555;">Heute gibt es keine passenden Spieler.</p>'
 
         result = prepare_df(df)
-        hidden_cols = {"has_open_bid", "is_listed_for_sale"}
+        hidden_cols = {"has_open_bid", "is_listed_for_sale", "buy_priority_score", "position_needed"}
         visible_cols = [col for col in result.columns if col not in hidden_cols]
         header_html = "".join(
             '<th style="background:#2c3e50;color:white;padding:6px;text-align:left;'
@@ -508,7 +525,13 @@ def send_mail(budget_df, market_df, squad_df, email):
                 <b>Markt:</b>
                 {badge("Strong buy")} erwartete Änderung >= 200.000 oder >= 2,00%;
                 {badge("Buy")} erwartete Änderung >= 75.000 oder >= 0,75%.
-                Schwächere Marktspieler werden ausgeblendet.
+                Zusätzlich bleiben offene Gebote, Topspieler und Spieler mit hoher oder mittlerer Kaufpriorität sichtbar.
+            </p>
+            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
+                <b>Kaufart & Priorität:</b>
+                {badge("Kader-Kauf")} meint langfristige Kaderverstärkung, vor allem durch Vorsaisonklasse, hohe LI-Startelfquote oder passende Position.
+                {badge("Trading-Kauf")} ist primär ein Marktwert-Trade.
+                Die Priorität {badge("Hoch")} / {badge("Mittel")} / {badge("Niedrig")} kombiniert Vorsaisonklasse, LI %, 7T-Prognose und deinen Positionsbedarf.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Klasse:</b>
@@ -517,7 +540,8 @@ def send_mail(budget_df, market_df, squad_df, email):
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Max. Gebot:</b>
-                Marktwert + 65% des erwarteten Upsides, danach auf sinnvolle Gebotsstufen aufgerundet
+                Trading-Käufe bleiben konservativ. Bei {badge("Kader-Kauf")} und besonders bei {badge("Elite-Spieler")}
+                wird mehr vom 1T/3T/7T-Upside eingepreist, danach auf psychologisch sinnvolle Gebotsstufen aufgerundet
                 und mit kleinem Overbid versehen, um runde Konkurrenzgebote zu schlagen.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
@@ -547,7 +571,8 @@ def send_mail(budget_df, market_df, squad_df, email):
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Kaderlimits:</b>
                 Maximal 16 Spieler insgesamt und maximal 3 Spieler pro Verein.
-                Gelb markiert 2/3 bei einem Verein, rot markiert volle Limits.
+                {badge("füllt 3/3")} warnt, dass der Kauf deinen dritten Spieler dieses Vereins belegt.
+                {badge("Vereinslimit voll")} bedeutet, dass der Verein in deinem Kader bereits bei 3/3 steht.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Zeilenfarben:</b>
@@ -591,7 +616,7 @@ def send_mail(budget_df, market_df, squad_df, email):
         {style_df(budget_df)}
 
         <h3 style="color: #2c3e50; margin-top: 30px;">Aktuelle Markt-Empfehlungen</h3>
-        <p style="font-size: 14px; color: #333;">Spieler mit positiver erwarteter Marktwertänderung für den nächsten Tag. Das maximale Gebot lässt grob 35% des prognostizierten Upsides als Puffer.</p>
+        <p style="font-size: 14px; color: #333;">Spieler mit Trading- oder Kaderwert. Das maximale Gebot ist je nach Kaufart konservativer oder aggressiver berechnet.</p>
 
         {style_df(market_df)}
 

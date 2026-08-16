@@ -1,4 +1,9 @@
-from features.predictions.predictions import live_data_predictions, join_current_market, join_current_squad
+from features.predictions.predictions import (
+    enrich_market_decisions_with_context,
+    live_data_predictions,
+    join_current_market,
+    join_current_squad,
+)
 from features.predictions.preprocessing import preprocess_player_data, split_data
 from features.predictions.modeling import train_model, evaluate_model
 from kickbase_api.league import get_league_id
@@ -110,13 +115,19 @@ live_predictions_df = live_data_predictions(today_df, models, features, proc_pla
 
 # Join with current available players on the market
 market_recommendations_df = join_current_market(token, league_id, live_predictions_df)
-print("\n=== Market Recommendations ===")
-display(market_recommendations_df)
 
 # Join with current players on the team
 squad_recommendations_df = join_current_squad(token, league_id, live_predictions_df)
 print("\n=== Squad Recommendations ===")
 display(squad_recommendations_df)
+
+market_recommendations_df = enrich_market_decisions_with_context(
+    market_recommendations_df,
+    squad_recommendations_df,
+)
+
+print("\n=== Market Recommendations ===")
+display(market_recommendations_df)
 
 # Send email with recommendations
 # send_mail(manager_budgets_df, market_recommendations_df, squad_recommendations_df, email)
