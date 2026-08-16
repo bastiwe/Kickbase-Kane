@@ -146,7 +146,7 @@ def join_current_market(token, league_id, today_df_results):
     diff = np.round((next_22 - now).total_seconds() / 3600, 2)
 
     bid_df["expires_before_mv_update"] = bid_df["hours_to_exp"] < diff
-    bid_df["expires_overnight"] = bid_df["expires_at"].map(is_night_expiry)
+    bid_df["expires_overnight"] = bid_df["expires_at"].map(lambda expires_at: is_night_expiry(expires_at, now))
 
     # Rename mv_change_1d to mv_change_yesterday for better understanding
     bid_df = bid_df.rename(columns={"mv_change_1d": "mv_change_yesterday"})
@@ -169,10 +169,27 @@ def join_current_market(token, league_id, today_df_results):
     return bid_df
 
 
-def is_night_expiry(expires_at):
-    """Return True when an offer expires between 22:00 and 09:00 Berlin time."""
+def is_night_expiry(expires_at, now=None):
+    """Return True when an offer expires in the next 22:00-09:00 sleep window."""
 
     if pd.isna(expires_at):
         return False
-    hour = expires_at.astimezone(ZoneInfo("Europe/Berlin")).hour
-    return hour >= 22 or hour < 9
+
+    berlin = ZoneInfo("Europe/Berlin")
+    current_time = (now or datetime.now(berlin)).astimezone(berlin)
+    expiry_time = expires_at.astimezone(berlin)
+
+    today_nine = current_time.replace(hour=9, minute=0, second=0, microsecond=0)
+    today_twenty_two = current_time.replace(hour=22, minute=0, second=0, microsecond=0)
+
+    if current_time < today_nine:
+        sleep_start = current_time
+        sleep_end = today_nine
+    elif current_time < today_twenty_two:
+        sleep_start = today_twenty_two
+        sleep_end = today_twenty_two + timedelta(hours=11)
+    else:
+        sleep_start = current_time
+        sleep_end = today_nine + timedelta(days=1)
+
+    return sleep_start <= expiry_time < sleep_end

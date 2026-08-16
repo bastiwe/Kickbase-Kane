@@ -378,7 +378,7 @@ def send_mail(budget_df, market_df, squad_df, email):
                 <b>Risiko:</b>
                 {badge("Before MV update")} bedeutet, dass das Angebot vor der nächsten Marktwert-Neuberechnung um 22:00 Uhr abläuft.
                 Dann kaufst du noch ohne den neuen Marktwert zu kennen.
-                {badge("Night expiry")} bedeutet, dass das Angebot zwischen 22:00 Uhr und 09:00 Uhr ausläuft; solche Gebote solltest du am Vorabend erledigen.
+                {badge("Night expiry")} bedeutet, dass das Angebot in der kommenden Nacht bis 09:00 Uhr ausläuft; solche Gebote solltest du am Vorabend erledigen.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Startquote:</b>
