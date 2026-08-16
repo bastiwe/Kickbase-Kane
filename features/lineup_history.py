@@ -275,12 +275,24 @@ def fetch_club_form_history_for_reports(api_key, dataframes):
 
     for player in players[:limit]:
         searched_count += 1
-        candidates = search_players(api_key, player["full_name"])
+        try:
+            candidates = search_players(api_key, player["full_name"])
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code == 429:
+                print("Big Balls club-form fallback stopped early because of rate limiting.")
+                break
+            raise
         candidate = select_player_candidate(candidates, player)
         if not candidate:
             continue
 
-        form = get_player_club_form(api_key, candidate.get("id"))
+        try:
+            form = get_player_club_form(api_key, candidate.get("id"))
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code == 429:
+                print("Big Balls club-form fallback stopped early because of rate limiting.")
+                break
+            raise
         stats = extract_club_form_stats(form)
         if not stats:
             continue
@@ -477,7 +489,12 @@ def collect_lineup_entries(
 
         for key, value in node.items():
             key_lower = str(key).lower()
+            if name and key_lower in {"player", "athlete"}:
+                continue
             child_team = node_team
+            is_home_lineup = key_lower in {"home", "hometeam", "home_team", "homelineup", "home_lineup"}
+            is_away_lineup = key_lower in {"away", "awayteam", "away_team", "awaylineup", "away_lineup"}
+            is_top_level_lineup_side = key_lower in {"home", "away"} and looks_like_lineup_side(value)
             if key_lower in {"home", "hometeam", "home_team", "homelineup", "home_lineup", "homebench", "home_bench"}:
                 child_team = local_home or node_team
             elif key_lower in {"away", "awayteam", "away_team", "awaylineup", "away_lineup", "awaybench", "away_bench"}:
@@ -489,7 +506,7 @@ def collect_lineup_entries(
                 current_team=child_team,
                 home_team=local_home,
                 away_team=local_away,
-                in_starters=in_starters or key_lower in {
+                in_starters=in_starters or is_top_level_lineup_side or key_lower in {
                     "starting_xi",
                     "startingxi",
                     "starters",
@@ -500,7 +517,7 @@ def collect_lineup_entries(
                     "awaylineup",
                     "away_lineup",
                 },
-                in_squad=in_squad or key_lower in {
+                in_squad=in_squad or is_top_level_lineup_side or is_home_lineup or is_away_lineup or key_lower in {
                     "players",
                     "squad",
                     "bench",
@@ -524,6 +541,26 @@ def collect_lineup_entries(
                 in_starters=in_starters,
                 in_squad=in_squad,
             )
+
+
+def looks_like_lineup_side(value):
+    if isinstance(value, list):
+        return True
+    if not isinstance(value, dict):
+        return False
+    lineup_keys = {
+        "players",
+        "squad",
+        "lineup",
+        "lineups",
+        "starting_xi",
+        "startingxi",
+        "starters",
+        "bench",
+        "substitutes",
+        "subs",
+    }
+    return any(str(key).lower() in lineup_keys for key in value)
 
 
 def extract_player_name(node):
