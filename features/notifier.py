@@ -275,6 +275,31 @@ def send_mail(budget_df, market_df, squad_df, email):
         best_options = sorted(missing_by_formation, key=lambda item: (item[1], item[0]))[:3]
         possible_text = ", ".join(possible) if possible else "noch keine"
         counts_text = " / ".join(f"{POSITION_LABELS[pos]} {counts.get(pos, 0)}" for pos in [1, 2, 3, 4])
+        squad_size = len(squad_df)
+        squad_slots_left = max(0, 16 - squad_size)
+        if squad_size >= 16:
+            squad_size_style = "background:#fee2e2;color:#991b1b;"
+        elif squad_size >= 14:
+            squad_size_style = "background:#fef3c7;color:#92400e;"
+        else:
+            squad_size_style = "background:#dcfce7;color:#166534;"
+
+        team_limit_html = ""
+        if "team_name" in squad_df:
+            team_counts = squad_df["team_name"].dropna().astype(str).value_counts().sort_index()
+            team_chips = []
+            for team, amount in team_counts.items():
+                if amount >= 3:
+                    style = "background:#fee2e2;color:#991b1b;"
+                elif amount == 2:
+                    style = "background:#fef3c7;color:#92400e;"
+                else:
+                    style = "background:#f3f4f6;color:#374151;"
+                team_chips.append(
+                    f'<span style="display:inline-block;{style}font-weight:700;border-radius:999px;'
+                    f'padding:4px 9px;margin:2px;white-space:nowrap;">{escape(team)} {amount}/3</span>'
+                )
+            team_limit_html = "".join(team_chips)
 
         needs = []
         for _, _, missing in best_options:
@@ -322,6 +347,13 @@ def send_mail(budget_df, market_df, squad_df, email):
                 <h3 style="color:#1f2933;margin:0 0 10px 0;font-size:16px;">Aufstellungsplaner</h3>
                 <p style="font-size:13px;color:#4b5563;margin:0 0 8px 0;">
                     Kaderpositionen: <b>{counts_text}</b>. Mögliche Formationen mit aktuellem Kader: <b>{possible_text}</b>.
+                </p>
+                <p style="font-size:13px;color:#4b5563;margin:0 0 8px 0;">
+                    Kadergröße:
+                    <span style="display:inline-block;{squad_size_style}font-weight:700;border-radius:999px;padding:4px 9px;white-space:nowrap;">{squad_size}/16</span>
+                    <span style="color:#6b7280;">({squad_slots_left} Plätze frei)</span>
+                    <span style="margin-left:10px;">Max. 3 Spieler pro Verein:</span>
+                    {team_limit_html}
                 </p>
                 <p style="font-size:13px;color:#374151;margin:0 0 6px 0;"><b>Nächstliegende Formationen:</b></p>
                 <ul style="margin:0 0 10px 18px;padding:0;font-size:13px;color:#374151;">{''.join(option_rows)}</ul>
@@ -459,6 +491,11 @@ def send_mail(budget_df, market_df, squad_df, email):
                 {badge("LI-Bundesliga")} bedeutet: LI % ist die historische Startelfquote nur im Bundesliga-Wettbewerb.
                 Falls keine Spielerseite/Quote gefunden wird, bleibt {badge("LI-Startelf")} oder {badge("LI-Kader")} als Teamseiten-Fallback.
                 Das ist eine Historienquote, keine offizielle Kickbase- oder LigaInsider-Prognose für den nächsten Spieltag.
+            </p>
+            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
+                <b>Kaderlimits:</b>
+                Maximal 16 Spieler insgesamt und maximal 3 Spieler pro Verein.
+                Gelb markiert 2/3 bei einem Verein, rot markiert volle Limits.
             </p>
             <p style="font-size:13px;color:#374151;margin:0;">
                 <b>Eigener Kader:</b>
