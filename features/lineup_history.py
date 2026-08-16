@@ -94,6 +94,8 @@ def fetch_recent_starter_history(api_key):
 
     history = {}
     lineup_match_count = 0
+    lineup_payload_count = 0
+    first_payload_keys = None
 
     for match in matches:
         kickoff = parse_datetime(match.get("kickoff_utc") or match.get("date") or match.get("start_time"))
@@ -109,6 +111,9 @@ def fetch_recent_starter_history(api_key):
         lineup_payload = get_lineups(api_key, match_id)
         if not lineup_payload:
             continue
+        lineup_payload_count += 1
+        if first_payload_keys is None:
+            first_payload_keys = summarize_payload_keys(lineup_payload)
         entries = extract_lineup_entries(lineup_payload, match)
         if entries:
             lineup_match_count += 1
@@ -140,8 +145,11 @@ def fetch_recent_starter_history(api_key):
 
     print(
         f"\nBig Balls lineup history: {len(matches)} matches checked, "
+        f"{lineup_payload_count} with lineup payloads, "
         f"{lineup_match_count} with lineup entries, {len(history)} players matched by name."
     )
+    if first_payload_keys:
+        print(f"Big Balls first lineup payload keys: {first_payload_keys}")
     return history
 
 
@@ -211,6 +219,13 @@ def get_lineups(api_key, match_id):
         return request_json(api_key, f"/stored/matches/{match_id}/lineups")
     except requests.HTTPError as e:
         status_code = e.response.status_code if e.response is not None else None
+        if status_code not in {404, 422}:
+            raise
+
+    try:
+        return request_json(api_key, f"/matches/{match_id}", params={"fields": "lineups"})
+    except requests.HTTPError as e:
+        status_code = e.response.status_code if e.response is not None else None
         if status_code in {404, 422}:
             return None
         raise
@@ -229,6 +244,8 @@ def request_json(api_key, path, params=None):
 
 def extract_lineup_entries(payload, match=None):
     data = payload.get("data", payload) if isinstance(payload, dict) else payload
+    if isinstance(data, dict) and "lineups" in data:
+        data = data["lineups"]
     entries = []
     match = match or {}
     home_team = extract_team_name(match.get("home") or match.get("home_team"))
@@ -236,6 +253,18 @@ def extract_lineup_entries(payload, match=None):
 
     collect_lineup_entries(data, entries, home_team=home_team, away_team=away_team)
     return entries
+
+
+def summarize_payload_keys(payload):
+    data = payload.get("data", payload) if isinstance(payload, dict) else payload
+    if isinstance(data, dict):
+        keys = list(data.keys())[:12]
+        if "lineups" in data and isinstance(data["lineups"], dict):
+            keys.append(f"lineups:{list(data['lineups'].keys())[:12]}")
+        return keys
+    if isinstance(data, list):
+        return [f"list[{len(data)}]"]
+    return [type(data).__name__]
 
 
 def collect_lineup_entries(
@@ -255,7 +284,13 @@ def collect_lineup_entries(
         name = extract_player_name(node)
         if name:
             team_name = extract_player_team_name(node) or node_team
-            is_starter = in_starters or node.get("is_starter") is True or node.get("starter") is True
+            is_starter = (
+                in_starters
+                or node.get("is_starter") is True
+                or node.get("isStarting") is True
+                or node.get("starter") is True
+                or str(node.get("role", "")).lower() in {"starter", "starting", "starting_xi"}
+            )
             if in_squad or is_starter:
                 entries.append({"name": name, "team_name": team_name, "started": is_starter})
 
@@ -278,6 +313,7 @@ def collect_lineup_entries(
                     "startingxi",
                     "starters",
                     "lineup",
+                    "lineups",
                     "homelineup",
                     "home_lineup",
                     "awaylineup",
@@ -288,6 +324,7 @@ def collect_lineup_entries(
                     "squad",
                     "bench",
                     "substitutes",
+                    "substitute",
                     "subs",
                     "homebench",
                     "home_bench",
@@ -309,7 +346,17 @@ def collect_lineup_entries(
 
 
 def extract_player_name(node):
-    return node.get("name") or node.get("player_name") or node.get("playerName")
+    direct_name = node.get("name") or node.get("player_name") or node.get("playerName") or node.get("full_name") or node.get("fullName")
+    if direct_name:
+        return direct_name
+
+    for key in ("player", "athlete"):
+        nested = node.get(key)
+        if isinstance(nested, dict):
+            nested_name = extract_player_name(nested)
+            if nested_name:
+                return nested_name
+    return None
 
 
 def extract_team_name(node):
