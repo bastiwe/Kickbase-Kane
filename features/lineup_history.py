@@ -8,6 +8,53 @@ import requests
 
 BASE_URL = "https://api.bigballsdata.com/v1"
 
+TEAM_ALIASES = {
+    "bayern munich": "bayern munchen",
+    "fc bayern munich": "bayern munchen",
+    "fc bayern munchen": "bayern munchen",
+    "bayer leverkusen": "bayer leverkusen",
+    "borussia dortmund": "borussia dortmund",
+    "dortmund": "borussia dortmund",
+    "bvb": "borussia dortmund",
+    "borussia monchengladbach": "borussia monchengladbach",
+    "borussia moenchengladbach": "borussia monchengladbach",
+    "monchengladbach": "borussia monchengladbach",
+    "moenchengladbach": "borussia monchengladbach",
+    "eintracht frankfurt": "eintracht frankfurt",
+    "frankfurt": "eintracht frankfurt",
+    "rb leipzig": "rb leipzig",
+    "rasenballsport leipzig": "rb leipzig",
+    "vfb stuttgart": "vfb stuttgart",
+    "stuttgart": "vfb stuttgart",
+    "sc freiburg": "sc freiburg",
+    "freiburg": "sc freiburg",
+    "werder bremen": "werder bremen",
+    "sv werder bremen": "werder bremen",
+    "union berlin": "union berlin",
+    "1 fc union berlin": "union berlin",
+    "fc union berlin": "union berlin",
+    "mainz": "mainz 05",
+    "mainz 05": "mainz 05",
+    "1 fsv mainz 05": "mainz 05",
+    "fsv mainz 05": "mainz 05",
+    "augsburg": "fc augsburg",
+    "fc augsburg": "fc augsburg",
+    "hoffenheim": "tsg hoffenheim",
+    "tsg hoffenheim": "tsg hoffenheim",
+    "wolfsburg": "vfl wolfsburg",
+    "vfl wolfsburg": "vfl wolfsburg",
+    "heidenheim": "heidenheim",
+    "1 fc heidenheim": "heidenheim",
+    "fc heidenheim": "heidenheim",
+    "st pauli": "st pauli",
+    "fc st pauli": "st pauli",
+    "hamburger sv": "hamburger sv",
+    "hamburg": "hamburger sv",
+    "koln": "koln",
+    "cologne": "koln",
+    "1 fc koln": "koln",
+}
+
 
 def enrich_reports_with_bigballs_lineups(market_df, squad_df):
     """Add historical starter rates from Big Balls Sports Data when configured."""
@@ -49,24 +96,32 @@ def fetch_recent_starter_history(api_key):
             continue
 
         lineup_payload = get_lineups(api_key, match_id)
-        starters, squad_players = extract_lineup_names(lineup_payload)
-        squad_keys = {normalize_name(player) for player in squad_players}
+        entries = extract_lineup_entries(lineup_payload, match)
+        per_match = {}
 
-        for name in squad_players:
-            key = normalize_name(name)
-            if not key:
+        for entry in entries:
+            player_key = normalize_name(entry["name"])
+            if not player_key:
                 continue
-            history.setdefault(key, {"starts": 0, "apps": 0})
-            history[key]["apps"] += 1
+            team_key = normalize_team_name(entry.get("team_name"))
+            stat_key = (player_key, team_key)
+            per_match.setdefault(stat_key, {"started": False, "team_name": entry.get("team_name")})
+            per_match[stat_key]["started"] = per_match[stat_key]["started"] or entry["started"]
 
-        for name in starters:
-            key = normalize_name(name)
-            if not key:
-                continue
-            history.setdefault(key, {"starts": 0, "apps": 0})
-            history[key]["starts"] += 1
-            if key not in squad_keys:
-                history[key]["apps"] += 1
+        for (player_key, team_key), stat in per_match.items():
+            player_history = history.setdefault(player_key, {"total": {"starts": 0, "apps": 0}, "teams": {}})
+            player_history["total"]["apps"] += 1
+            if stat["started"]:
+                player_history["total"]["starts"] += 1
+
+            if team_key:
+                team_history = player_history["teams"].setdefault(
+                    team_key,
+                    {"starts": 0, "apps": 0, "team_name": stat.get("team_name")},
+                )
+                team_history["apps"] += 1
+                if stat["started"]:
+                    team_history["starts"] += 1
 
     return history
 
@@ -97,44 +152,123 @@ def request_json(api_key, path, params=None):
     return response.json()
 
 
-def extract_lineup_names(payload):
+def extract_lineup_entries(payload, match=None):
     data = payload.get("data", payload) if isinstance(payload, dict) else payload
-    starters = set()
-    squad_players = set()
+    entries = []
+    match = match or {}
+    home_team = extract_team_name(match.get("home") or match.get("home_team"))
+    away_team = extract_team_name(match.get("away") or match.get("away_team"))
 
-    collect_named_players(data, starters, squad_players)
-    return starters, squad_players
+    collect_lineup_entries(data, entries, home_team=home_team, away_team=away_team)
+    return entries
 
 
-def collect_named_players(node, starters, squad_players, in_starters=False, in_squad=False):
+def collect_lineup_entries(
+    node,
+    entries,
+    current_team=None,
+    home_team=None,
+    away_team=None,
+    in_starters=False,
+    in_squad=False,
+):
     if isinstance(node, dict):
-        current_in_starters = in_starters or any(
-            key in node for key in ("starting_xi", "startingXI", "starters", "homeLineup", "awayLineup")
-        )
-        current_in_squad = in_squad or current_in_starters or any(
-            key in node for key in ("bench", "substitutes", "subs", "homeBench", "awayBench")
-        )
+        node_team = extract_team_name(node) or current_team
+        local_home = extract_team_name(node.get("home") or node.get("home_team")) or home_team
+        local_away = extract_team_name(node.get("away") or node.get("away_team")) or away_team
 
-        name = node.get("name") or node.get("player_name") or node.get("playerName")
-        is_starter = current_in_starters or node.get("is_starter") is True or node.get("starter") is True
+        name = extract_player_name(node)
         if name:
-            if current_in_squad or is_starter:
-                squad_players.add(name)
-            if is_starter:
-                starters.add(name)
+            team_name = extract_player_team_name(node) or node_team
+            is_starter = in_starters or node.get("is_starter") is True or node.get("starter") is True
+            if in_squad or is_starter:
+                entries.append({"name": name, "team_name": team_name, "started": is_starter})
 
         for key, value in node.items():
             key_lower = str(key).lower()
-            collect_named_players(
+            child_team = node_team
+            if key_lower in {"home", "hometeam", "home_team", "homelineup", "home_lineup", "homebench", "home_bench"}:
+                child_team = local_home or node_team
+            elif key_lower in {"away", "awayteam", "away_team", "awaylineup", "away_lineup", "awaybench", "away_bench"}:
+                child_team = local_away or node_team
+
+            collect_lineup_entries(
                 value,
-                starters,
-                squad_players,
-                in_starters=current_in_starters or key_lower in {"starting_xi", "startingxi", "starters", "homelineup", "awaylineup"},
-                in_squad=current_in_squad or key_lower in {"bench", "substitutes", "subs", "homebench", "awaybench"},
+                entries,
+                current_team=child_team,
+                home_team=local_home,
+                away_team=local_away,
+                in_starters=in_starters or key_lower in {
+                    "starting_xi",
+                    "startingxi",
+                    "starters",
+                    "lineup",
+                    "homelineup",
+                    "home_lineup",
+                    "awaylineup",
+                    "away_lineup",
+                },
+                in_squad=in_squad or key_lower in {
+                    "players",
+                    "squad",
+                    "bench",
+                    "substitutes",
+                    "subs",
+                    "homebench",
+                    "home_bench",
+                    "awaybench",
+                    "away_bench",
+                },
             )
     elif isinstance(node, list):
         for item in node:
-            collect_named_players(item, starters, squad_players, in_starters=in_starters, in_squad=in_squad)
+            collect_lineup_entries(
+                item,
+                entries,
+                current_team=current_team,
+                home_team=home_team,
+                away_team=away_team,
+                in_starters=in_starters,
+                in_squad=in_squad,
+            )
+
+
+def extract_player_name(node):
+    return node.get("name") or node.get("player_name") or node.get("playerName")
+
+
+def extract_team_name(node):
+    if isinstance(node, str):
+        return node
+    if not isinstance(node, dict):
+        return None
+    value = (
+        node.get("team_name")
+        or node.get("teamName")
+        or node.get("club_name")
+        or node.get("clubName")
+        or node.get("short_name")
+        or node.get("shortName")
+    )
+    if value:
+        return value
+    for key in ("team", "club"):
+        nested = node.get(key)
+        if isinstance(nested, dict):
+            nested_name = nested.get("name") or nested.get("display_name") or nested.get("displayName")
+            if nested_name:
+                return nested_name
+    return None
+
+
+def extract_player_team_name(node):
+    for key in ("team", "club"):
+        nested = node.get(key)
+        if isinstance(nested, dict):
+            nested_name = extract_team_name(nested) or nested.get("name")
+            if nested_name:
+                return nested_name
+    return node.get("team_name") or node.get("teamName") or node.get("club_name") or node.get("clubName")
 
 
 def add_history_columns(df, history):
@@ -143,20 +277,14 @@ def add_history_columns(df, history):
 
     result = df.copy()
     aliases = build_history_aliases(history)
-    keys = result.apply(
-        lambda row: resolve_player_key(row.get("first_name", ""), row.get("last_name", ""), history, aliases),
-        axis=1,
-    )
-    result["recent_starts"] = keys.map(lambda key: history.get(key, {}).get("starts") if key else None)
-    result["recent_apps"] = keys.map(lambda key: history.get(key, {}).get("apps") if key else None)
-    result["starter_rate"] = result.apply(
-        lambda row: round((row["recent_starts"] / row["recent_apps"]) * 100, 0)
-        if pd.notna(row["recent_starts"]) and pd.notna(row["recent_apps"]) and row["recent_apps"] > 0
-        else None,
-        axis=1,
-    )
+    rows = result.apply(lambda row: resolve_player_history(row, history, aliases), axis=1)
 
-    lineup_cols = ["starter_rate", "recent_starts", "recent_apps"]
+    result["recent_starts"] = rows.map(lambda item: item["starts"])
+    result["recent_apps"] = rows.map(lambda item: item["apps"])
+    result["starter_rate"] = rows.map(lambda item: item["starter_rate"])
+    result["lineup_scope"] = rows.map(lambda item: item["scope"])
+
+    lineup_cols = ["starter_rate", "recent_starts", "recent_apps", "lineup_scope"]
     other_cols = [col for col in result.columns if col not in lineup_cols]
     if "expected_change_pct" in other_cols:
         insert_at = other_cols.index("expected_change_pct") + 1
@@ -164,6 +292,35 @@ def add_history_columns(df, history):
         return result[ordered_cols]
 
     return result
+
+
+def resolve_player_history(row, history, aliases):
+    player_key = resolve_player_key(row.get("first_name", ""), row.get("last_name", ""), history, aliases)
+    player_history = history.get(player_key)
+    if not player_history:
+        return empty_history()
+
+    team_key = normalize_team_name(row.get("team_name"))
+    team_history = player_history.get("teams", {}).get(team_key) if team_key else None
+    if team_history:
+        return format_history(team_history, "Aktueller Verein")
+
+    total_history = player_history.get("total")
+    if total_history and total_history.get("apps"):
+        return format_history(total_history, "Gesamt")
+
+    return empty_history()
+
+
+def format_history(history, scope):
+    starts = history.get("starts")
+    apps = history.get("apps")
+    starter_rate = round((starts / apps) * 100, 0) if apps else None
+    return {"starts": starts, "apps": apps, "starter_rate": starter_rate, "scope": scope}
+
+
+def empty_history():
+    return {"starts": None, "apps": None, "starter_rate": None, "scope": None}
 
 
 def normalize_name(name):
@@ -174,6 +331,13 @@ def normalize_name(name):
     normalized = normalized.lower()
     normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
     return " ".join(normalized.split())
+
+
+def normalize_team_name(name):
+    key = normalize_name(name)
+    key = re.sub(r"\b(fc|sc|sv|vfl|vfb|tsg|1)\b", " ", key)
+    key = " ".join(key.split())
+    return TEAM_ALIASES.get(key, TEAM_ALIASES.get(normalize_name(name), key))
 
 
 def resolve_player_key(first_name, last_name, history, aliases):

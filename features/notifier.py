@@ -20,6 +20,7 @@ COLUMN_LABELS = {
     "starter_rate": "Startquote",
     "recent_starts": "Starts",
     "recent_apps": "Kader",
+    "lineup_scope": "Basis",
     "hours_to_exp": "Reststunden",
     "risk": "Risiko",
     "User": "Manager",
@@ -38,6 +39,8 @@ DISPLAY_LABELS = {
     "Sell": "Verkaufen",
     "Normal": "Normal",
     "Before MV update": "Vor MW-Update",
+    "Aktueller Verein": "Aktueller Verein",
+    "Gesamt": "Gesamt",
 }
 
 BADGE_STYLES = {
@@ -49,6 +52,8 @@ BADGE_STYLES = {
     "Sell": ("#fee2e2", "#991b1b"),
     "Normal": ("#f3f4f6", "#374151"),
     "Before MV update": ("#ffedd5", "#9a3412"),
+    "Aktueller Verein": ("#dcfce7", "#166534"),
+    "Gesamt": ("#eef2ff", "#3730a3"),
 }
 
 POSITION_LABELS = {
@@ -293,7 +298,7 @@ def send_mail(budget_df, market_df, squad_df, email):
             result = result.drop(columns=["first_name", "last_name", "image_url"], errors="ignore")
 
         for col in result.columns:
-            if col in {"recommendation", "risk"}:
+            if col in {"recommendation", "risk", "lineup_scope"}:
                 result[col] = result[col].map(badge)
             elif col == "expected_change_pct":
                 result[col] = result[col].map(lambda value: colored_number(value, format_percent(value)))
@@ -355,6 +360,7 @@ def send_mail(budget_df, market_df, squad_df, email):
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Startquote:</b>
                 Optional aus Big Balls Sports Data berechnet. Sie zeigt, wie oft ein Spieler in den zuletzt gefundenen bestätigten Lineups gestartet ist.
+                Die Basis <b>Aktueller Verein</b> nutzt nur Lineups des aktuellen Kickbase-Teams; <b>Gesamt</b> ist der Fallback, wenn ein Spielername gefunden wurde, aber der Verein nicht sicher passt.
                 Die Spalte erscheint nur, wenn <code>BIGBALLS_API_KEY</code> oder <code>BBS_API_KEY</code> gesetzt ist und passende Daten gefunden werden.
             </p>
             <p style="font-size:13px;color:#374151;margin:0;">
