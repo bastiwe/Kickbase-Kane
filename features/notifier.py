@@ -34,7 +34,7 @@ DISPLAY_LABELS = {
     "Consider sell": "Verkauf prüfen",
     "Sell": "Verkaufen",
     "Normal": "Normal",
-    "Expires soon": "Läuft bald ab",
+    "Before MV update": "Vor MW-Update",
 }
 
 BADGE_STYLES = {
@@ -45,7 +45,7 @@ BADGE_STYLES = {
     "Consider sell": ("#fef3c7", "#92400e"),
     "Sell": ("#fee2e2", "#991b1b"),
     "Normal": ("#f3f4f6", "#374151"),
-    "Expires soon": ("#ffedd5", "#9a3412"),
+    "Before MV update": ("#ffedd5", "#9a3412"),
 }
 
 POSITION_LABELS = {
@@ -325,6 +325,11 @@ def send_mail(budget_df, market_df, squad_df, email):
                 <b>Max. Gebot:</b>
                 Marktwert + 65% des erwarteten Upsides, danach auf sinnvolle Gebotsstufen aufgerundet
                 und mit kleinem Overbid versehen, um runde Konkurrenzgebote zu schlagen.
+            </p>
+            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
+                <b>Risiko:</b>
+                {badge("Before MV update")} bedeutet, dass das Angebot vor der nächsten Marktwert-Neuberechnung um 22:00 Uhr abläuft.
+                Dann kaufst du noch ohne den neuen Marktwert zu kennen.
             </p>
             <p style="font-size:13px;color:#374151;margin:0;">
                 <b>Eigener Kader:</b>

@@ -47,9 +47,9 @@ def add_recommendation_columns(df, is_market):
         df["max_bid"] = raw_max_bid.map(psychological_bid).astype(int)
         df["risk"] = np.select(
             [
-                df["expiring_today"],
+                df["expires_before_mv_update"],
             ],
-            ["Expires soon"],
+            ["Before MV update"],
             default="Normal"
         )
     else:
@@ -143,8 +143,7 @@ def join_current_market(token, league_id, today_df_results):
         next_22 += timedelta(days=1)
     diff = np.round((next_22 - now).total_seconds() / 3600, 2)
 
-    # If hours_to_exp < diff then it expires today
-    bid_df["expiring_today"] = bid_df["hours_to_exp"] < diff
+    bid_df["expires_before_mv_update"] = bid_df["hours_to_exp"] < diff
 
     # Rename mv_change_1d to mv_change_yesterday for better understanding
     bid_df = bid_df.rename(columns={"mv_change_1d": "mv_change_yesterday"})
