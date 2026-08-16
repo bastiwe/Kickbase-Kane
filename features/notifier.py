@@ -37,6 +37,7 @@ COLUMN_LABELS = {
 DISPLAY_LABELS = {
     "Strong buy": "Top-Kauf",
     "Buy": "Kaufen",
+    "Watch": "Beobachten",
     "Keep": "Behalten",
     "Hold": "Halten",
     "Consider sell": "Verkauf prüfen",
@@ -63,6 +64,7 @@ DISPLAY_LABELS = {
 BADGE_STYLES = {
     "Strong buy": ("#dcfce7", "#166534"),
     "Buy": ("#e0f2fe", "#075985"),
+    "Watch": ("#f3f4f6", "#374151"),
     "Keep": ("#dcfce7", "#166534"),
     "Hold": ("#f3f4f6", "#374151"),
     "Consider sell": ("#fef3c7", "#92400e"),

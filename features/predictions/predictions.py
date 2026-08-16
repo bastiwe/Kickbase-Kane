@@ -204,15 +204,17 @@ def join_current_market(token, league_id, today_df_results, current_user_id=None
     bid_df = bid_df.rename(columns={"mv_change_1d": "mv_change_yesterday"})
 
     bid_df = add_recommendation_columns(bid_df, is_market=True)
+    own_open_bids_total = int(bid_df["has_open_bid"].sum())
 
-    # Drop weak recommendations from the market overview.
-    bid_df = bid_df[bid_df["recommendation"] != "Watch"]
+    # Drop weak recommendations from the market overview, but always keep your own open bids visible.
+    bid_df = bid_df[(bid_df["recommendation"] != "Watch") | (bid_df["has_open_bid"])]
 
-    # Sort urgent expiring offers first, then by expected absolute profit and relative upside.
+    # Sort own open bids first, then urgent expiring offers, then by expected absolute profit and relative upside.
+    bid_df["own_bid_rank"] = np.where(bid_df["has_open_bid"], 0, 1)
     bid_df["risk_rank"] = bid_df["risk"].map({"Night expiry": 0, "Before MV update": 1}).fillna(2)
     bid_df = bid_df.sort_values(
-        ["risk_rank", "predicted_mv_target", "expected_change_pct"],
-        ascending=[True, False, False],
+        ["own_bid_rank", "risk_rank", "predicted_mv_target", "expected_change_pct"],
+        ascending=[True, True, False, False],
     )
 
     # Keep only relevant columns
@@ -237,7 +239,10 @@ def join_current_market(token, league_id, today_df_results, current_user_id=None
         "risk",
         "has_open_bid",
     ]]
-    print(f"Kickbase own open bids detected: {int(bid_df['has_open_bid'].sum())}.")
+    print(
+        f"Kickbase own open bids detected: {own_open_bids_total} total, "
+        f"{int(bid_df['has_open_bid'].sum())} shown in market recommendations."
+    )
 
     return bid_df
 
