@@ -109,6 +109,7 @@ def fetch_ligainsider_signals(dataframes):
     signals = {}
     fetched = 0
     matched = 0
+    starters = 0
 
     for team_key, players in players_by_team.items():
         url = team_urls.get(team_key)
@@ -122,10 +123,15 @@ def fetch_ligainsider_signals(dataframes):
             signal = resolve_player_signal(player, page_signal)
             if signal:
                 matched += 1
+                if signal["li_status"] == "Startelf":
+                    starters += 1
                 signals[player["key"]] = signal
         time.sleep(float(os.getenv("LIGAINSIDER_REQUEST_DELAY", "0.4")))
 
-    print(f"\nLigaInsider signals: {fetched} team pages checked, {matched} report players matched.")
+    print(
+        f"\nLigaInsider signals: {fetched} team pages checked, "
+        f"{matched} report players matched, {starters} projected starters."
+    )
     return signals
 
 
@@ -199,17 +205,18 @@ def parse_page(url):
 def extract_page_signals(parser):
     text = "\n".join(parser.text_parts)
     prediction_text = extract_prediction_section(text)
+    normalized_prediction_text = normalize_name(prediction_text)
 
     predicted = set()
     known = set()
     unavailable = set()
 
     for _, link_text in parser.links:
-        name_key = normalize_name(link_text)
         if is_probable_player_name(link_text):
-            known.add(name_key)
-            if name_key and name_key in normalize_name(prediction_text):
-                predicted.add(name_key)
+            aliases = player_name_aliases(link_text)
+            known.update(aliases)
+            if any(contains_name_alias(normalized_prediction_text, alias) for alias in aliases):
+                predicted.update(aliases)
 
     lowered = normalize_name(text)
     for status_word in ("verletzt", "gesperrt", "aufbautraining", "krank"):
@@ -220,12 +227,28 @@ def extract_page_signals(parser):
 
 
 def extract_prediction_section(text):
-    start = find_marker(text, ["VORAUSSICHTLICHE AUFSTELLUNG"])
+    start = find_marker(text, ["VORAUSSICHTLICHE AUFSTELLUNG", "TOPELF"])
     if start < 0:
         return before_marker(text, ["AKTUELLE THEMEN", "DEIN TIPP:", "ERGEBNISSE", "## KADER", "\nKADER "])
 
     section = text[start:]
     return before_marker(section, ["AKTUELLE THEMEN", "DEIN TIPP:", "ERGEBNISSE", "## KADER", "\nKADER "])
+
+
+def player_name_aliases(name):
+    normalized = normalize_name(name)
+    aliases = {normalized} if normalized else set()
+    parts = normalized.split()
+    if len(parts) >= 2:
+        for index in range(1, len(parts)):
+            aliases.add(" ".join(parts[index:]))
+    return aliases
+
+
+def contains_name_alias(text, alias):
+    if not alias:
+        return False
+    return re.search(rf"(^| ){re.escape(alias)}($| )", text) is not None
 
 
 def resolve_player_signal(player, page_signal):
