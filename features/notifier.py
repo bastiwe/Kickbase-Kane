@@ -17,10 +17,9 @@ COLUMN_LABELS = {
     "mv_change_yesterday": "Gestern",
     "predicted_mv_target": "Erw. MW",
     "expected_change_pct": "Erw. %",
-    "starter_rate": "Startquote",
-    "recent_starts": "Starts",
-    "recent_apps": "Kader",
+    "starter_rate": "LI %",
     "lineup_scope": "Basis",
+    "li_status": "LI-Signal",
     "hours_to_exp": "Resth.",
     "expires_at": "Ablauf",
     "risk": "Risiko",
@@ -41,12 +40,15 @@ DISPLAY_LABELS = {
     "Normal": "Normal",
     "Before MV update": "Vor MW-Update",
     "Night expiry": "Nacht-Ablauf",
-    "Aktueller Verein": "Aktueller Verein",
-    "Gesamt": "Gesamt",
-    "Club-Form": "Club-Form",
-    "Kein API-Key": "Kein API-Key",
-    "API-Fehler": "API-Fehler",
-    "Keine Daten": "Keine Daten",
+    "LI-Startelf": "LI-Startelf",
+    "LI-Kader": "LI-Kader",
+    "Startelf": "Startelf",
+    "Kader": "Kader",
+    "Nicht gefunden": "Nicht gefunden",
+    "Kein Treffer": "Kein Treffer",
+    "LI-Fehler": "LI-Fehler",
+    "Keine LI-Daten": "Keine LI-Daten",
+    "Deaktiviert": "Deaktiviert",
 }
 
 BADGE_STYLES = {
@@ -59,12 +61,15 @@ BADGE_STYLES = {
     "Normal": ("#f3f4f6", "#374151"),
     "Before MV update": ("#ffedd5", "#9a3412"),
     "Night expiry": ("#fee2e2", "#991b1b"),
-    "Aktueller Verein": ("#dcfce7", "#166534"),
-    "Gesamt": ("#eef2ff", "#3730a3"),
-    "Club-Form": ("#e0f2fe", "#075985"),
-    "Kein API-Key": ("#f3f4f6", "#374151"),
-    "API-Fehler": ("#fee2e2", "#991b1b"),
-    "Keine Daten": ("#fef3c7", "#92400e"),
+    "LI-Startelf": ("#dcfce7", "#166534"),
+    "LI-Kader": ("#fef3c7", "#92400e"),
+    "Startelf": ("#dcfce7", "#166534"),
+    "Kader": ("#fef3c7", "#92400e"),
+    "Nicht gefunden": ("#f3f4f6", "#374151"),
+    "Kein Treffer": ("#f3f4f6", "#374151"),
+    "LI-Fehler": ("#fee2e2", "#991b1b"),
+    "Keine LI-Daten": ("#fef3c7", "#92400e"),
+    "Deaktiviert": ("#f3f4f6", "#374151"),
 }
 
 POSITION_LABELS = {
@@ -339,7 +344,7 @@ def send_mail(budget_df, market_df, squad_df, email):
             result = result.drop(columns=["first_name", "last_name", "image_url"], errors="ignore")
 
         for col in result.columns:
-            if col in {"recommendation", "risk", "lineup_scope"}:
+            if col in {"recommendation", "risk", "lineup_scope", "li_status"}:
                 result[col] = result[col].map(badge)
             elif col == "expected_change_pct":
                 result[col] = result[col].map(lambda value: colored_number(value, format_percent(value)))
@@ -402,11 +407,11 @@ def send_mail(budget_df, market_df, squad_df, email):
                 {badge("Night expiry")} bedeutet, dass das Angebot in der kommenden Nacht bis 09:00 Uhr ausläuft; solche Gebote solltest du am Vorabend erledigen.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
-                <b>Startquote:</b>
-                Optional aus Big Balls Sports Data berechnet. Sie zeigt, wie oft ein Spieler in den zuletzt gefundenen bestätigten Lineups gestartet ist.
-                Die Basis <b>Aktueller Verein</b> nutzt nur Lineups des aktuellen Kickbase-Teams; <b>Gesamt</b> ist der Fallback, wenn ein Spielername gefunden wurde, aber der Verein nicht sicher passt.
-                <b>Club-Form</b> ist eine Näherung aus Big-Balls-Saisonform: geschätzte Starts aus Minuten geteilt durch Einsätze.
-                Die Spalte erscheint nur, wenn <code>BIGBALLS_API_KEY</code> oder <code>BBS_API_KEY</code> gesetzt ist und passende Daten gefunden werden.
+                <b>LI-Signal:</b>
+                Optional aus den öffentlich sichtbaren LigaInsider-Teamseiten abgeleitet.
+                {badge("LI-Startelf")} bedeutet: Spieler wurde in der öffentlichen voraussichtlichen Aufstellung gefunden.
+                {badge("LI-Kader")} bedeutet: Spieler wurde auf der Teamseite gefunden, aber nicht eindeutig in der Startelf-Zone.
+                Die Prozentzahl ist eine eigene grobe Ableitung, keine offizielle LigaInsider-ProZone-Wahrscheinlichkeit.
             </p>
             <p style="font-size:13px;color:#374151;margin:0;">
                 <b>Eigener Kader:</b>
