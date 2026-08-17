@@ -416,7 +416,10 @@ def join_current_squad(token, league_id, today_df_results, current_user_id=None)
     squad_df = squad_df.rename(columns={"mv_x": "mv"})
 
     squad_df = add_recommendation_columns(squad_df, is_market=False)
-    squad_df = squad_df.sort_values("predicted_mv_target", ascending=True)
+    squad_df = squad_df.sort_values(
+        ["mv_change_yesterday", "predicted_mv_target"],
+        ascending=[True, True],
+    )
 
     # Keep only relevant columns
     squad_df = squad_df[[

@@ -628,7 +628,7 @@ def send_mail(budget_df, market_df, squad_df, email):
         {style_df(market_df)}
 
         <h3 style="color: #2c3e50; margin-top: 30px;">Dein Kader</h3>
-        <p style="font-size: 14px; color: #333;">Dein Kader sortiert nach prognostizierter Marktwertänderung, inklusive Verkaufs- und Haltesignalen.</p>
+        <p style="font-size: 14px; color: #333;">Dein Kader sortiert nach letzter Marktwertänderung, mit den stärksten Verlusten zuerst, inklusive Verkaufs- und Haltesignalen.</p>
 
         {style_df(squad_df)}
 
