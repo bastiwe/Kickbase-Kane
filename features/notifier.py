@@ -509,7 +509,7 @@ def send_mail(budget_df, market_df, squad_df, email):
             rows.append(f'<tr style="{row_style}">{cells}</tr>')
 
         return (
-            '<table style="width:100%;min-width:1460px;border-collapse:collapse;font-size:12px;'
+            '<table style="width:100%;min-width:2050px;border-collapse:collapse;font-size:12px;'
             f'margin:16px 0 24px 0;table-layout:auto;"><thead><tr>{header_html}</tr></thead>'
             f'<tbody>{"".join(rows)}</tbody></table>'
         )
@@ -596,8 +596,8 @@ def send_mail(budget_df, market_df, squad_df, email):
     msg.set_content("Sorry, results only via html visible.", subtype="plain")
     msg.add_alternative(f"""\
     <html>
-    <body style="font-family: Arial, sans-serif; background-color: #f4f6f8; margin: 0; padding: 12px;">
-        <div style="max-width: 1600px; width: 100%; margin: auto; background: #ffffff; padding: 18px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); overflow-x: auto; box-sizing: border-box;">
+    <body style="font-family: Arial, sans-serif; background-color: #f4f6f8; margin: 0; padding: 8px;">
+        <div style="max-width: 2200px; width: 100%; margin: auto; background: #ffffff; padding: 14px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); overflow-x: auto; box-sizing: border-box;">
         
         <h2 style="color: #1f2933; text-align: center; margin-top: 0;">Kickbase Report für {today}</h2>
         
