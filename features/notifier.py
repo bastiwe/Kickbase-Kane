@@ -17,13 +17,9 @@ COLUMN_LABELS = {
     "team_name": "Team",
     "mv": "Marktwert",
     "max_bid": "Max. Gebot",
-    "mv_change_yesterday": "Gestern",
+    "mv_change_yesterday": "Letzte MW",
     "predicted_mv_target": "Erw. 1T",
-    "predicted_mv_target_3d": "Erw. 3T",
-    "predicted_mv_target_7d": "Erw. 7T",
     "expected_change_pct": "Erw. %",
-    "expected_change_pct_3d": "3T %",
-    "expected_change_pct_7d": "7T %",
     "top_player_tag": "Klasse",
     "last_season_points": "Pkt. Vors.",
     "last_season_avg_points": "Ø Pkt.",
@@ -451,7 +447,18 @@ def send_mail(budget_df, market_df, squad_df, email):
             result.insert(1, "player_display", result.apply(player_display, axis=1))
             result = result.drop(columns=["first_name", "last_name", "image_url"], errors="ignore")
 
-        result = result.drop(columns=["lineup_scope", "li_status", "ligainsider_url"], errors="ignore")
+        result = result.drop(
+            columns=[
+                "lineup_scope",
+                "li_status",
+                "ligainsider_url",
+                "predicted_mv_target_3d",
+                "predicted_mv_target_7d",
+                "expected_change_pct_3d",
+                "expected_change_pct_7d",
+            ],
+            errors="ignore",
+        )
 
         for col in result.columns:
             if col in {"recommendation", "risk", "top_player_tag", "buy_type", "buy_priority", "team_limit_warning"}:
@@ -519,7 +526,7 @@ def send_mail(budget_df, market_df, squad_df, email):
             <h3 style="color:#1f2933;margin:0 0 10px 0;font-size:16px;">Action-Legende</h3>
             <p style="font-size:13px;color:#4b5563;margin:0 0 8px 0;">
                 Die Action ergibt sich aus der vom Modell erwarteten Marktwertänderung für den nächsten Tag, absolut und relativ zum aktuellen Marktwert.
-                Erw. 1T, Erw. 3T und Erw. 7T zeigen die geschätzte Änderung für morgen, drei Tage und sieben Tage.
+                Erw. 1T zeigt die geschätzte Änderung für den nächsten Marktwertsprung.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Markt:</b>
@@ -531,7 +538,7 @@ def send_mail(budget_df, market_df, squad_df, email):
                 <b>Kaufart & Priorität:</b>
                 {badge("Kader-Kauf")} meint langfristige Kaderverstärkung, vor allem durch Vorsaisonklasse, hohe LI-Startelfquote oder passende Position.
                 {badge("Trading-Kauf")} ist primär ein Marktwert-Trade.
-                Die Priorität {badge("Hoch")} / {badge("Mittel")} / {badge("Niedrig")} kombiniert Vorsaisonklasse, LI %, 7T-Prognose und deinen Positionsbedarf.
+                Die Priorität {badge("Hoch")} / {badge("Mittel")} / {badge("Niedrig")} kombiniert Vorsaisonklasse, LI %, mittelfristiges Marktwertsignal und deinen Positionsbedarf.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Klasse:</b>
