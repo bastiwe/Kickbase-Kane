@@ -351,6 +351,10 @@ def enrich_market_decisions_with_context(market_df, squad_df):
     )
     result = result[keep_rows]
 
+    if "hours_to_exp" in result:
+        result["expiry_rank"] = pd.to_numeric(result["hours_to_exp"], errors="coerce").fillna(float("inf"))
+    else:
+        result["expiry_rank"] = float("inf")
     result["own_bid_rank"] = np.where(result["has_open_bid"].fillna(False).astype(bool), 0, 1)
     result["priority_rank"] = result["buy_priority"].map({"Hoch": 0, "Mittel": 1, "Niedrig": 2}).fillna(3)
     result["top_player_rank"] = np.where(result["top_player_tag"].fillna("").astype(str).ne(""), 0, 1)
@@ -358,6 +362,7 @@ def enrich_market_decisions_with_context(market_df, squad_df):
     result["risk_rank"] = result["risk"].map({"Night expiry": 0, "Before MV update": 1}).fillna(2)
     result = result.sort_values(
         [
+            "expiry_rank",
             "own_bid_rank",
             "priority_rank",
             "limit_rank",
@@ -366,11 +371,11 @@ def enrich_market_decisions_with_context(market_df, squad_df):
             "predicted_mv_target_7d",
             "predicted_mv_target",
         ],
-        ascending=[True, True, True, True, True, False, False],
+        ascending=[True, True, True, True, True, True, False, False],
     )
 
     result = result.drop(
-        columns=["own_bid_rank", "priority_rank", "top_player_rank", "limit_rank", "risk_rank"],
+        columns=["expiry_rank", "own_bid_rank", "priority_rank", "top_player_rank", "limit_rank", "risk_rank"],
         errors="ignore",
     )
     ordered_columns = [
