@@ -46,9 +46,6 @@ def create_player_data_table():
 def check_if_data_reload_needed():
     """Check if data reload is needed based on the last entry with null market value"""
 
-    print("\nData reload needed, this takes a few minutes...")
-    return True # Due to some issues with the data, we always reload for now, until fixed
-
     now = datetime.now(ZoneInfo("Europe/Berlin"))
     today_date = now.date()
 
@@ -57,7 +54,7 @@ def check_if_data_reload_needed():
         cursor = conn.cursor()
 
         # Get the most recent date where mv is NULL
-        cursor.execute("SELECT date FROM player_data_1d WHERE mv IS NULL ORDER BY date ASC LIMIT 1;")
+        cursor.execute("SELECT date FROM player_data_1d WHERE mv IS NULL ORDER BY date DESC LIMIT 1;")
         last_null_entry = cursor.fetchone()
 
         # convert last_null_entry (timestamp) to date
@@ -85,14 +82,14 @@ def check_if_data_reload_needed():
         if last_null_entry is None or last_non_null_entry is None:
             return True
 
-        # Cutoff-Time: 22:15 Uhr
-        cutoff = now.replace(hour=22, minute=15, second=0, microsecond=0)
+        # Cutoff-Time: Kickbase market values usually update around 22:00.
+        cutoff = now.replace(hour=22, minute=0, second=0, microsecond=0)
 
-        # If it is before 22:15 then yesterday should exist in the database with a mv value or today should exist with a null mv value
+        # Before the market value update, yesterday should exist with a mv value or today with a null mv value.
         if now < cutoff and (last_non_null_entry == today_date - timedelta(days=1) or last_null_entry == today_date):
             return False
 
-        # If it is after 22:15 today should exist in the database with a mv value
+        # After the market value update, today should exist with a mv value.
         elif now >= cutoff and last_non_null_entry == today_date:
             return False
         

@@ -48,7 +48,6 @@ features = [
 # what columns to learn and predict on
 prediction_targets = {
     "predicted_mv_target": "mv_target_clipped",
-    "predicted_mv_target_3d": "mv_target_3d_clipped",
     "predicted_mv_target_7d": "mv_target_7d_clipped",
 }
 

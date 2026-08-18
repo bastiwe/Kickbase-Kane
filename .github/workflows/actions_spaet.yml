@@ -34,6 +34,18 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Restore player data cache
+        if: steps.berlin-time.outputs.run == 'true'
+        id: player-data-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: player_data_total.db
+          key: ${{ runner.os }}-kickbase-player-data-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-kickbase-player-data-
 
       - name: Install dependencies
         if: steps.berlin-time.outputs.run == 'true'
@@ -50,3 +62,10 @@ jobs:
           KICK_PASS: ${{ secrets.KICK_PASS }}
         run: |
           python daily_predictions_spaet.py
+
+      - name: Save player data cache
+        if: steps.berlin-time.outputs.run == 'true' && hashFiles('player_data_total.db') != ''
+        uses: actions/cache/save@v5
+        with:
+          path: player_data_total.db
+          key: ${{ steps.player-data-cache.outputs.cache-primary-key }}

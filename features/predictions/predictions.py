@@ -100,20 +100,19 @@ def live_data_predictions(today_df, models, features, history_df=None, season_st
     # Predict market value changes for all configured horizons
     for column, model in models.items():
         today_df_results[column] = np.round(model.predict(today_df_features), 2)
+    for optional_column in ["predicted_mv_target_3d", "predicted_mv_target_7d"]:
+        if optional_column not in today_df_results:
+            today_df_results[optional_column] = 0
 
     today_df_results = add_player_quality_signals(today_df_results, history_df, season_start_date)
 
     # Sort by predicted_mv_target descending
     today_df_results = today_df_results.sort_values("predicted_mv_target", ascending=False)
 
-    # Filter date to today or yesterday if before 22:15, because mv is updated around 22:15
-    now = datetime.now(ZoneInfo("Europe/Berlin"))
-    cutoff_time = now.replace(hour=22, minute=15, second=0, microsecond=0)
-    date = (now - timedelta(days=1)) if now <= cutoff_time else now
-    date = date.date()
-
-    # Drop rows where NaN mv
+    # Drop rows where NaN mv and keep the latest usable entry for each player.
     today_df_results = today_df_results.dropna(subset=["mv"])
+    today_df_results["date"] = pd.to_datetime(today_df_results["date"])
+    today_df_results = today_df_results.sort_values(["player_id", "date"]).drop_duplicates("player_id", keep="last")
 
     # Keep only relevant columns
     today_df_results = today_df_results[[
