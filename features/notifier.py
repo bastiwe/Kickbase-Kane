@@ -284,11 +284,11 @@ def send_mail(budget_df, market_df, squad_df, email):
         if not isinstance(value, Number) or value != value:
             return "-"
         if value > 25_000:
-            symbol, label, key = "↑", "erwartet steigend", "trend_up"
+            symbol, label, key = "↑", "Erw. 1T höher als Letzte MW", "trend_up"
         elif value < -25_000:
-            symbol, label, key = "↓", "erwartet sinkend", "trend_down"
+            symbol, label, key = "↓", "Erw. 1T niedriger als Letzte MW", "trend_down"
         else:
-            symbol, label, key = "→", "nahezu stabil erwartet", "trend_flat"
+            symbol, label, key = "→", "Erw. 1T ähnlich wie Letzte MW", "trend_flat"
         background, color = BADGE_STYLES[key]
         return (
             f'<span title="{label}" style="display:inline-block;background:{background};color:{color};'
@@ -575,7 +575,7 @@ def send_mail(budget_df, market_df, squad_df, email):
         result = df.copy()
         if {"predicted_mv_target", "mv_change_yesterday"}.issubset(result.columns):
             insert_at = result.columns.get_loc("predicted_mv_target") + 1
-            result.insert(insert_at, "mv_trend", result["predicted_mv_target"])
+            result.insert(insert_at, "mv_trend", result["predicted_mv_target"] - result["mv_change_yesterday"])
 
         if {"starter_rate", "recent_starts", "recent_apps"}.issubset(result.columns):
             result["starter_rate"] = result.apply(
@@ -732,9 +732,9 @@ def send_mail(budget_df, market_df, squad_df, email):
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>MW-Tendenz:</b>
-                <span style="display:inline-block;background:#dcfce7;color:#166534;font-weight:800;border-radius:999px;padding:3px 8px;">↑</span> erwarteter Marktwert steigt,
-                <span style="display:inline-block;background:#f3f4f6;color:#374151;font-weight:800;border-radius:999px;padding:3px 8px;">→</span> nahezu stabil,
-                <span style="display:inline-block;background:#fee2e2;color:#991b1b;font-weight:800;border-radius:999px;padding:3px 8px;">↓</span> erwarteter Marktwert sinkt.
+                <span style="display:inline-block;background:#dcfce7;color:#166534;font-weight:800;border-radius:999px;padding:3px 8px;">↑</span> Erw. 1T ist höher als Letzte MW,
+                <span style="display:inline-block;background:#f3f4f6;color:#374151;font-weight:800;border-radius:999px;padding:3px 8px;">→</span> etwa gleich,
+                <span style="display:inline-block;background:#fee2e2;color:#991b1b;font-weight:800;border-radius:999px;padding:3px 8px;">↓</span> Erw. 1T ist niedriger als Letzte MW.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Risiko:</b>
