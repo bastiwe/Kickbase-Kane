@@ -287,6 +287,125 @@ def send_mail(budget_df, market_df, squad_df, email):
         last_name = "" if row.get("last_name") != row.get("last_name") else str(row.get("last_name", ""))
         return f"{first_name} {last_name}".strip() or "-"
 
+    def player_url(row):
+        ligainsider_url = row.get("ligainsider_url")
+        if ligainsider_url == ligainsider_url and ligainsider_url:
+            return str(ligainsider_url)
+        return ""
+
+    def player_image(row, size=78):
+        image_url = row.get("image_url")
+        if image_url == image_url and image_url:
+            return (
+                f'<img src="{escape(str(image_url), quote=True)}" alt="{escape(player_name(row), quote=True)}" '
+                f'width="{size}" height="{size}" '
+                f'style="width:{size}px;height:{size}px;border-radius:10px;object-fit:cover;background:#e5e7eb;display:block;">'
+            )
+        return (
+            f'<span style="display:block;width:{size}px;height:{size}px;border-radius:10px;'
+            'background:#e5e7eb;"></span>'
+        )
+
+    def action_card(row, title, value, value_positive_good=True, accent="#991b1b"):
+        name = escape(player_name(row))
+        url = player_url(row)
+        image = player_image(row)
+        name_html = (
+            f'<a href="{escape(url, quote=True)}" target="_blank" style="color:#111827;text-decoration:none;">{name}</a>'
+            if url else name
+        )
+        meta = f'{position_label(row.get("position"))} · {escape(str(row.get("team_name", "-")))}'
+        expires = expiry_value(row.get("expires_at")) if "expires_at" in row else ""
+        expires_html = (
+            f'<div style="font-size:12px;color:#6b7280;margin-top:5px;">Ablauf: <b>{expires}</b></div>'
+            if expires and expires != "-" else ""
+        )
+        return (
+            '<td style="vertical-align:top;padding:0 8px 10px 0;width:33.33%;">'
+            f'<div style="border:1px solid #e5e7eb;border-left:5px solid {accent};border-radius:8px;'
+            'background:#ffffff;padding:10px;min-height:118px;">'
+            '<table role="presentation" style="border-collapse:collapse;width:100%;"><tr>'
+            f'<td style="width:88px;vertical-align:top;">{image}</td>'
+            '<td style="vertical-align:top;padding-left:10px;">'
+            f'<div style="font-size:12px;color:#6b7280;font-weight:700;text-transform:uppercase;">{escape(title)}</div>'
+            f'<div style="font-size:15px;font-weight:800;color:#111827;margin-top:3px;">{name_html}</div>'
+            f'<div style="font-size:12px;color:#6b7280;margin-top:3px;">{meta}</div>'
+            f'<div style="font-size:14px;margin-top:7px;">{colored_number(value, format_number(value), positive_good=value_positive_good)}</div>'
+            f'{expires_html}'
+            '</td></tr></table>'
+            '</div></td>'
+        )
+
+    def card_row(cards):
+        if not cards:
+            return '<p style="font-size:13px;color:#6b7280;margin:6px 0 0 0;">Kein akuter Handlungsbedarf im aktuellen Report.</p>'
+        return (
+            '<table role="presentation" style="width:100%;border-collapse:collapse;table-layout:fixed;"><tr>'
+            + "".join(cards)
+            + "</tr></table>"
+        )
+
+    def build_action_overview():
+        squad_cards = []
+        if not squad_df.empty and "predicted_mv_target" in squad_df:
+            loss_candidates = squad_df[squad_df["predicted_mv_target"] < -25_000].copy()
+            loss_candidates = loss_candidates.sort_values("predicted_mv_target", ascending=True).head(3)
+            for _, row in loss_candidates.iterrows():
+                squad_cards.append(
+                    action_card(
+                        row,
+                        "Drohender MW-Verlust",
+                        row.get("predicted_mv_target"),
+                        value_positive_good=True,
+                        accent="#991b1b",
+                    )
+                )
+
+        market_cards = []
+        if not market_df.empty and "predicted_mv_target" in market_df:
+            market_candidates = market_df.copy()
+            if "expires_before_mv_update" in market_candidates:
+                market_candidates = market_candidates[market_candidates["expires_before_mv_update"].fillna(False).astype(bool)]
+            elif "risk" in market_candidates:
+                market_candidates = market_candidates[market_candidates["risk"] == "Before MV update"]
+            else:
+                market_candidates = market_candidates.iloc[0:0]
+            market_candidates = market_candidates.sort_values("predicted_mv_target", ascending=False).head(3)
+            for _, row in market_candidates.iterrows():
+                market_cards.append(
+                    action_card(
+                        row,
+                        "Top-Chance vor MW-Update",
+                        row.get("predicted_mv_target"),
+                        value_positive_good=True,
+                        accent="#166534",
+                    )
+                )
+
+        return f"""
+            <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin:8px 0 20px 0;">
+                <h3 style="color:#1f2933;margin:0 0 12px 0;font-size:17px;">Heute handeln</h3>
+                <p style="font-size:13px;color:#374151;margin:0 0 8px 0;"><b>Dein Kader: drohender MW-Verlust um 22 Uhr</b></p>
+                {card_row(squad_cards)}
+                <p style="font-size:13px;color:#374151;margin:8px 0 8px 0;"><b>Markt: Top 3 erwartete MW-Steigerungen mit Ablauf vor der nächsten Neuberechnung</b></p>
+                {card_row(market_cards)}
+            </div>
+        """
+
+    def build_squad_change_summary():
+        if squad_df.empty or "mv_change_yesterday" not in squad_df:
+            return ""
+        total_change = squad_df["mv_change_yesterday"].sum()
+        player_count = len(squad_df)
+        return (
+            '<div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;'
+            'padding:12px 14px;margin:8px 0 12px 0;font-size:14px;color:#374151;">'
+            f'<b>Kader-Gewinn/Verlust gegenüber Vortagesmarktwert:</b> '
+            f'{colored_number(total_change, format_number(total_change))} '
+            f'<span style="color:#6b7280;">über {player_count} Spieler</span>'
+            '</div>'
+        )
+
     def build_lineup_advice():
         if squad_df.empty or "position" not in squad_df:
             return ""
@@ -597,7 +716,9 @@ def send_mail(budget_df, market_df, squad_df, email):
             </p>
         </div>
     """
+    action_overview = build_action_overview()
     lineup_advice = build_lineup_advice()
+    squad_change_summary = build_squad_change_summary()
 
     # Set email content
     msg.set_content("Sorry, results only via html visible.", subtype="plain")
@@ -607,14 +728,14 @@ def send_mail(budget_df, market_df, squad_df, email):
         <div style="max-width: 2200px; width: 100%; margin: auto; background: #ffffff; padding: 14px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); overflow-x: auto; box-sizing: border-box;">
         
         <h2 style="color: #1f2933; text-align: center; margin-top: 0;">Kickbase Report für {today}</h2>
+
+        {action_overview}
         
         <div style="display:block;margin:16px 0 24px 0;">
             <span style="display:inline-block;background:#edf7ed;color:#1f6f3d;padding:8px 10px;border-radius:6px;margin:4px;font-size:13px;"><b>{market_buy_count}</b> Top-Käufe</span>
             <span style="display:inline-block;background:#fff4e5;color:#8a4b00;padding:8px 10px;border-radius:6px;margin:4px;font-size:13px;"><b>{squad_sell_count}</b> Verkaufschecks</span>
             <span style="display:inline-block;background:#eef2ff;color:#263a8b;padding:8px 10px;border-radius:6px;margin:4px;font-size:13px;">Höchste Kaufkraft: <b>{top_budget}</b></span>
         </div>
-
-        {action_legend}
 
         {lineup_advice}
 
@@ -629,8 +750,11 @@ def send_mail(budget_df, market_df, squad_df, email):
 
         <h3 style="color: #2c3e50; margin-top: 30px;">Dein Kader</h3>
         <p style="font-size: 14px; color: #333;">Dein Kader sortiert nach letzter Marktwertänderung, mit den stärksten Verlusten zuerst, inklusive Verkaufs- und Haltesignalen.</p>
+        {squad_change_summary}
 
         {style_df(squad_df)}
+
+        {action_legend}
 
         <p style="margin-top: 20px; font-size: 14px;">Viele Grüße<br><b>Dein KickAdvisor Bot</b></p>
         
