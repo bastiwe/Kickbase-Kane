@@ -3,6 +3,7 @@ from email.message import EmailMessage
 from html import escape
 from numbers import Number
 from zoneinfo import ZoneInfo
+import json
 import smtplib
 import os
 
@@ -132,6 +133,20 @@ FORMATIONS = [
     ("5-2-3", {1: 1, 2: 5, 3: 2, 4: 3}),
 ]
 
+BACKTEST_SUMMARY_PATH = "model_backtest_summary.json"
+
+
+def load_backtest_summary():
+    if not os.path.exists(BACKTEST_SUMMARY_PATH):
+        return None
+
+    try:
+        with open(BACKTEST_SUMMARY_PATH, "r", encoding="utf-8") as file:
+            return json.load(file)
+    except (OSError, json.JSONDecodeError) as error:
+        print(f"\nWarning: Could not read model backtest summary: {error}")
+        return None
+
 def send_mail(budget_df, market_df, squad_df, email):
     """Sends an email with the provided DataFrames as HTML tables."""
 
@@ -159,6 +174,8 @@ def send_mail(budget_df, market_df, squad_df, email):
     market_buy_count = int((market_df.get("recommendation") == "Strong buy").sum()) if "recommendation" in market_df else 0
     squad_sell_count = int(squad_df.get("recommendation", []).isin(["Sell", "Consider sell"]).sum()) if "recommendation" in squad_df else 0
     top_budget = budget_df.iloc[0]["User"] if not budget_df.empty and "User" in budget_df else "-"
+
+    backtest_summary = load_backtest_summary()
 
     def format_number(value):
         if isinstance(value, bool):
@@ -385,12 +402,41 @@ def send_mail(budget_df, market_df, squad_df, email):
         return f"""
             <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin:8px 0 20px 0;">
                 <h3 style="color:#1f2933;margin:0 0 12px 0;font-size:17px;">Heute handeln</h3>
+                {build_model_quality_card()}
                 <p style="font-size:13px;color:#374151;margin:0 0 8px 0;"><b>Dein Kader: drohender MW-Verlust um 22 Uhr</b></p>
                 {card_row(squad_cards)}
                 <p style="font-size:13px;color:#374151;margin:8px 0 8px 0;"><b>Markt: Top 3 erwartete MW-Steigerungen mit Ablauf vor der nächsten Neuberechnung</b></p>
                 {card_row(market_cards)}
             </div>
         """
+
+    def build_model_quality_card():
+        if not backtest_summary:
+            return ""
+
+        generated_at = escape(str(backtest_summary.get("generated_at", "-")))
+        direction = backtest_summary.get("direction_accuracy_pct")
+        mae = backtest_summary.get("mae")
+        hit_rate = backtest_summary.get("top_trade_hit_rate_pct")
+        avg_profit = backtest_summary.get("top_trade_avg_profit")
+        test_days = backtest_summary.get("test_days", "-")
+        test_rows = backtest_summary.get("test_rows", "-")
+
+        return (
+            '<div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;'
+            'padding:10px 12px;margin:0 0 12px 0;">'
+            '<div style="font-size:12px;color:#6b7280;font-weight:700;text-transform:uppercase;margin-bottom:6px;">Modellgüte letzter Backtest</div>'
+            '<span style="display:inline-block;background:#eef2ff;color:#3730a3;padding:6px 9px;border-radius:6px;margin:2px;font-size:13px;">'
+            f'Richtung: <b>{format_percent(direction)}</b></span>'
+            '<span style="display:inline-block;background:#f8fafc;color:#374151;padding:6px 9px;border-radius:6px;margin:2px;font-size:13px;">'
+            f'Ø Fehler: <b>{format_number(mae)}</b></span>'
+            '<span style="display:inline-block;background:#ecfdf5;color:#166534;padding:6px 9px;border-radius:6px;margin:2px;font-size:13px;">'
+            f'Top-Trade Treffer: <b>{format_percent(hit_rate)}</b></span>'
+            '<span style="display:inline-block;background:#f8fafc;color:#374151;padding:6px 9px;border-radius:6px;margin:2px;font-size:13px;">'
+            f'Ø Top-Trade: <b>{format_number(avg_profit)}</b></span>'
+            f'<div style="font-size:11px;color:#6b7280;margin-top:5px;">Test: {test_days} Tage, n={test_rows}, Stand {generated_at}</div>'
+            '</div>'
+        )
 
     def build_squad_change_summary():
         if squad_df.empty or "mv_change_yesterday" not in squad_df:

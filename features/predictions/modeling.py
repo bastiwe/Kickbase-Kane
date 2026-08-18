@@ -1,17 +1,22 @@
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.ensemble import RandomForestRegressor
 import numpy as np
+import os
 
-def train_model(X_train, y_train):
+def train_model(X_train, y_train, n_estimators=None):
     """Train a RandomForestRegressor model, parameters optimized via grid search"""
 
+    if n_estimators is None:
+        n_estimators = int(os.getenv("MODEL_N_ESTIMATORS", "500"))
+
     model = RandomForestRegressor(
-        n_estimators=500,
+        n_estimators=n_estimators,
         max_depth=20,
         min_samples_split=5,
         min_samples_leaf=2,
         max_features="sqrt",
-        n_jobs=-1
+        n_jobs=-1,
+        random_state=42,
     )
 
     model.fit(X_train, y_train)

@@ -1,3 +1,5 @@
 .env
 __pycache__
 .venv
+model_backtest_summary.json
+player_data_total.db
