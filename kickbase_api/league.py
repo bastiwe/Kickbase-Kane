@@ -59,13 +59,51 @@ def get_league_activities(token, league_id, league_start_date):
     achievements = [entry for entry in filtered_activities if entry.get("t") == 26]
     trade = [entry for entry in filtered_activities if entry.get("t") == 15]
     trading = []
+    missing_trade_fields_logged = False
     for entry in trade:
         data = entry.get("data", {})
-        item = {k: data.get(k) for k in ["byr", "slr", "pi", "pn", "tid", "trp", "mv", "mvo", "prc"]}
+        item = {
+            "byr": first_existing(data, "byr", "buyer", "buyerName", "buyer_name", "bu"),
+            "slr": first_existing(data, "slr", "seller", "sellerName", "seller_name", "su"),
+            "pi": first_existing(data, "pi", "playerId", "player_id", "pId", "id"),
+            "pn": first_existing(data, "pn", "playerName", "player_name", "name", "n"),
+            "tid": first_existing(data, "tid", "teamId", "team_id"),
+            "trp": first_existing(data, "trp", "prc", "price", "amount", "bid", "value"),
+            "mv": first_existing(data, "mv", "marketValue", "market_value"),
+            "mvo": first_existing(data, "mvo", "marketValueOld", "market_value_old"),
+            "prc": first_existing(data, "prc", "price", "amount", "bid", "value"),
+        }
         item["dt"] = entry.get("dt")
+        if not missing_trade_fields_logged and not any(item.get(key) is not None for key in ["byr", "pi", "trp", "prc"]):
+            print(f"Warning: Could not parse transfer activity fields. Available keys: {sorted(data.keys())}")
+            missing_trade_fields_logged = True
         trading.append(item)
 
     return trading, login, achievements
+
+def first_existing(data, *keys):
+    """Return the first non-empty value from possible Kickbase activity fields."""
+
+    for key in keys:
+        value = data.get(key)
+        if value is None:
+            continue
+        if isinstance(value, dict):
+            nested_value = (
+                value.get("v")
+                or value.get("value")
+                or value.get("amount")
+                or value.get("price")
+                or value.get("n")
+                or value.get("name")
+                or value.get("id")
+                or value.get("i")
+            )
+            if nested_value is not None:
+                return nested_value
+        elif value != "":
+            return value
+    return None
 
 def get_league_players_on_market(token, league_id, current_user_id=None):
     """Get all players currently available on the market in the league."""

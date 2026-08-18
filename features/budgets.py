@@ -139,6 +139,7 @@ def calc_average_overpay_by_manager(activities_df, league_start_date):
     """Calculate average paid price above market value for current-season buys."""
 
     if activities_df.empty or not {"byr", "pi", "trp"}.issubset(activities_df.columns):
+        print("Average overpay skipped: transfer activity fields are missing.")
         return {}
 
     market_values = load_market_values_for_overpay()
@@ -150,25 +151,51 @@ def calc_average_overpay_by_manager(activities_df, league_start_date):
     season_trades = season_trades[season_trades["dt"].fillna("") >= league_start_date]
     season_trades = season_trades[season_trades["byr"].notna()]
     if season_trades.empty:
+        print("Average overpay skipped: no current-season buys found in the activity feed.")
         return {}
 
     rows = []
+    missing_player_id = 0
+    missing_price = 0
+    missing_market_value = 0
     for _, trade in season_trades.iterrows():
-        buyer = trade.get("byr")
+        buyer = normalize_activity_name(trade.get("byr"))
         player_id = trade.get("pi")
         price = first_number(trade.get("trp"), trade.get("prc"))
         market_value = first_number(trade.get("mv"), trade.get("mvo"))
         if market_value is None:
             market_value = lookup_market_value(market_values, player_id, trade.get("dt"))
-        if not buyer or player_id is None or price is None or market_value is None:
+        if not buyer:
+            continue
+        if player_id is None:
+            missing_player_id += 1
+            continue
+        if price is None:
+            missing_price += 1
+            continue
+        if market_value is None:
+            missing_market_value += 1
             continue
         rows.append({"User": buyer, "Overpay": price - market_value})
 
     if not rows:
+        print(
+            "Average overpay skipped: no usable transfer rows. "
+            f"Checked {len(season_trades)} buys, missing player id: {missing_player_id}, "
+            f"missing price: {missing_price}, missing market value: {missing_market_value}."
+        )
         return {}
 
     overpay_df = pd.DataFrame(rows)
+    print(f"Average overpay calculated from {len(overpay_df)} usable buys.")
     return overpay_df.groupby("User")["Overpay"].mean().round(0).to_dict()
+
+def normalize_activity_name(value):
+    if isinstance(value, dict):
+        value = value.get("n") or value.get("name") or value.get("u") or value.get("id")
+    if value is None or pd.isna(value):
+        return None
+    return str(value)
 
 def load_market_values_for_overpay():
     try:
@@ -209,7 +236,14 @@ def lookup_market_value(market_values, player_id, activity_date):
 
 def first_number(*values):
     for value in values:
-        if value is None or pd.isna(value):
+        if isinstance(value, dict):
+            value = value.get("v") or value.get("value") or value.get("amount") or value.get("price")
+        if value is None:
+            continue
+        try:
+            if pd.isna(value):
+                continue
+        except (TypeError, ValueError):
             continue
         try:
             return float(value)
