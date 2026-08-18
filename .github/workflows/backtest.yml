@@ -76,7 +76,7 @@ jobs:
 
       - name: Upload model backtest summary
         if: steps.berlin-time.outputs.run == 'true' && hashFiles('model_backtest_summary.json') != ''
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: model-backtest-summary
           path: model_backtest_summary.json
