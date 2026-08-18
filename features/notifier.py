@@ -415,17 +415,26 @@ def send_mail(budget_df, market_df, squad_df, email):
             return ""
 
         generated_at = escape(str(backtest_summary.get("generated_at", "-")))
-        direction = backtest_summary.get("direction_accuracy_pct")
-        mae = backtest_summary.get("mae")
-        hit_rate = backtest_summary.get("top_trade_hit_rate_pct")
-        avg_profit = backtest_summary.get("top_trade_avg_profit")
-        test_days = backtest_summary.get("test_days", "-")
-        test_rows = backtest_summary.get("test_rows", "-")
+        phase_key = backtest_summary.get("current_market_phase", "gesamt")
+        phase_summary = backtest_summary.get("phases", {}).get(phase_key, backtest_summary)
+        phase_label = {
+            "saisonstart": "Saisonstart",
+            "saisonbetrieb": "Saisonbetrieb",
+            "gesamt": "Gesamt",
+        }.get(str(phase_key), str(phase_key))
+        direction = phase_summary.get("direction_accuracy_pct")
+        mae = phase_summary.get("mae")
+        hit_rate = phase_summary.get("top_trade_hit_rate_pct")
+        avg_profit = phase_summary.get("top_trade_avg_profit")
+        test_days = phase_summary.get("days", backtest_summary.get("test_days", "-"))
+        test_rows = phase_summary.get("rows", backtest_summary.get("test_rows", "-"))
 
         return (
             '<div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;'
             'padding:10px 12px;margin:0 0 12px 0;">'
             '<div style="font-size:12px;color:#6b7280;font-weight:700;text-transform:uppercase;margin-bottom:6px;">Modellgüte letzter Backtest</div>'
+            '<span style="display:inline-block;background:#ffedd5;color:#9a3412;padding:6px 9px;border-radius:6px;margin:2px;font-size:13px;">'
+            f'Marktphase: <b>{escape(phase_label)}</b></span>'
             '<span style="display:inline-block;background:#eef2ff;color:#3730a3;padding:6px 9px;border-radius:6px;margin:2px;font-size:13px;">'
             f'Richtung: <b>{format_percent(direction)}</b></span>'
             '<span style="display:inline-block;background:#f8fafc;color:#374151;padding:6px 9px;border-radius:6px;margin:2px;font-size:13px;">'

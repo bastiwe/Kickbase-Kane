@@ -69,11 +69,13 @@ def main():
         test_df["mv_target_clipped"],
     )
     top_trade_summary = simulate_top_trades(test_df)
+    phase_summaries = build_phase_summaries(test_df)
 
     generated_at = datetime.now(ZoneInfo("Europe/Berlin")).isoformat(timespec="seconds")
     summary = {
         "generated_at": generated_at,
         "target": "1T",
+        "current_market_phase": current_market_phase(test_df),
         "train_rows": int(len(train_df)),
         "test_rows": int(len(test_df)),
         "test_days": int(test_df["date"].dt.date.nunique()),
@@ -84,6 +86,7 @@ def main():
         "rmse": round(float(rmse), 2),
         "r2": round(float(r2), 4),
         **top_trade_summary,
+        "phases": phase_summaries,
     }
 
     with open(SUMMARY_PATH, "w", encoding="utf-8") as file:
@@ -136,6 +139,60 @@ def simulate_top_trades(test_df):
         "top_trade_avg_profit": round(float(actual_profit.mean()), 2) if len(selected) else 0,
         "top_trade_total_profit": round(float(actual_profit.sum()), 2) if len(selected) else 0,
     }
+
+
+def build_phase_summaries(test_df):
+    phased_df = test_df.copy()
+    phased_df["market_phase"] = phased_df["date"].map(market_phase)
+
+    summaries = {
+        "gesamt": summarize_phase(test_df),
+    }
+    for phase in ["saisonstart", "saisonbetrieb"]:
+        phase_df = phased_df[phased_df["market_phase"] == phase]
+        if not phase_df.empty:
+            summaries[phase] = summarize_phase(phase_df)
+    return summaries
+
+
+def summarize_phase(df):
+    actual = df["mv_target_clipped"]
+    predicted = df["prediction"]
+    direction_accuracy = (actual.apply(sign) == predicted.apply(sign)).mean() * 100
+    errors = (actual - predicted).abs()
+    top_trade_summary = simulate_top_trades(df)
+
+    return {
+        "rows": int(len(df)),
+        "days": int(df["date"].dt.date.nunique()),
+        "start": df["date"].min().date().isoformat(),
+        "end": df["date"].max().date().isoformat(),
+        "direction_accuracy_pct": round(float(direction_accuracy), 2),
+        "mae": round(float(errors.mean()), 2),
+        **top_trade_summary,
+    }
+
+
+def current_market_phase(test_df):
+    return market_phase(test_df["date"].max())
+
+
+def market_phase(date_value):
+    date = pd.Timestamp(date_value)
+    season_start = pd.Timestamp(os.getenv("BACKTEST_SEASON_START", "2026-08-15"))
+    start_days = int(os.getenv("BACKTEST_START_PHASE_DAYS", "30"))
+
+    if season_start <= date <= season_start + pd.Timedelta(days=start_days):
+        return "saisonstart"
+    return "saisonbetrieb"
+
+
+def sign(value):
+    if value > 0:
+        return 1
+    if value < 0:
+        return -1
+    return 0
 
 
 if __name__ == "__main__":
