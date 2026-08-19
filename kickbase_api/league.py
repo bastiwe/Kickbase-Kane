@@ -65,13 +65,13 @@ def get_league_activities(token, league_id, league_start_date):
         item = {
             "byr": first_existing(data, "byr", "buyer", "buyerName", "buyer_name", "bu"),
             "slr": first_existing(data, "slr", "seller", "sellerName", "seller_name", "su"),
-            "pi": first_existing(data, "pi", "playerId", "player_id", "pId", "id"),
+            "pi": first_existing(data, "pi", "player", "p", "playerId", "player_id", "pId", "id", prefer_id=True),
             "pn": first_existing(data, "pn", "playerName", "player_name", "name", "n"),
-            "tid": first_existing(data, "tid", "teamId", "team_id"),
-            "trp": first_existing(data, "trp", "prc", "price", "amount", "bid", "value"),
-            "mv": first_existing(data, "mv", "marketValue", "market_value"),
-            "mvo": first_existing(data, "mvo", "marketValueOld", "market_value_old"),
-            "prc": first_existing(data, "prc", "price", "amount", "bid", "value"),
+            "tid": first_existing(data, "tid", "team", "teamId", "team_id", prefer_id=True),
+            "trp": first_existing(data, "trp", "prc", "price", "amount", "bid", "value", prefer_value=True),
+            "mv": first_existing(data, "mv", "marketValue", "market_value", prefer_value=True),
+            "mvo": first_existing(data, "mvo", "marketValueOld", "market_value_old", prefer_value=True),
+            "prc": first_existing(data, "prc", "price", "amount", "bid", "value", prefer_value=True),
         }
         item["dt"] = entry.get("dt")
         if not missing_trade_fields_logged and not any(item.get(key) is not None for key in ["byr", "pi", "trp", "prc"]):
@@ -81,7 +81,7 @@ def get_league_activities(token, league_id, league_start_date):
 
     return trading, login, achievements
 
-def first_existing(data, *keys):
+def first_existing(data, *keys, prefer_id=False, prefer_value=False):
     """Return the first non-empty value from possible Kickbase activity fields."""
 
     for key in keys:
@@ -89,16 +89,13 @@ def first_existing(data, *keys):
         if value is None:
             continue
         if isinstance(value, dict):
-            nested_value = (
-                value.get("v")
-                or value.get("value")
-                or value.get("amount")
-                or value.get("price")
-                or value.get("n")
-                or value.get("name")
-                or value.get("id")
-                or value.get("i")
-            )
+            if prefer_id:
+                nested_keys = ("i", "id", "pi", "playerId", "tid", "teamId", "v", "value", "n", "name")
+            elif prefer_value:
+                nested_keys = ("v", "value", "amount", "price", "trp", "mv", "mvo", "id", "i")
+            else:
+                nested_keys = ("n", "name", "u", "id", "i", "v", "value")
+            nested_value = next((value.get(nested_key) for nested_key in nested_keys if value.get(nested_key) is not None), None)
             if nested_value is not None:
                 return nested_value
         elif value != "":

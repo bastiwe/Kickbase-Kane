@@ -65,11 +65,13 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget):
 
     # Initial cash budgets. Use all managers, not only users that already have transfer activities.
     budgets = {manager_name: start_budget for manager_name, _ in managers}
-    average_overpay = calc_average_overpay_by_manager(activities_df, league_start_date)
+    manager_lookup = build_manager_lookup(managers)
+    average_overpay = calc_average_overpay_by_manager(activities_df, league_start_date, managers)
 
     for _, row in activities_df.iterrows():
-        byr, slr, trp = row.get("byr"), row.get("slr"), row.get("trp", 0)
-        trp = 0 if pd.isna(trp) else trp
+        byr = normalize_activity_name(row.get("byr"), manager_lookup)
+        slr = normalize_activity_name(row.get("slr"), manager_lookup)
+        trp = first_number(row.get("trp"), row.get("prc")) or 0
         try:
             if pd.isna(byr) and pd.notna(slr):
                 budgets.setdefault(slr, start_budget)
@@ -135,7 +137,7 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget):
 
     return budget_df
 
-def calc_average_overpay_by_manager(activities_df, league_start_date):
+def calc_average_overpay_by_manager(activities_df, league_start_date, managers=None):
     """Calculate average paid price above market value for current-season buys."""
 
     if activities_df.empty or not {"byr", "pi", "trp"}.issubset(activities_df.columns):
@@ -154,12 +156,13 @@ def calc_average_overpay_by_manager(activities_df, league_start_date):
         print("Average overpay skipped: no current-season buys found in the activity feed.")
         return {}
 
+    manager_lookup = build_manager_lookup(managers)
     rows = []
     missing_player_id = 0
     missing_price = 0
     missing_market_value = 0
     for _, trade in season_trades.iterrows():
-        buyer = normalize_activity_name(trade.get("byr"))
+        buyer = normalize_activity_name(trade.get("byr"), manager_lookup)
         player_id = trade.get("pi")
         price = first_number(trade.get("trp"), trade.get("prc"))
         market_value = first_number(trade.get("mv"), trade.get("mvo"))
@@ -190,12 +193,20 @@ def calc_average_overpay_by_manager(activities_df, league_start_date):
     print(f"Average overpay calculated from {len(overpay_df)} usable buys.")
     return overpay_df.groupby("User")["Overpay"].mean().round(0).to_dict()
 
-def normalize_activity_name(value):
+def normalize_activity_name(value, manager_lookup=None):
     if isinstance(value, dict):
-        value = value.get("n") or value.get("name") or value.get("u") or value.get("id")
+        value = value.get("n") or value.get("name") or value.get("u") or value.get("id") or value.get("i")
     if value is None or pd.isna(value):
         return None
-    return str(value)
+    value = str(value)
+    return (manager_lookup or {}).get(value, value)
+
+def build_manager_lookup(managers=None):
+    lookup = {}
+    for manager_name, manager_id in managers or []:
+        lookup[str(manager_name)] = str(manager_name)
+        lookup[str(manager_id)] = str(manager_name)
+    return lookup
 
 def load_market_values_for_overpay():
     try:
