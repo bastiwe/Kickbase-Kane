@@ -13,6 +13,7 @@ import pandas as pd
 import sqlite3
 import unicodedata
 import re
+from datetime import timedelta
 
 def calc_manager_budgets(token, league_id, league_start_date, start_budget):
     """Calculate manager budgets based on activities, bonuses, and team performance."""
@@ -233,12 +234,8 @@ def load_market_values_for_overpay():
         return pd.DataFrame(columns=["player_id", "date", "mv", "first_name", "last_name"])
 
 def lookup_market_value(market_values, player_id, activity_date, player_name=None):
-    if not activity_date:
-        return None
-
-    try:
-        activity_date = pd.to_datetime(activity_date, utc=True).tz_convert(None).normalize()
-    except Exception:
+    market_value_date = market_value_date_for_activity(activity_date)
+    if market_value_date is None:
         return None
 
     player_values = pd.DataFrame()
@@ -267,12 +264,28 @@ def lookup_market_value(market_values, player_id, activity_date, player_name=Non
         return None
 
     player_values["date"] = pd.to_datetime(player_values["date"]).dt.normalize()
-    values_until_trade = player_values[player_values["date"] <= activity_date].sort_values("date")
-    if not values_until_trade.empty:
-        value = values_until_trade.iloc[-1]["mv"]
-    else:
-        value = player_values.sort_values("date").iloc[0]["mv"]
+    target_date = pd.Timestamp(market_value_date).normalize()
+    exact_values = player_values[player_values["date"] == target_date].sort_values("date")
+    if not exact_values.empty:
+        value = exact_values.iloc[-1]["mv"]
+        return None if pd.isna(value) else float(value)
+
+    values_until_trade = player_values[player_values["date"] < target_date].sort_values("date")
+    if values_until_trade.empty:
+        return None
+    value = values_until_trade.iloc[-1]["mv"]
     return None if pd.isna(value) else float(value)
+
+def market_value_date_for_activity(activity_date):
+    try:
+        activity_time = pd.to_datetime(activity_date, utc=True).tz_convert("Europe/Berlin")
+    except Exception:
+        return None
+
+    # Before the 22:00 market update, the active market value is still yesterday's value.
+    if activity_time.hour < 22:
+        activity_time = activity_time - timedelta(days=1)
+    return activity_time.date()
 
 def normalize_player_name(value):
     if value is None or pd.isna(value):
