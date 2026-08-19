@@ -362,6 +362,92 @@ def send_mail(budget_df, market_df, squad_df, email):
             + "</tr></table>"
         )
 
+    def top_pick_card(row, rank):
+        buy_type = str(row.get("buy_type", "") or "")
+        is_big_boy = buy_type == "Kader-Kauf" or str(row.get("top_player_tag", "") or "") != ""
+        accent = "#854d0e" if is_big_boy else "#166534"
+        title = f"#{rank} {'Big Boy' if is_big_boy else 'Trading-Pick'}"
+        name = escape(player_name(row))
+        url = player_url(row)
+        image = player_image(row, size=96)
+        name_html = (
+            f'<a href="{escape(url, quote=True)}" target="_blank" style="color:#111827;text-decoration:none;">{name}</a>'
+            if url else name
+        )
+        expires = expiry_value(row.get("expires_at")) if "expires_at" in row else "-"
+        starter_rate = row.get("starter_rate")
+        starter_text = format_percent(starter_rate) if isinstance(starter_rate, Number) and starter_rate == starter_rate else "-"
+        tag_badge = badge(row.get("top_player_tag"))
+        limit_badge = badge(row.get("team_limit_warning"))
+        return (
+            '<td style="vertical-align:top;padding:0 10px 12px 0;width:33.33%;">'
+            f'<div style="border:1px solid #e5e7eb;border-top:5px solid {accent};border-radius:8px;'
+            'background:#ffffff;padding:12px;min-height:196px;">'
+            '<table role="presentation" style="border-collapse:collapse;width:100%;"><tr>'
+            f'<td style="width:108px;vertical-align:top;">{image}</td>'
+            '<td style="vertical-align:top;padding-left:12px;">'
+            f'<div style="font-size:12px;color:#6b7280;font-weight:800;text-transform:uppercase;">{escape(title)}</div>'
+            f'<div style="font-size:17px;font-weight:900;color:#111827;margin-top:4px;">{name_html}</div>'
+            f'<div style="font-size:12px;color:#6b7280;margin-top:3px;">{position_label(row.get("position"))} · {escape(str(row.get("team_name", "-")))}</div>'
+            f'<div style="margin-top:8px;">{badge(row.get("buy_type"))} {badge(row.get("buy_priority"))} {tag_badge} {limit_badge}</div>'
+            '</td></tr></table>'
+            '<div style="border-top:1px solid #eef2f7;margin-top:10px;padding-top:9px;">'
+            '<table role="presentation" style="border-collapse:collapse;width:100%;font-size:12px;color:#374151;">'
+            '<tr>'
+            f'<td style="padding:3px 4px 3px 0;color:#6b7280;">Erw. 1T</td><td style="padding:3px 0;text-align:right;">{colored_number(row.get("predicted_mv_target"), format_number(row.get("predicted_mv_target")))}</td>'
+            '</tr><tr>'
+            f'<td style="padding:3px 4px 3px 0;color:#6b7280;">Max. Gebot</td><td style="padding:3px 0;text-align:right;font-weight:800;">{format_number(row.get("max_bid"))}</td>'
+            '</tr><tr>'
+            f'<td style="padding:3px 4px 3px 0;color:#6b7280;">LI %</td><td style="padding:3px 0;text-align:right;">{starter_text}</td>'
+            '</tr><tr>'
+            f'<td style="padding:3px 4px 3px 0;color:#6b7280;">Ablauf</td><td style="padding:3px 0;text-align:right;">{expires}</td>'
+            '</tr>'
+            '</table>'
+            '</div>'
+            '</div></td>'
+        )
+
+    def build_top_buy_picks():
+        if market_df.empty or "predicted_mv_target" not in market_df:
+            return ""
+
+        candidates = market_df.copy()
+        for col, default in [
+            ("buy_priority_score", 0),
+            ("predicted_mv_target", 0),
+            ("expected_change_pct", 0),
+            ("buy_priority", "Niedrig"),
+            ("buy_type", "Trading-Kauf"),
+            ("top_player_tag", ""),
+            ("starter_rate", 0),
+            ("has_open_bid", False),
+        ]:
+            if col not in candidates:
+                candidates[col] = default
+
+        candidates["big_boy_rank"] = candidates["buy_type"].eq("Kader-Kauf") | candidates["top_player_tag"].fillna("").astype(str).ne("")
+        candidates["priority_rank"] = candidates["buy_priority"].map({"Hoch": 0, "Mittel": 1, "Niedrig": 2}).fillna(3)
+        candidates["open_bid_rank"] = candidates["has_open_bid"].fillna(False).astype(bool).map({True: 0, False: 1})
+        candidates = candidates.sort_values(
+            [
+                "priority_rank",
+                "big_boy_rank",
+                "buy_priority_score",
+                "predicted_mv_target",
+                "expected_change_pct",
+                "open_bid_rank",
+            ],
+            ascending=[True, False, False, False, False, True],
+        ).head(3)
+        if candidates.empty:
+            return ""
+
+        cards = [top_pick_card(row, rank) for rank, (_, row) in enumerate(candidates.iterrows(), start=1)]
+        return f"""
+            <p style="font-size:13px;color:#374151;margin:10px 0 8px 0;"><b>Top 3 Kauf-Picks: Big Boys und starke Trading-Spieler</b></p>
+            {card_row(cards)}
+        """
+
     def build_action_overview():
         squad_cards = []
         if not squad_df.empty and "predicted_mv_target" in squad_df:
@@ -403,6 +489,7 @@ def send_mail(budget_df, market_df, squad_df, email):
             <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin:8px 0 20px 0;">
                 <h3 style="color:#1f2933;margin:0 0 12px 0;font-size:17px;">Heute handeln</h3>
                 {build_model_quality_card()}
+                {build_top_buy_picks()}
                 <p style="font-size:13px;color:#374151;margin:0 0 8px 0;"><b>Dein Kader: drohender MW-Verlust um 22 Uhr</b></p>
                 {card_row(squad_cards)}
                 <p style="font-size:13px;color:#374151;margin:8px 0 8px 0;"><b>Markt: Top 3 erwartete MW-Steigerungen mit Ablauf vor der nächsten Neuberechnung</b></p>
