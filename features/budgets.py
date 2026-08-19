@@ -11,6 +11,8 @@ from kickbase_api.manager import (
 from kickbase_api.others import get_achievement_reward
 import pandas as pd
 import sqlite3
+import unicodedata
+import re
 
 def calc_manager_budgets(token, league_id, league_start_date, start_budget):
     """Calculate manager budgets based on activities, bonuses, and team performance."""
@@ -167,7 +169,12 @@ def calc_average_overpay_by_manager(activities_df, league_start_date, managers=N
         price = first_number(trade.get("trp"), trade.get("prc"))
         market_value = first_number(trade.get("mv"), trade.get("mvo"))
         if market_value is None:
-            market_value = lookup_market_value(market_values, player_id, trade.get("dt"))
+            market_value = lookup_market_value(
+                market_values,
+                player_id,
+                trade.get("dt"),
+                trade.get("pn"),
+            )
         if not buyer:
             continue
         if player_id is None:
@@ -214,6 +221,7 @@ def load_market_values_for_overpay():
             return pd.read_sql_query(
                 """
                 SELECT player_id, date, mv
+                     , first_name, last_name
                 FROM player_data_1d
                 WHERE mv IS NOT NULL
                 """,
@@ -222,28 +230,58 @@ def load_market_values_for_overpay():
             )
     except Exception as e:
         print(f"Warning: Could not load market values for overpay calculation: {e}")
-        return pd.DataFrame(columns=["player_id", "date", "mv"])
+        return pd.DataFrame(columns=["player_id", "date", "mv", "first_name", "last_name"])
 
-def lookup_market_value(market_values, player_id, activity_date):
-    if player_id is None or not activity_date:
+def lookup_market_value(market_values, player_id, activity_date, player_name=None):
+    if not activity_date:
         return None
 
     try:
-        player_id = int(player_id)
         activity_date = pd.to_datetime(activity_date, utc=True).tz_convert(None).normalize()
     except Exception:
         return None
 
-    player_values = market_values[market_values["player_id"] == player_id].copy()
+    player_values = pd.DataFrame()
+    if player_id is not None:
+        try:
+            player_id = int(player_id)
+            player_values = market_values[market_values["player_id"] == player_id].copy()
+        except Exception:
+            player_values = pd.DataFrame()
+
+    if player_values.empty and player_name:
+        normalized_name = normalize_player_name(player_name)
+        if normalized_name:
+            values_with_names = market_values.copy()
+            values_with_names["normalized_name"] = values_with_names.apply(
+                lambda row: normalize_player_name(f"{row.get('first_name', '')} {row.get('last_name', '')}"),
+                axis=1,
+            )
+            values_with_names["normalized_last_name"] = values_with_names["last_name"].map(normalize_player_name)
+            player_values = values_with_names[
+                (values_with_names["normalized_name"] == normalized_name)
+                | (values_with_names["normalized_last_name"] == normalized_name)
+            ].copy()
+
     if player_values.empty:
         return None
 
     player_values["date"] = pd.to_datetime(player_values["date"]).dt.normalize()
     values_until_trade = player_values[player_values["date"] <= activity_date].sort_values("date")
-    if values_until_trade.empty:
-        return None
-    value = values_until_trade.iloc[-1]["mv"]
+    if not values_until_trade.empty:
+        value = values_until_trade.iloc[-1]["mv"]
+    else:
+        value = player_values.sort_values("date").iloc[0]["mv"]
     return None if pd.isna(value) else float(value)
+
+def normalize_player_name(value):
+    if value is None or pd.isna(value):
+        return ""
+    normalized = unicodedata.normalize("NFKD", str(value))
+    normalized = "".join(char for char in normalized if not unicodedata.combining(char))
+    normalized = normalized.lower().replace("ß", "ss")
+    normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
+    return " ".join(normalized.split())
 
 def first_number(*values):
     for value in values:
