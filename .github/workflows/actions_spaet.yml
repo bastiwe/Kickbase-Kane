@@ -2,9 +2,9 @@ name: Run Daily Predictions Spaet
 
 on:
   schedule:
-    - cron: '30 19 * * *'  # 21:30 in Germany during daylight saving time
+    - cron: '40 19 * * *'  # 21:40 in Germany during daylight saving time
     - cron: '10 20 * * *'  # 22:10 in Germany during daylight saving time
-    - cron: '30 20 * * *'  # 21:30 in Germany during standard time
+    - cron: '40 20 * * *'  # 21:40 in Germany during standard time
     - cron: '10 21 * * *'  # 22:10 in Germany during standard time
   workflow_dispatch:
 
@@ -18,7 +18,7 @@ jobs:
         run: |
           berlin_time="$(TZ=Europe/Berlin date +%H%M)"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] || \
-             { [ "$berlin_time" -ge 2130 ] && [ "$berlin_time" -le 2159 ]; } || \
+             { [ "$berlin_time" -ge 2140 ] && [ "$berlin_time" -le 2159 ]; } || \
              { [ "$berlin_time" -ge 2210 ] && [ "$berlin_time" -le 2239 ]; }; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
