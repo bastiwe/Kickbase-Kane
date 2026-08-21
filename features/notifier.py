@@ -473,6 +473,9 @@ def send_mail(budget_df, market_df, squad_df, email):
                 market_candidates = market_candidates[market_candidates["risk"] == "Before MV update"]
             else:
                 market_candidates = market_candidates.iloc[0:0]
+            market_candidates = market_candidates[
+                market_candidates["predicted_mv_target"].fillna(0) > 0
+            ]
             market_candidates = market_candidates.sort_values("predicted_mv_target", ascending=False).head(3)
             for _, row in market_candidates.iterrows():
                 market_cards.append(
