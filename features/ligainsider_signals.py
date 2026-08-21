@@ -327,14 +327,14 @@ def resolve_player_signal(player, page_signal, player_rate=None, player_url=None
         }
     if any(candidate in page_signal["predicted"] for candidate in candidates):
         return {
-            "starter_rate": 90,
+            "starter_rate": None,
             "lineup_scope": "LI-Startelf",
             "li_status": "Startelf",
             "ligainsider_url": player_url,
         }
     if any(candidate in page_signal["known"] for candidate in candidates):
         return {
-            "starter_rate": 35,
+            "starter_rate": None,
             "lineup_scope": "LI-Kader",
             "li_status": "Kader",
             "ligainsider_url": player_url,

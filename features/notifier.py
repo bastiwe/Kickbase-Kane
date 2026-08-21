@@ -834,9 +834,9 @@ def send_mail(budget_df, market_df, squad_df, email):
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>LI-Signal:</b>
-                Bevorzugt aus der öffentlichen LigaInsider-Spielerseite im Bereich Einsatzquote abgeleitet.
-                {badge("LI-Bundesliga")} bedeutet: LI % ist die historische Startelfquote nur im Bundesliga-Wettbewerb.
-                Falls keine Spielerseite/Quote gefunden wird, bleibt {badge("LI-Startelf")} oder {badge("LI-Kader")} als Teamseiten-Fallback.
+                LI % kommt ausschließlich aus der öffentlichen LigaInsider-Spielerseite im Bereich Einsatzquote.
+                {badge("LI-Bundesliga")} bedeutet: LI % ist die historische Startelfquote im Bundesliga-Wettbewerb.
+                Teamseiten-Fallbacks wie {badge("LI-Startelf")} oder {badge("LI-Kader")} setzen keine künstliche Prozentzahl mehr.
                 Das ist eine Historienquote, keine offizielle Kickbase- oder LigaInsider-Prognose für den nächsten Spieltag.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
