@@ -460,10 +460,12 @@ def join_current_market(token, league_id, today_df_results, current_user_id=None
         .drop(columns=["id"])
     )
 
-    # exp contains seconds until expiration
+    # exp contains seconds until expiration. Kickbase can occasionally omit it.
+    exp_values = bid_df["exp"] if "exp" in bid_df else pd.Series(np.nan, index=bid_df.index)
+    bid_df["exp"] = pd.to_numeric(exp_values, errors="coerce")
     bid_df["hours_to_exp"] = np.round((bid_df["exp"] / 3600), 2)
     now = datetime.now(ZoneInfo("Europe/Berlin"))
-    bid_df["expires_at"] = bid_df["exp"].map(lambda seconds: now + timedelta(seconds=float(seconds)))
+    bid_df["expires_at"] = bid_df["exp"].map(lambda seconds: expiry_from_seconds(seconds, now))
 
     # check if current sysdate + hours_to_exp is after the next 22:00
     next_22 = now.replace(hour=22, minute=0, second=0, microsecond=0)
@@ -546,3 +548,18 @@ def is_night_expiry(expires_at, now=None):
         sleep_end = today_nine + timedelta(days=1)
 
     return sleep_start <= expiry_time < sleep_end
+
+
+def expiry_from_seconds(seconds, now):
+    if pd.isna(seconds):
+        return pd.NaT
+
+    try:
+        seconds = float(seconds)
+    except (TypeError, ValueError):
+        return pd.NaT
+
+    if not np.isfinite(seconds):
+        return pd.NaT
+
+    return now + timedelta(seconds=seconds)
