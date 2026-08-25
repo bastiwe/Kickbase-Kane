@@ -88,10 +88,14 @@ def table_html(df, is_market):
         ("Team", lambda row: escape(str(row.get("team_name", "-")))),
         ("Status", lambda row: status_badge(row.get("player_status"))),
         ("Marktwert", lambda row: format_number(row.get("mv"))),
+        ("Kaufpreis", lambda row: format_number(row.get("purchase_price"))),
+        ("G/V", lambda row: colored_number(row.get("squad_profit_loss"))),
         ("Letzte MW", lambda row: colored_number(row.get("mv_change_yesterday"))),
         ("Erw. 1T", lambda row: colored_number(row.get("predicted_mv_target"))),
         ("Erw. %", lambda row: colored_pct(row.get("expected_change_pct"))),
     ]
+    if is_market:
+        columns = [column for column in columns if column[0] not in {"Kaufpreis", "G/V"}]
     if is_market:
         columns.extend([
             ("Ablauf", lambda row: expiry_value(row.get("expires_at"))),

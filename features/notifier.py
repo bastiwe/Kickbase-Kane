@@ -23,6 +23,8 @@ COLUMN_LABELS = {
     "team_name": "Team",
     "player_status": "Status",
     "mv": "Marktwert",
+    "purchase_price": "Kaufpreis",
+    "squad_profit_loss": "G/V",
     "max_bid": "Max. Gebot",
     "mv_change_yesterday": "Letzte MW",
     "predicted_mv_target": "Erw. 1T",
@@ -796,7 +798,7 @@ def send_mail(budget_df, market_df, squad_df, email):
                 result[col] = result[col].map(lambda value: colored_number(value, format_percent(value)))
             elif col == "starter_rate" and not result[col].astype(str).str.contains("<span", regex=False).any():
                 result[col] = result[col].map(starter_rate_value)
-            elif col in {"mv_change_yesterday", "predicted_mv_target", "predicted_mv_target_3d", "predicted_mv_target_7d"}:
+            elif col in {"mv_change_yesterday", "predicted_mv_target", "predicted_mv_target_3d", "predicted_mv_target_7d", "squad_profit_loss"}:
                 result[col] = result[col].map(lambda value: colored_number(value, format_number(value)))
             elif col == "Available Budget":
                 result[col] = result[col].map(lambda value: budget_value(value, format_number(value)))
@@ -804,7 +806,7 @@ def send_mail(budget_df, market_df, squad_df, email):
                 result[col] = result[col].map(lambda value: colored_number(value, format_number(value), positive_good=False))
             elif col == "bid_gap":
                 result[col] = result[col].map(lambda value: colored_number(value, format_number(value)))
-            elif col in {"mv", "max_bid", "winning_bid", "opponent_overpay_forecast", "Budget", "Team Value", "Max Negative", "recent_starts", "recent_apps", "last_season_points", "last_season_avg_points"}:
+            elif col in {"mv", "purchase_price", "max_bid", "winning_bid", "opponent_overpay_forecast", "Budget", "Team Value", "Max Negative", "recent_starts", "recent_apps", "last_season_points", "last_season_avg_points"}:
                 result[col] = result[col].map(format_number)
             elif col == "hours_to_exp":
                 result[col] = result[col].map(hours_value)

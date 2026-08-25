@@ -912,6 +912,7 @@ def join_current_squad(token, league_id, today_df_results, current_user_id=None)
     }
 
     squad_df = pd.DataFrame(squad_players["it"])
+    squad_df["purchase_price"] = extract_purchase_price_column(squad_df)
     if not squad_df.empty and "i" in squad_df:
         squad_df["is_listed_for_sale"] = squad_df["i"].astype(str).isin(listed_player_ids)
     else:
@@ -929,6 +930,7 @@ def join_current_squad(token, league_id, today_df_results, current_user_id=None)
 
     # Rename "mv_x" to "mv" for better understanding
     squad_df = squad_df.rename(columns={"mv_x": "mv"})
+    squad_df["squad_profit_loss"] = squad_df["mv"] - squad_df["purchase_price"]
 
     squad_df = add_recommendation_columns(squad_df, is_market=False)
     squad_df = squad_df.sort_values(
@@ -946,6 +948,8 @@ def join_current_squad(token, league_id, today_df_results, current_user_id=None)
         "team_name",
         "player_status",
         "mv",
+        "purchase_price",
+        "squad_profit_loss",
         "mv_change_yesterday",
         "predicted_mv_target",
         "predicted_mv_target_3d",
@@ -958,9 +962,42 @@ def join_current_squad(token, league_id, today_df_results, current_user_id=None)
         "expected_change_pct_7d",
         "is_listed_for_sale",
     ]]
+    purchase_prices_found = int(squad_df["purchase_price"].notna().sum())
+    print(f"Kickbase purchase prices detected for squad: {purchase_prices_found}/{len(squad_df)}.")
     print(f"Kickbase own transfer listings detected: {int(squad_df['is_listed_for_sale'].sum())}.")
 
     return squad_df 
+
+
+def extract_purchase_price_column(squad_df):
+    if squad_df is None or squad_df.empty:
+        return pd.Series(dtype="float64")
+
+    candidates = [
+        "purchase_price",
+        "purchasePrice",
+        "buy_price",
+        "buyPrice",
+        "paid_price",
+        "paidPrice",
+        "acquisition_price",
+        "acquisitionPrice",
+        "trp",
+        "prc",
+        "bp",
+        "bpr",
+        "cp",
+        "op",
+    ]
+    for column in candidates:
+        if column in squad_df:
+            values = pd.to_numeric(squad_df[column], errors="coerce")
+            if values.notna().any():
+                print(f"Kickbase squad purchase price source column: {column}.")
+                return values
+
+    print("Kickbase squad purchase price source column: none found.")
+    return pd.Series(np.nan, index=squad_df.index, dtype="float64")
 
 
 def join_current_market(token, league_id, today_df_results, current_user_id=None):
