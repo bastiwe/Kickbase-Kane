@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from email.message import EmailMessage
 from html import escape
 from numbers import Number
+from pathlib import Path
 from zoneinfo import ZoneInfo
 import json
 import smtplib
@@ -179,7 +180,7 @@ def load_backtest_summary():
         print(f"\nWarning: Could not read model backtest summary: {error}")
         return None
 
-def send_mail(budget_df, market_df, squad_df, email):
+def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
     """Sends an email with the provided DataFrames as HTML tables."""
 
     if not email:
@@ -1047,11 +1048,14 @@ def send_mail(budget_df, market_df, squad_df, email):
     </html>
     """, subtype="html")
 
+    attach_file(msg, attachment_path)
+
     try:
         with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
             smtp.starttls()
             smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
             smtp.send_message(msg)
+        print("\nEmail sent successfully!")
     except smtplib.SMTPAuthenticationError:
         print("\nEmail authentication failed, skipping email sending. Check EMAIL_USER and EMAIL_PASS.")
         return
@@ -1059,4 +1063,23 @@ def send_mail(budget_df, market_df, squad_df, email):
         print(f"\nEmail sending failed, skipping email sending: {e}")
         return
 
-    print("\nEmail sent successfully!")
+
+def attach_file(msg, attachment_path):
+    if not attachment_path:
+        return
+
+    path = Path(attachment_path)
+    if not path.exists():
+        print(f"\nWarning: Email attachment not found, skipping: {path}")
+        return
+
+    try:
+        msg.add_attachment(
+            path.read_bytes(),
+            maintype="text",
+            subtype="html",
+            filename=path.name,
+        )
+        print(f"Email attachment added: {path}.")
+    except OSError as error:
+        print(f"\nWarning: Could not attach file to email: {error}")
