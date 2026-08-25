@@ -826,6 +826,9 @@ def send_mail(budget_df, market_df, squad_df, email):
             "buy_priority_score",
             "position_needed",
             "opponent_overpay_breakdown",
+            "Erw. Gegner-Overpay",
+            "Sieggebot",
+            "Gap",
             "Overpay-Gegner",
         }
         visible_cols = [col for col in result.columns if col not in hidden_cols]
