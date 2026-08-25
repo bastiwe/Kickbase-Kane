@@ -61,6 +61,9 @@ def build_player_payload(market_df):
                     "rosterNote": clean_value(item.get("roster_note"), ""),
                     "squadSize": number_value(item.get("squad_size")),
                     "teamCount": number_value(item.get("team_count")),
+                    "aggressionScore": number_value(item.get("aggression_score")),
+                    "archetype": clean_value(item.get("archetype"), ""),
+                    "pattern": clean_value(item.get("pattern"), ""),
                 }
                 for item in breakdown
             ],
@@ -74,12 +77,17 @@ def build_manager_payload(budget_df):
         return []
 
     managers = []
+    profiles = getattr(budget_df, "attrs", {}).get("overpay_profiles") or {}
     for _, row in budget_df.iterrows():
+        profile = profiles.get(row.get("User")) or {}
         managers.append({
             "name": clean_value(row.get("User"), "-"),
             "avgOverpay": number_value(row.get("Avg Overpay")),
             "availableBudget": number_value(row.get("Available Budget")),
             "teamValue": number_value(row.get("Team Value")),
+            "aggressionScore": number_value(profile.get("aggression_score")),
+            "archetype": clean_value(profile.get("archetype"), ""),
+            "samples": number_value(profile.get("samples")),
         })
     return managers
 
@@ -358,13 +366,14 @@ def render_overpay_tool(payload):
       const maxOverpay = Math.max(...player.opponents.map(item => item.overpay || 0), 1);
       byId('opponentTable').innerHTML = player.opponents.length
         ? `<table>
-            <thead><tr><th>Manager</th><th>Erw. Overpay</th><th>Kaufkraft</th><th>Limit-Hinweis</th><th>Relativ</th></tr></thead>
+            <thead><tr><th>Manager</th><th>Erw. Overpay</th><th>Kaufkraft</th><th>Bietmuster</th><th>Limit-Hinweis</th><th>Relativ</th></tr></thead>
             <tbody>
               ${{player.opponents.map(item => `
                 <tr>
                   <td><strong>${{item.name}}</strong></td>
                   <td>${{plusMoney(item.overpay)}}</td>
                   <td>${{money(item.availableBudget)}}</td>
+                  <td>${{item.pattern || item.archetype || '-'}}</td>
                   <td>${{item.rosterNote || '-'}}</td>
                   <td><div class="barWrap"><div class="bar" style="width:${{Math.round(((item.overpay || 0) / maxOverpay) * 100)}}%"></div></div></td>
                 </tr>
@@ -377,12 +386,14 @@ def render_overpay_tool(payload):
     function renderManagers() {{
       byId('managerTable').innerHTML = DATA.managers.length
         ? `<table>
-            <thead><tr><th>Manager</th><th>Ø Overpay</th><th>Kaufkraft</th><th>Kaderwert</th></tr></thead>
+            <thead><tr><th>Manager</th><th>Ø Overpay</th><th>Aggro</th><th>Typ</th><th>Kaufkraft</th><th>Kaderwert</th></tr></thead>
             <tbody>
               ${{DATA.managers.map(manager => `
                 <tr>
                   <td><strong>${{manager.name}}</strong></td>
                   <td>${{plusMoney(manager.avgOverpay)}}</td>
+                  <td>${{manager.aggressionScore === null ? '-' : Math.round(manager.aggressionScore) + '/100'}}</td>
+                  <td>${{manager.archetype || '-'}}</td>
                   <td>${{money(manager.availableBudget)}}</td>
                   <td>${{money(manager.teamValue)}}</td>
                 </tr>

@@ -193,14 +193,15 @@ def build_overpay_rows(activities_df, league_start_date, managers=None):
         buyer = normalize_activity_name(trade.get("byr"), manager_lookup)
         player_id = trade.get("pi")
         price = first_number(trade.get("trp"), trade.get("prc"))
+        market_context = lookup_market_context(
+            market_values,
+            player_id,
+            trade.get("dt"),
+            trade.get("pn"),
+        )
         market_value = first_number(trade.get("mv"), trade.get("mvo"))
         if market_value is None:
-            market_value = lookup_market_value(
-                market_values,
-                player_id,
-                trade.get("dt"),
-                trade.get("pn"),
-            )
+            market_value = market_context.get("mv")
         if not buyer:
             continue
         if player_id is None:
@@ -220,6 +221,9 @@ def build_overpay_rows(activities_df, league_start_date, managers=None):
             "Overpay": price - market_value,
             "OverpayPct": ((price - market_value) / market_value) * 100 if market_value else 0,
             "MarketValueBucket": market_value_bucket(market_value),
+            "Position": normalize_position(market_context.get("position")),
+            "MomentumBucket": momentum_bucket(market_context.get("mv_change_1d")),
+            "QualityBucket": quality_bucket(market_value, market_context.get("p")),
         })
 
     if not rows:
@@ -264,18 +268,90 @@ def summarize_overpay_profile(rows):
 
     segments = {}
     for bucket, bucket_rows in rows.groupby("MarketValueBucket"):
-        segments[bucket] = {
-            "samples": int(len(bucket_rows)),
-            "avg_overpay": round(float(bucket_rows["Overpay"].mean()), 0),
-            "avg_overpay_pct": round(float(bucket_rows["OverpayPct"].mean()), 2),
-        }
+        segments[bucket] = summarize_group(bucket_rows)
 
+    position_bias = summarize_group_map(rows, "Position")
+    momentum_bias = summarize_group_map(rows, "MomentumBucket")
+    quality_bias = summarize_group_map(rows, "QualityBucket")
+    avg_overpay = round(float(rows["Overpay"].mean()), 0)
+    stdev_overpay = round(float(rows["Overpay"].std(ddof=0)), 0) if len(rows) > 1 else 0
+    p75_overpay = round(float(rows["Overpay"].quantile(0.75)), 0)
+    max_overpay = round(float(rows["Overpay"].max()), 0)
+
+    return {
+        "samples": int(len(rows)),
+        "avg_overpay": avg_overpay,
+        "avg_overpay_pct": round(float(rows["OverpayPct"].mean()), 2),
+        "stdev_overpay": stdev_overpay,
+        "p75_overpay": p75_overpay,
+        "max_overpay": max_overpay,
+        "aggression_score": aggression_score(avg_overpay, p75_overpay, max_overpay, stdev_overpay),
+        "archetype": overpay_archetype(rows, avg_overpay, stdev_overpay, quality_bias, momentum_bias),
+        "segments": segments,
+        "position_bias": position_bias,
+        "momentum_bias": momentum_bias,
+        "quality_bias": quality_bias,
+    }
+
+def summarize_group(rows):
     return {
         "samples": int(len(rows)),
         "avg_overpay": round(float(rows["Overpay"].mean()), 0),
         "avg_overpay_pct": round(float(rows["OverpayPct"].mean()), 2),
-        "segments": segments,
     }
+
+def summarize_group_map(rows, column):
+    if column not in rows:
+        return {}
+    result = {}
+    usable = rows.dropna(subset=[column])
+    usable = usable[usable[column].astype(str).ne("")]
+    for key, group_rows in usable.groupby(column):
+        result[str(key)] = summarize_group(group_rows)
+    return result
+
+def aggression_score(avg_overpay, p75_overpay, max_overpay, stdev_overpay):
+    score = 0
+    score += min(max(avg_overpay, 0) / 25_000, 40)
+    score += min(max(p75_overpay, 0) / 40_000, 25)
+    score += min(max(max_overpay, 0) / 100_000, 20)
+    score += min(max(stdev_overpay, 0) / 75_000, 15)
+    return int(round(min(score, 100), 0))
+
+def overpay_archetype(rows, avg_overpay, stdev_overpay, quality_bias, momentum_bias):
+    if rows.empty:
+        return "Keine Daten"
+    if avg_overpay >= 900_000:
+        base = "Aggressiver Überbieter"
+    elif avg_overpay >= 350_000:
+        base = "Aktiver Überbieter"
+    elif avg_overpay >= 75_000:
+        base = "Kontrollierter Bieter"
+    else:
+        base = "Marktwertnah"
+
+    quality_note = ""
+    if relative_group_avg(quality_bias, "elite") >= 1.25:
+        quality_note = " · Big-Boy-Fokus"
+    elif relative_group_avg(quality_bias, "top") >= 1.20:
+        quality_note = " · Topspieler-Fokus"
+
+    momentum_note = ""
+    if relative_group_avg(momentum_bias, "rising") >= 1.20:
+        momentum_note = " · Trendjäger"
+
+    variance_note = " · hohe Varianz" if stdev_overpay >= max(avg_overpay, 1) * 1.25 and stdev_overpay >= 500_000 else ""
+    return f"{base}{quality_note}{momentum_note}{variance_note}"
+
+def relative_group_avg(group_map, key):
+    values = [group.get("avg_overpay") for group in (group_map or {}).values() if group.get("avg_overpay") is not None]
+    target = (group_map or {}).get(key, {}).get("avg_overpay")
+    if not values or target is None:
+        return 0
+    baseline = sum(values) / len(values)
+    if baseline <= 0:
+        return 0
+    return target / baseline
 
 def market_value_bucket(market_value):
     if market_value is None or pd.isna(market_value):
@@ -288,6 +364,31 @@ def market_value_bucket(market_value):
     if market_value >= 5_000_000:
         return "5m_15m"
     return "under_5m"
+
+def normalize_position(value):
+    if value is None or pd.isna(value):
+        return ""
+    labels = {1: "TW", 2: "ABW", 3: "MIT", 4: "ST", "1": "TW", "2": "ABW", "3": "MIT", "4": "ST"}
+    return labels.get(value, labels.get(str(value), str(value)))
+
+def momentum_bucket(mv_change):
+    if mv_change is None or pd.isna(mv_change):
+        return "unknown"
+    mv_change = float(mv_change)
+    if mv_change >= 50_000:
+        return "rising"
+    if mv_change <= -50_000:
+        return "falling"
+    return "flat"
+
+def quality_bucket(market_value, points=None):
+    points = 0 if points is None or pd.isna(points) else float(points)
+    market_value = 0 if market_value is None or pd.isna(market_value) else float(market_value)
+    if market_value >= 30_000_000 or points >= 160:
+        return "elite"
+    if market_value >= 15_000_000 or points >= 100:
+        return "top"
+    return "normal"
 
 def extract_roster_profile(manager_info):
     players = find_player_list(manager_info)
@@ -376,24 +477,31 @@ def build_manager_lookup(managers=None):
 def load_market_values_for_overpay():
     try:
         with sqlite3.connect("player_data_total.db") as conn:
-            return pd.read_sql_query(
+            market_values = pd.read_sql_query(
                 """
                 SELECT player_id, date, mv
-                     , first_name, last_name
+                     , first_name, last_name, position, p
                 FROM player_data_1d
                 WHERE mv IS NOT NULL
                 """,
                 conn,
                 parse_dates=["date"],
             )
+            market_values = market_values.sort_values(["player_id", "date"])
+            market_values["mv_change_1d"] = market_values["mv"] - market_values.groupby("player_id")["mv"].shift(1)
+            return market_values
     except Exception as e:
         print(f"Warning: Could not load market values for overpay calculation: {e}")
-        return pd.DataFrame(columns=["player_id", "date", "mv", "first_name", "last_name"])
+        return pd.DataFrame(columns=["player_id", "date", "mv", "first_name", "last_name", "position", "p", "mv_change_1d"])
 
 def lookup_market_value(market_values, player_id, activity_date, player_name=None):
+    context = lookup_market_context(market_values, player_id, activity_date, player_name)
+    return context.get("mv")
+
+def lookup_market_context(market_values, player_id, activity_date, player_name=None):
     market_value_date = market_value_date_for_activity(activity_date)
     if market_value_date is None:
-        return None
+        return {}
 
     player_values = pd.DataFrame()
     if player_id is not None:
@@ -418,20 +526,26 @@ def lookup_market_value(market_values, player_id, activity_date, player_name=Non
             ].copy()
 
     if player_values.empty:
-        return None
+        return {}
 
     player_values["date"] = pd.to_datetime(player_values["date"]).dt.normalize()
     target_date = pd.Timestamp(market_value_date).normalize()
     exact_values = player_values[player_values["date"] == target_date].sort_values("date")
     if not exact_values.empty:
-        value = exact_values.iloc[-1]["mv"]
-        return None if pd.isna(value) else float(value)
+        return market_context_from_row(exact_values.iloc[-1])
 
     values_until_trade = player_values[player_values["date"] < target_date].sort_values("date")
     if values_until_trade.empty:
-        return None
-    value = values_until_trade.iloc[-1]["mv"]
-    return None if pd.isna(value) else float(value)
+        return {}
+    return market_context_from_row(values_until_trade.iloc[-1])
+
+def market_context_from_row(row):
+    result = {}
+    for key in ["mv", "position", "p", "mv_change_1d"]:
+        value = row.get(key)
+        if value is not None and not pd.isna(value):
+            result[key] = float(value) if key in {"mv", "p", "mv_change_1d"} else value
+    return result
 
 def market_value_date_for_activity(activity_date):
     try:

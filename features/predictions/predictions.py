@@ -429,9 +429,12 @@ def add_opponent_overpay_forecast(market_df, manager_budgets_df=None):
                 row.get("mv"),
                 row.get("top_player_tag"),
                 row.get("buy_type"),
+                row.get("position"),
+                row.get("predicted_mv_target"),
             )
             if overpay is None:
                 continue
+            profile = profiles.get(name) or {}
             forecasts.append({
                 "name": name,
                 "overpay": max(0, round(float(overpay), 0)),
@@ -439,6 +442,15 @@ def add_opponent_overpay_forecast(market_df, manager_budgets_df=None):
                 "roster_note": roster_block["note"],
                 "squad_size": roster_block["squad_size"],
                 "team_count": roster_block["team_count"],
+                "aggression_score": profile.get("aggression_score"),
+                "archetype": profile.get("archetype", ""),
+                "pattern": manager_pattern_summary(
+                    profile,
+                    row.get("position"),
+                    row.get("predicted_mv_target"),
+                    row.get("top_player_tag"),
+                    row.get("buy_type"),
+                ),
             })
 
         if not forecasts:
@@ -472,7 +484,15 @@ def add_opponent_overpay_forecast(market_df, manager_budgets_df=None):
     return result
 
 
-def forecast_manager_overpay(manager_profile, league_profile, market_value, top_player_tag="", buy_type=""):
+def forecast_manager_overpay(
+    manager_profile,
+    league_profile,
+    market_value,
+    top_player_tag="",
+    buy_type="",
+    position=None,
+    predicted_change=None,
+):
     if market_value is None or pd.isna(market_value):
         return None
 
@@ -499,7 +519,97 @@ def forecast_manager_overpay(manager_profile, league_profile, market_value, top_
         base = (first_valid(manager_avg, 0) * manager_weight) + (first_valid(league_segment, league_avg, 0) * (1 - manager_weight))
 
     quality_factor = overpay_quality_factor(market_value, top_player_tag, buy_type)
-    return max(0, base * quality_factor)
+    pattern_factor = overpay_pattern_factor(manager_profile, position, predicted_change, market_value, top_player_tag)
+    escalation_factor = overpay_escalation_factor(manager_profile)
+    return max(0, base * quality_factor * pattern_factor * escalation_factor)
+
+
+def overpay_pattern_factor(manager_profile, position=None, predicted_change=None, market_value=None, top_player_tag=""):
+    if not manager_profile:
+        return 1.0
+    position_key = position_label_key(position)
+    momentum_key = forecast_momentum_key(predicted_change)
+    quality_key = forecast_quality_key(market_value, top_player_tag)
+    factors = [
+        profile_bias_factor(manager_profile, "position_bias", position_key, sample_target=4),
+        profile_bias_factor(manager_profile, "momentum_bias", momentum_key, sample_target=5),
+        profile_bias_factor(manager_profile, "quality_bias", quality_key, sample_target=4),
+    ]
+    factor = 1.0
+    for item in factors:
+        factor *= item
+    return min(max(factor, 0.70), 1.45)
+
+
+def profile_bias_factor(profile, group_name, key, sample_target=4):
+    if not key:
+        return 1.0
+    group = (profile.get(group_name) or {}).get(key)
+    avg = profile_avg(profile)
+    if not group or avg is None or avg <= 0:
+        return 1.0
+    samples = int(group.get("samples") or 0)
+    if samples <= 0:
+        return 1.0
+    raw = float(group.get("avg_overpay") or avg) / avg
+    weight = min(samples / sample_target, 1.0)
+    return 1 + ((min(max(raw, 0.55), 1.75) - 1) * weight)
+
+
+def overpay_escalation_factor(profile):
+    if not profile:
+        return 1.0
+    avg = profile_avg(profile)
+    if avg is None or avg <= 0:
+        return 1.0
+    p75 = profile.get("p75_overpay")
+    stdev = profile.get("stdev_overpay")
+    if p75 is None or stdev is None:
+        return 1.0
+    spread = max(float(p75) - avg, 0) + (float(stdev) * 0.25)
+    return min(1.18, 1 + min(spread / max(avg * 3, 1), 0.18))
+
+
+def manager_pattern_summary(profile, position=None, predicted_change=None, top_player_tag="", buy_type=""):
+    if not profile:
+        return ""
+    parts = []
+    archetype = profile.get("archetype")
+    if archetype:
+        parts.append(str(archetype))
+    aggression = profile.get("aggression_score")
+    if aggression is not None:
+        parts.append(f"Aggro {int(aggression)}/100")
+
+    position_key = position_label_key(position)
+    position_text = bias_text(profile, "position_bias", position_key, "Pos")
+    if position_text:
+        parts.append(position_text)
+
+    momentum_text = bias_text(profile, "momentum_bias", forecast_momentum_key(predicted_change), "Trend")
+    if momentum_text:
+        parts.append(momentum_text)
+
+    quality_text = bias_text(profile, "quality_bias", forecast_quality_key(None, top_player_tag), "Klasse")
+    if quality_text:
+        parts.append(quality_text)
+    if buy_type == "Kader-Kauf":
+        parts.append("Kader-Kauf")
+    return " · ".join(parts[:5])
+
+
+def bias_text(profile, group_name, key, label):
+    if not key:
+        return ""
+    factor = profile_bias_factor(profile, group_name, key)
+    samples = int((profile.get(group_name) or {}).get(key, {}).get("samples") or 0)
+    if samples < 2:
+        return ""
+    if factor >= 1.15:
+        return f"{label} +{int(round((factor - 1) * 100, 0))}%"
+    if factor <= 0.88:
+        return f"{label} -{int(round((1 - factor) * 100, 0))}%"
+    return ""
 
 
 def opponent_roster_block(roster_profile, target_team_key):
@@ -580,6 +690,37 @@ def overpay_quality_factor(market_value, top_player_tag="", buy_type=""):
     if buy_type == "Kader-Kauf":
         factor += 0.10
     return factor
+
+
+def position_label_key(value):
+    labels = {1: "TW", 2: "ABW", 3: "MIT", 4: "ST", "1": "TW", "2": "ABW", "3": "MIT", "4": "ST"}
+    return labels.get(value, labels.get(str(value), str(value) if value is not None else ""))
+
+
+def forecast_momentum_key(predicted_change):
+    if predicted_change is None or pd.isna(predicted_change):
+        return "unknown"
+    predicted_change = float(predicted_change)
+    if predicted_change >= 50_000:
+        return "rising"
+    if predicted_change <= -50_000:
+        return "falling"
+    return "flat"
+
+
+def forecast_quality_key(market_value=None, top_player_tag=""):
+    tag = str(top_player_tag or "")
+    if tag == "Elite-Spieler":
+        return "elite"
+    if tag == "Top-Spieler":
+        return "top"
+    if market_value is not None and not pd.isna(market_value):
+        market_value = float(market_value)
+        if market_value >= 30_000_000:
+            return "elite"
+        if market_value >= 15_000_000:
+            return "top"
+    return "normal"
 
 
 def overpay_pressure(overpay, market_value):
