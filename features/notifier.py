@@ -19,6 +19,7 @@ COLUMN_LABELS = {
     "last_name": "Spieler",
     "position": "Pos",
     "team_name": "Team",
+    "player_status": "Status",
     "mv": "Marktwert",
     "max_bid": "Max. Gebot",
     "mv_change_yesterday": "Letzte MW",
@@ -75,6 +76,17 @@ DISPLAY_LABELS = {
     "Unklar": "Unklar",
     "Vereinslimit voll": "Limit voll",
     "füllt 3/3": "füllt 3/3",
+    "Fit": "Fit",
+    "Verletzt": "Verletzt",
+    "Angeschlagen": "Angeschlagen",
+    "Reha": "Reha",
+    "Rotgesperrt": "Rot",
+    "Gelb-Rot-Sperre": "Gelb-Rot",
+    "Gelbsperre": "Gelbsperre",
+    "Nicht im Kader": "Nicht im Kader",
+    "Nicht in Liga": "Nicht in Liga",
+    "Abwesend": "Abwesend",
+    "Unbekannt": "Unbekannt",
 }
 
 BADGE_STYLES = {
@@ -112,6 +124,17 @@ BADGE_STYLES = {
     "Unklar": ("#f3f4f6", "#374151"),
     "Vereinslimit voll": ("#fee2e2", "#991b1b"),
     "füllt 3/3": ("#ffedd5", "#9a3412"),
+    "Fit": ("#dcfce7", "#166534"),
+    "Verletzt": ("#fee2e2", "#991b1b"),
+    "Angeschlagen": ("#fef3c7", "#92400e"),
+    "Reha": ("#ffedd5", "#9a3412"),
+    "Rotgesperrt": ("#fee2e2", "#991b1b"),
+    "Gelb-Rot-Sperre": ("#fee2e2", "#991b1b"),
+    "Gelbsperre": ("#ffedd5", "#9a3412"),
+    "Nicht im Kader": ("#fee2e2", "#991b1b"),
+    "Nicht in Liga": ("#fee2e2", "#991b1b"),
+    "Abwesend": ("#fee2e2", "#991b1b"),
+    "Unbekannt": ("#f3f4f6", "#374151"),
 }
 
 POSITION_LABELS = {
@@ -384,6 +407,7 @@ def send_mail(budget_df, market_df, squad_df, email):
         starter_text = format_percent(starter_rate) if isinstance(starter_rate, Number) and starter_rate == starter_rate else "-"
         tag_badge = badge(row.get("top_player_tag"))
         limit_badge = badge(row.get("team_limit_warning"))
+        status_badge = badge(row.get("player_status"))
         pressure_badge = badge(row.get("opponent_pressure"))
         opponent_overpay = row.get("opponent_overpay_forecast")
         opponent_overpay_text = (
@@ -402,7 +426,7 @@ def send_mail(budget_df, market_df, squad_df, email):
             f'<div style="font-size:12px;color:#6b7280;font-weight:800;text-transform:uppercase;">{escape(title)}</div>'
             f'<div style="font-size:17px;font-weight:900;color:#111827;margin-top:4px;">{name_html}</div>'
             f'<div style="font-size:12px;color:#6b7280;margin-top:3px;">{position_label(row.get("position"))} · {escape(str(row.get("team_name", "-")))}</div>'
-            f'<div style="margin-top:8px;">{badge(row.get("buy_type"))} {badge(row.get("buy_priority"))} {tag_badge} {limit_badge}</div>'
+            f'<div style="margin-top:8px;">{badge(row.get("buy_type"))} {badge(row.get("buy_priority"))} {status_badge} {tag_badge} {limit_badge}</div>'
             '</td></tr></table>'
             '<div style="border-top:1px solid #eef2f7;margin-top:10px;padding-top:9px;">'
             '<table role="presentation" style="border-collapse:collapse;width:100%;font-size:12px;color:#374151;">'
@@ -495,6 +519,18 @@ def send_mail(budget_df, market_df, squad_df, email):
             market_candidates = market_candidates[
                 market_candidates["predicted_mv_target"].fillna(0) > 0
             ]
+            if "player_status" in market_candidates:
+                market_candidates = market_candidates[
+                    ~market_candidates["player_status"].isin([
+                        "Verletzt",
+                        "Reha",
+                        "Rotgesperrt",
+                        "Gelb-Rot-Sperre",
+                        "Nicht im Kader",
+                        "Nicht in Liga",
+                        "Abwesend",
+                    ])
+                ]
             market_candidates = market_candidates.sort_values("predicted_mv_target", ascending=False).head(3)
             for _, row in market_candidates.iterrows():
                 market_cards.append(
@@ -744,7 +780,7 @@ def send_mail(budget_df, market_df, squad_df, email):
         )
 
         for col in result.columns:
-            if col in {"recommendation", "risk", "top_player_tag", "buy_type", "buy_priority", "team_limit_warning", "opponent_pressure"}:
+            if col in {"recommendation", "risk", "top_player_tag", "buy_type", "buy_priority", "team_limit_warning", "opponent_pressure", "player_status"}:
                 result[col] = result[col].map(badge)
             elif col == "mv_trend":
                 result[col] = result[col].map(trend_value)
@@ -839,6 +875,13 @@ def send_mail(budget_df, market_df, squad_df, email):
                 Trading-Käufe bleiben konservativ. Bei {badge("Kader-Kauf")} und besonders bei {badge("Elite-Spieler")}
                 wird mehr vom 1T/3T/7T-Upside eingepreist, danach auf psychologisch sinnvolle Gebotsstufen aufgerundet
                 und mit kleinem Overbid versehen, um runde Konkurrenzgebote zu schlagen.
+                Kritische Spielerstatus wie {badge("Verletzt")} oder {badge("Reha")} reduzieren Priorität und Max. Gebot deutlich.
+            </p>
+            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
+                <b>Status:</b>
+                Kommt aus dem Kickbase-Spielerstatus im Markt- oder Kaderpayload.
+                {badge("Fit")} ist unkritisch; {badge("Angeschlagen")} / {badge("Gelbsperre")} sind Warnsignale;
+                {badge("Verletzt")} / {badge("Reha")} / Sperren werden aus Top-Chance-Kacheln ausgeschlossen.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Ø Overpay:</b>

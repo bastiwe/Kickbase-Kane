@@ -235,6 +235,7 @@ def enrich_market_decisions_with_context(market_df, squad_df, manager_budgets_df
         ("predicted_mv_target_3d", 0),
         ("predicted_mv_target", 0),
         ("has_open_bid", False),
+        ("player_status", "Fit"),
     ]:
         if col not in result:
             result[col] = default
@@ -290,6 +291,12 @@ def enrich_market_decisions_with_context(market_df, squad_df, manager_budgets_df
         if bool(row.get("has_open_bid", False)):
             score += 8
 
+        status = str(row.get("player_status", "Fit") or "Fit")
+        if status in {"Verletzt", "Reha", "Rotgesperrt", "Gelb-Rot-Sperre", "Nicht im Kader", "Nicht in Liga", "Abwesend"}:
+            score -= 35
+        elif status in {"Angeschlagen", "Gelbsperre"}:
+            score -= 15
+
         warning = row.get("team_limit_warning", "")
         if warning == "Vereinslimit voll":
             score -= 35
@@ -339,16 +346,24 @@ def enrich_market_decisions_with_context(market_df, squad_df, manager_budgets_df
         else:
             raw_bid = mv + max(upside_1d * 0.65, upside_3d * 0.30, upside_7d * 0.18)
 
+        status = str(row.get("player_status", "Fit") or "Fit")
+        if status in {"Verletzt", "Reha", "Rotgesperrt", "Gelb-Rot-Sperre", "Nicht im Kader", "Nicht in Liga", "Abwesend"}:
+            raw_bid = min(raw_bid, mv + (max(upside_1d, 0) * 0.20))
+        elif status in {"Angeschlagen", "Gelbsperre"}:
+            raw_bid = min(raw_bid, mv + (max(upside_1d, 0) * 0.45))
+
         return int(psychological_bid(raw_bid))
 
     result["max_bid"] = result.apply(strategic_max_bid, axis=1)
 
+    status_ok = ~result["player_status"].isin(["Verletzt", "Reha", "Rotgesperrt", "Gelb-Rot-Sperre", "Nicht im Kader", "Nicht in Liga", "Abwesend"])
     keep_rows = (
         (result["recommendation"] != "Watch")
         | result["has_open_bid"].fillna(False).astype(bool)
         | result["top_player_tag"].fillna("").astype(str).ne("")
         | result["buy_priority"].isin(["Hoch", "Mittel"])
     )
+    keep_rows = keep_rows & (status_ok | result["has_open_bid"].fillna(False).astype(bool) | result["top_player_tag"].fillna("").astype(str).ne(""))
     result = result[keep_rows]
 
     if "hours_to_exp" in result:
@@ -697,6 +712,101 @@ def position_label_key(value):
     return labels.get(value, labels.get(str(value), str(value) if value is not None else ""))
 
 
+PLAYER_STATUS_LABELS = {
+    0: "Fit",
+    1: "Verletzt",
+    2: "Angeschlagen",
+    4: "Reha",
+    8: "Rotgesperrt",
+    16: "Gelb-Rot-Sperre",
+    32: "Gelbsperre",
+    64: "Nicht im Kader",
+    128: "Nicht in Liga",
+    256: "Abwesend",
+}
+
+
+def normalize_player_status(value):
+    if value is None:
+        return "Fit"
+    try:
+        if pd.isna(value):
+            return "Fit"
+    except (TypeError, ValueError):
+        pass
+
+    if isinstance(value, dict):
+        value = value.get("st") or value.get("status") or value.get("v") or value.get("value") or value.get("n")
+
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if cleaned == "":
+            return "Fit"
+        normalized = cleaned.lower()
+        string_map = {
+            "none": "Fit",
+            "fit": "Fit",
+            "healthy": "Fit",
+            "injured": "Verletzt",
+            "verletzt": "Verletzt",
+            "stricken": "Angeschlagen",
+            "angeschlagen": "Angeschlagen",
+            "rehab": "Reha",
+            "reha": "Reha",
+            "absent": "Abwesend",
+            "abwesend": "Abwesend",
+            "not_in_team": "Nicht im Kader",
+            "not in team": "Nicht im Kader",
+            "not_in_league": "Nicht in Liga",
+            "not in league": "Nicht in Liga",
+        }
+        if normalized in string_map:
+            return string_map[normalized]
+        try:
+            value = int(float(cleaned))
+        except ValueError:
+            return cleaned
+
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        return str(value)
+
+    if value in PLAYER_STATUS_LABELS:
+        return PLAYER_STATUS_LABELS[value]
+
+    labels = [label for bit, label in PLAYER_STATUS_LABELS.items() if bit and value & bit]
+    return " + ".join(labels) if labels else "Unbekannt"
+
+
+def add_player_status_column(df):
+    result = df.copy()
+    status_sources = [
+        "player_status",
+        "status",
+        "st",
+        "playerStatus",
+        "player_status_x",
+        "player_status_y",
+        "status_x",
+        "status_y",
+        "st_x",
+        "st_y",
+        "prob",
+    ]
+    source = None
+    for column in status_sources:
+        if column in result:
+            source = column
+            break
+
+    if source is None:
+        result["player_status"] = "Fit"
+    else:
+        result["player_status"] = result[source].map(normalize_player_status)
+    return result
+
+
 def forecast_momentum_key(predicted_change):
     if predicted_change is None or pd.isna(predicted_change):
         return "unknown"
@@ -774,6 +884,7 @@ def join_current_squad(token, league_id, today_df_results, current_user_id=None)
         pd.merge(today_df_results, squad_df, left_on="player_id", right_on="i")
         .drop(columns=["i"])
     )
+    squad_df = add_player_status_column(squad_df)
 
     # Rename mv_change_1d to mv_change_yesterday for better understanding
     squad_df = squad_df.rename(columns={"mv_change_1d": "mv_change_yesterday"})
@@ -795,6 +906,7 @@ def join_current_squad(token, league_id, today_df_results, current_user_id=None)
         "image_url",
         "position",
         "team_name",
+        "player_status",
         "mv",
         "mv_change_yesterday",
         "predicted_mv_target",
@@ -826,6 +938,7 @@ def join_current_market(token, league_id, today_df_results, current_user_id=None
         pd.merge(today_df_results, market_df, left_on="player_id", right_on="id")
         .drop(columns=["id"])
     )
+    bid_df = add_player_status_column(bid_df)
 
     # exp contains seconds until expiration. Kickbase can occasionally omit it.
     exp_values = bid_df["exp"] if "exp" in bid_df else pd.Series(np.nan, index=bid_df.index)
@@ -866,6 +979,7 @@ def join_current_market(token, league_id, today_df_results, current_user_id=None
         "image_url",
         "position",
         "team_name",
+        "player_status",
         "mv",
         "max_bid",
         "mv_change_yesterday",

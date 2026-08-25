@@ -114,12 +114,19 @@ def get_league_players_on_market(token, league_id, current_user_id=None):
         result.append({
             'id': player.get('i'),
             'prob': player.get('prob'),
+            "player_status": player_status_value(player),
             "exp": player.get("exs"),
             "has_open_bid": has_user_market_offer(player, current_user_id),
             "is_own_listing": is_user_market_listing(player, current_user_id),
         })
 
     return result
+
+def player_status_value(player):
+    for key in ("st", "status", "playerStatus", "player_status", "prob"):
+        if key in player and player.get(key) is not None:
+            return player.get(key)
+    return None
 
 def has_user_market_offer(item, current_user_id=None):
     """Best-effort detection for bids placed by the logged-in user."""

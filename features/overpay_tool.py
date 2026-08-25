@@ -43,6 +43,7 @@ def build_player_payload(market_df):
             "name": name,
             "team": clean_value(row.get("team_name"), "-"),
             "position": position_label(row.get("position")),
+            "status": clean_value(row.get("player_status"), "Fit"),
             "imageUrl": clean_value(row.get("image_url"), ""),
             "marketValue": number_value(row.get("mv")),
             "maxBid": number_value(row.get("max_bid")),
@@ -303,6 +304,13 @@ def render_overpay_tool(payload):
       return '';
     }}
 
+    function statusClass(value) {{
+      if (value === 'Fit') return 'low';
+      if (['Angeschlagen', 'Reha', 'Gelbsperre'].includes(value)) return 'mid';
+      if (value && value !== '-') return 'high';
+      return '';
+    }}
+
     function initials(name) {{
       return (name || '?').split(/\\s+/).slice(0, 2).map(part => part[0] || '').join('').toUpperCase();
     }}
@@ -311,7 +319,7 @@ def render_overpay_tool(payload):
       const query = byId('search').value.trim().toLowerCase();
       if (!query) return DATA.players;
       return DATA.players.filter(player =>
-        [player.name, player.team, player.position, player.buyType, player.classTag]
+        [player.name, player.team, player.position, player.status, player.buyType, player.classTag]
           .join(' ').toLowerCase().includes(query)
       );
     }}
@@ -348,6 +356,7 @@ def render_overpay_tool(payload):
             <h2 style="margin:0;font-size:24px;">${{player.name}}</h2>
             <div class="muted">${{player.position}} · ${{player.team}}</div>
             <div class="chips">
+              <span class="chip ${{statusClass(player.status)}}">Status: ${{player.status}}</span>
               <span class="chip ${{pressureClass(player.pressure)}}">Gegnerdruck: ${{player.pressure}}</span>
               <span class="chip">${{player.buyType}}</span>
               <span class="chip">Priorität: ${{player.priority}}</span>
