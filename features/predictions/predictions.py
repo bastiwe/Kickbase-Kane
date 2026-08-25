@@ -1,5 +1,5 @@
-from kickbase_api.league import get_league_players_on_market
-from kickbase_api.user import get_players_in_squad
+from kickbase_api.league import get_league_activities, get_league_players_on_market
+from kickbase_api.user import get_players_in_squad, get_username
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import pandas as pd
@@ -902,7 +902,7 @@ def format_short_money(value):
     return f"{value / 1_000:.0f}k"
 
 
-def join_current_squad(token, league_id, today_df_results, current_user_id=None):
+def join_current_squad(token, league_id, today_df_results, current_user_id=None, league_start_date=None):
     squad_players = get_players_in_squad(token, league_id)
     players_on_market = get_league_players_on_market(token, league_id, current_user_id)
     listed_player_ids = {
@@ -913,6 +913,12 @@ def join_current_squad(token, league_id, today_df_results, current_user_id=None)
 
     squad_df = pd.DataFrame(squad_players["it"])
     squad_df["purchase_price"] = extract_purchase_price_column(squad_df)
+    if "i" in squad_df:
+        fallback_purchase_prices = load_own_purchase_prices_from_activities(token, league_id, league_start_date)
+        if fallback_purchase_prices:
+            activity_prices = squad_df["i"].astype(str).map(fallback_purchase_prices)
+            squad_df["purchase_price"] = squad_df["purchase_price"].fillna(activity_prices)
+            print(f"Kickbase activity purchase prices matched for squad: {int(activity_prices.notna().sum())}/{len(squad_df)}.")
     if not squad_df.empty and "i" in squad_df:
         squad_df["is_listed_for_sale"] = squad_df["i"].astype(str).isin(listed_player_ids)
     else:
@@ -998,6 +1004,65 @@ def extract_purchase_price_column(squad_df):
 
     print("Kickbase squad purchase price source column: none found.")
     return pd.Series(np.nan, index=squad_df.index, dtype="float64")
+
+
+def load_own_purchase_prices_from_activities(token, league_id, league_start_date):
+    if not league_start_date:
+        print("Kickbase activity purchase price fallback skipped: league_start_date is not configured.")
+        return {}
+
+    try:
+        own_username = get_username(token)
+        activities, _, _ = get_league_activities(token, league_id, league_start_date)
+    except Exception as exc:
+        print(f"Warning: Could not load own purchase prices from activities: {exc}")
+        return {}
+
+    if not activities:
+        print("Kickbase activity purchase price fallback: no transfer activities found.")
+        return {}
+
+    own_key = normalize_name_key(own_username)
+    purchases = []
+    for activity in activities:
+        buyer = normalize_name_key(activity.get("byr"))
+        player_id = activity.get("pi")
+        price = numeric_value(activity.get("trp"), activity.get("prc"))
+        if buyer != own_key or player_id is None or price is None:
+            continue
+        purchases.append({
+            "player_id": str(player_id),
+            "price": price,
+            "date": activity.get("dt") or "",
+        })
+
+    if not purchases:
+        print("Kickbase activity purchase price fallback: no own buys matched.")
+        return {}
+
+    purchases_df = pd.DataFrame(purchases).sort_values("date")
+    latest_prices = purchases_df.groupby("player_id")["price"].last().to_dict()
+    print(f"Kickbase activity purchase price fallback: {len(latest_prices)} own player prices found.")
+    return latest_prices
+
+
+def normalize_name_key(value):
+    if value is None or pd.isna(value):
+        return ""
+    return str(value).strip().casefold()
+
+
+def numeric_value(*values):
+    for value in values:
+        if value is None:
+            continue
+        try:
+            numeric = pd.to_numeric(value, errors="coerce")
+            if pd.notna(numeric):
+                return float(numeric)
+        except (TypeError, ValueError):
+            continue
+    return None
 
 
 def join_current_market(token, league_id, today_df_results, current_user_id=None):

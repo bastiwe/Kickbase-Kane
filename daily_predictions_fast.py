@@ -20,6 +20,7 @@ load_dotenv()
 
 competition_ids = [1]
 league_name = "Die Spätzünder"
+league_start_date = "2026-08-15"
 last_mv_values = 365
 last_pfm_values = 50
 email = os.getenv("EMAIL_USER")
@@ -67,7 +68,7 @@ live_predictions_df = live_data_predictions(
 )
 
 market_df = join_current_market(token, league_id, live_predictions_df, current_user_id)
-squad_df = join_current_squad(token, league_id, live_predictions_df, current_user_id)
+squad_df = join_current_squad(token, league_id, live_predictions_df, current_user_id, league_start_date)
 
 market_count_before_filter = len(market_df)
 market_df = market_df[market_df["predicted_mv_target"].fillna(0) > min_market_prediction].copy()
