@@ -396,6 +396,7 @@ def add_opponent_overpay_forecast(market_df, manager_budgets_df=None):
     result["opponent_overpay_forecast"] = np.nan
     result["opponent_overpay_details"] = ""
     result["opponent_pressure"] = "Unklar"
+    result["opponent_overpay_breakdown"] = [[] for _ in range(len(result))]
 
     if manager_budgets_df is None or not hasattr(manager_budgets_df, "attrs"):
         return result
@@ -426,18 +427,23 @@ def add_opponent_overpay_forecast(market_df, manager_budgets_df=None):
             )
             if overpay is None:
                 continue
-            forecasts.append((name, overpay))
+            forecasts.append({
+                "name": name,
+                "overpay": max(0, round(float(overpay), 0)),
+                "available_budget": float(available_budget) if pd.notna(available_budget) else None,
+            })
 
         if not forecasts:
             return pd.Series({
                 "opponent_overpay_forecast": np.nan,
                 "opponent_overpay_details": "",
                 "opponent_pressure": "Unklar",
+                "opponent_overpay_breakdown": [],
             })
 
-        forecasts = sorted(forecasts, key=lambda item: item[1], reverse=True)
-        top_overpay = max(0, round(float(forecasts[0][1]), 0))
-        details = ", ".join(f"{name}: +{format_short_money(max(0, value))}" for name, value in forecasts[:3])
+        forecasts = sorted(forecasts, key=lambda item: item["overpay"], reverse=True)
+        top_overpay = forecasts[0]["overpay"]
+        details = ", ".join(f"{item['name']}: +{format_short_money(item['overpay'])}" for item in forecasts[:3])
         mv = row.get("mv")
         mv = 0 if mv is None or pd.isna(mv) else float(mv)
         pressure = overpay_pressure(top_overpay, mv)
@@ -445,9 +451,16 @@ def add_opponent_overpay_forecast(market_df, manager_budgets_df=None):
             "opponent_overpay_forecast": top_overpay,
             "opponent_overpay_details": details,
             "opponent_pressure": pressure,
+            "opponent_overpay_breakdown": forecasts,
         })
 
-    result[["opponent_overpay_forecast", "opponent_overpay_details", "opponent_pressure"]] = result.apply(row_forecast, axis=1)
+    forecast_columns = [
+        "opponent_overpay_forecast",
+        "opponent_overpay_details",
+        "opponent_pressure",
+        "opponent_overpay_breakdown",
+    ]
+    result[forecast_columns] = result.apply(row_forecast, axis=1)
     return result
 
 

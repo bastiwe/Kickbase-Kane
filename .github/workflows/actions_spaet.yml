@@ -72,6 +72,13 @@ jobs:
         run: |
           python daily_predictions_spaet.py
 
+      - name: Upload overpay forecast tool
+        if: steps.berlin-time.outputs.run == 'true' && hashFiles('overpay_forecast.html') != ''
+        uses: actions/upload-artifact@v6
+        with:
+          name: overpay-forecast-tool
+          path: overpay_forecast.html
+
       - name: Save player data cache
         if: steps.berlin-time.outputs.run == 'true' && hashFiles('player_data_total.db') != ''
         uses: actions/cache/save@v5

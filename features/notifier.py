@@ -774,7 +774,13 @@ def send_mail(budget_df, market_df, squad_df, email):
             return '<p style="font-size:14px;color:#555;">Heute gibt es keine passenden Spieler.</p>'
 
         result = prepare_df(df)
-        hidden_cols = {"has_open_bid", "is_listed_for_sale", "buy_priority_score", "position_needed"}
+        hidden_cols = {
+            "has_open_bid",
+            "is_listed_for_sale",
+            "buy_priority_score",
+            "position_needed",
+            "opponent_overpay_breakdown",
+        }
         visible_cols = [col for col in result.columns if col not in hidden_cols]
         header_html = "".join(
             '<th style="background:#2c3e50;color:white;padding:6px;text-align:left;'

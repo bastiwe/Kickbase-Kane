@@ -9,6 +9,7 @@ from features.predictions.modeling import train_model, evaluate_model
 from kickbase_api.league import get_league_id
 from kickbase_api.user import get_user_id, login
 from features.notifier import send_mail
+from features.overpay_tool import write_overpay_tool
 from features.predictions.data_handler import (
     create_player_data_table,
     check_if_data_reload_needed,
@@ -135,6 +136,8 @@ display(market_recommendations_df)
 
 print("\n=== Squad Recommendations ===")
 display(squad_recommendations_df)
+
+write_overpay_tool(market_recommendations_df, manager_budgets_df)
 
 # Send email with recommendations
 send_mail(manager_budgets_df, market_recommendations_df, squad_recommendations_df, email)
