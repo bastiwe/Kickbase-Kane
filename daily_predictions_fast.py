@@ -23,6 +23,7 @@ league_name = "Die Spätzünder"
 last_mv_values = 365
 last_pfm_values = 50
 email = os.getenv("EMAIL_USER")
+min_market_prediction = 50_000
 
 features = [
     "p", "mv", "days_to_next",
@@ -67,6 +68,14 @@ live_predictions_df = live_data_predictions(
 
 market_df = join_current_market(token, league_id, live_predictions_df, current_user_id)
 squad_df = join_current_squad(token, league_id, live_predictions_df, current_user_id)
+
+market_count_before_filter = len(market_df)
+market_df = market_df[market_df["predicted_mv_target"].fillna(0) > min_market_prediction].copy()
+print(
+    "\nFast market filter: "
+    f"{len(market_df)} of {market_count_before_filter} players kept "
+    f"with expected 1T change > {min_market_prediction:,.0f} EUR.".replace(",", ".")
+)
 
 market_df = market_df.sort_values("predicted_mv_target", ascending=False, ignore_index=True)
 squad_df = squad_df.sort_values("predicted_mv_target", ascending=False, ignore_index=True)
