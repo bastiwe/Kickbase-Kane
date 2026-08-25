@@ -848,7 +848,7 @@ def send_mail(budget_df, market_df, squad_df, email):
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Gegnerdruck:</b>
                 Schätzt den höchsten zu erwartenden Overpay deiner Gegner anhand bisheriger Käufe.
-                Berücksichtigt werden Marktwert-Segment, Top-/Eliteklasse, Kader-Kauf und verfügbare Budgets.
+                Berücksichtigt werden Marktwert-Segment, Top-/Eliteklasse, Kader-Kauf, verfügbare Budgets sowie erkennbare Kader- und Vereinslimits der Gegner.
                 Das erkennt keine echten Mitbieter, sondern modelliert den wahrscheinlichen Preisdruck.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">

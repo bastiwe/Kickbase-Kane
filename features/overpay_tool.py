@@ -58,6 +58,9 @@ def build_player_payload(market_df):
                     "name": clean_value(item.get("name"), "-"),
                     "overpay": number_value(item.get("overpay")),
                     "availableBudget": number_value(item.get("available_budget")),
+                    "rosterNote": clean_value(item.get("roster_note"), ""),
+                    "squadSize": number_value(item.get("squad_size")),
+                    "teamCount": number_value(item.get("team_count")),
                 }
                 for item in breakdown
             ],
@@ -355,13 +358,14 @@ def render_overpay_tool(payload):
       const maxOverpay = Math.max(...player.opponents.map(item => item.overpay || 0), 1);
       byId('opponentTable').innerHTML = player.opponents.length
         ? `<table>
-            <thead><tr><th>Manager</th><th>Erw. Overpay</th><th>Kaufkraft</th><th>Relativ</th></tr></thead>
+            <thead><tr><th>Manager</th><th>Erw. Overpay</th><th>Kaufkraft</th><th>Limit-Hinweis</th><th>Relativ</th></tr></thead>
             <tbody>
               ${{player.opponents.map(item => `
                 <tr>
                   <td><strong>${{item.name}}</strong></td>
                   <td>${{plusMoney(item.overpay)}}</td>
                   <td>${{money(item.availableBudget)}}</td>
+                  <td>${{item.rosterNote || '-'}}</td>
                   <td><div class="barWrap"><div class="bar" style="width:${{Math.round(((item.overpay || 0) / maxOverpay) * 100)}}%"></div></div></td>
                 </tr>
               `).join('')}}

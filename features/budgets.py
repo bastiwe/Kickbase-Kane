@@ -46,11 +46,13 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget):
         raise RuntimeError(f"Failed to fetch managers: {e}")
 
     performances = []
+    roster_profiles = {}
     for manager in managers:
         try:
             manager_name, manager_id = manager
             info = get_manager_info(token, league_id, manager_id)
             team_value = info.get("tv", 0)
+            roster_profiles[manager_name] = extract_roster_profile(info)
 
             perf = get_manager_performance(token, league_id, manager_id, manager_name)
             perf["Team Value"] = team_value
@@ -142,6 +144,7 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget):
     # Sort by available budget ascending
     budget_df.sort_values("Available Budget", ascending=False, inplace=True, ignore_index=True)
     budget_df.attrs["overpay_profiles"] = overpay_profiles
+    budget_df.attrs["roster_profiles"] = roster_profiles
     budget_df.attrs["own_user"] = own_username if "own_username" in locals() else None
 
     return budget_df
@@ -285,6 +288,75 @@ def market_value_bucket(market_value):
     if market_value >= 5_000_000:
         return "5m_15m"
     return "under_5m"
+
+def extract_roster_profile(manager_info):
+    players = find_player_list(manager_info)
+    team_counts = {}
+    for player in players:
+        team_key = player_team_key(player)
+        if team_key:
+            team_counts[team_key] = team_counts.get(team_key, 0) + 1
+
+    return {
+        "squad_size": len(players),
+        "team_counts": team_counts,
+        "has_roster_data": bool(players),
+    }
+
+def find_player_list(value):
+    candidates = []
+
+    def walk(node):
+        if isinstance(node, list):
+            player_like = [item for item in node if is_player_like(item)]
+            if player_like:
+                candidates.append(player_like)
+            for item in node:
+                walk(item)
+        elif isinstance(node, dict):
+            for child in node.values():
+                walk(child)
+
+    walk(value)
+    if not candidates:
+        return []
+    return max(candidates, key=len)
+
+def is_player_like(value):
+    if not isinstance(value, dict):
+        return False
+    keys = set(value.keys())
+    has_player_id = bool(keys & {"i", "id", "pi", "playerId", "player_id"})
+    has_player_name = bool(keys & {"n", "name", "fn", "first_name", "ln", "last_name"})
+    has_team = bool(keys & {"tid", "teamId", "team_id", "tn", "teamName", "team_name"})
+    return (has_player_id or has_player_name) and has_team
+
+def player_team_key(player):
+    team_value = (
+        player.get("tid")
+        or player.get("teamId")
+        or player.get("team_id")
+        or player.get("tn")
+        or player.get("teamName")
+        or player.get("team_name")
+    )
+    return normalize_team_key(team_value)
+
+def normalize_team_key(value):
+    if isinstance(value, dict):
+        value = value.get("n") or value.get("name") or value.get("tn") or value.get("id") or value.get("i")
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    normalized = unicodedata.normalize("NFKD", str(value))
+    normalized = "".join(char for char in normalized if not unicodedata.combining(char))
+    normalized = normalized.lower().replace("ß", "ss")
+    normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
+    return " ".join(normalized.split())
 
 def normalize_activity_name(value, manager_lookup=None):
     if isinstance(value, dict):

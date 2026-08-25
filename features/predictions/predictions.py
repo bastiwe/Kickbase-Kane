@@ -405,17 +405,22 @@ def add_opponent_overpay_forecast(market_df, manager_budgets_df=None):
     if not profiles:
         return result
 
+    roster_profiles = manager_budgets_df.attrs.get("roster_profiles") or {}
     own_user = manager_budgets_df.attrs.get("own_user")
     manager_rows = manager_budgets_df.to_dict("records") if not manager_budgets_df.empty else []
 
     def row_forecast(row):
         forecasts = []
+        target_team_key = normalize_forecast_team_key(row.get("team_name"))
         for manager in manager_rows:
             name = manager.get("User")
             if not name or name == own_user:
                 continue
             available_budget = manager.get("Available Budget")
             if pd.notna(available_budget) and pd.notna(row.get("mv")) and float(available_budget) < float(row.get("mv")):
+                continue
+            roster_block = opponent_roster_block(roster_profiles.get(name), target_team_key)
+            if roster_block["blocked"]:
                 continue
 
             overpay = forecast_manager_overpay(
@@ -431,6 +436,9 @@ def add_opponent_overpay_forecast(market_df, manager_budgets_df=None):
                 "name": name,
                 "overpay": max(0, round(float(overpay), 0)),
                 "available_budget": float(available_budget) if pd.notna(available_budget) else None,
+                "roster_note": roster_block["note"],
+                "squad_size": roster_block["squad_size"],
+                "team_count": roster_block["team_count"],
             })
 
         if not forecasts:
@@ -492,6 +500,51 @@ def forecast_manager_overpay(manager_profile, league_profile, market_value, top_
 
     quality_factor = overpay_quality_factor(market_value, top_player_tag, buy_type)
     return max(0, base * quality_factor)
+
+
+def opponent_roster_block(roster_profile, target_team_key):
+    if not roster_profile or not roster_profile.get("has_roster_data"):
+        return {"blocked": False, "note": "", "squad_size": None, "team_count": None}
+
+    squad_size = int(roster_profile.get("squad_size") or 0)
+    team_counts = roster_profile.get("team_counts") or {}
+    team_count = int(team_counts.get(target_team_key, 0)) if target_team_key else 0
+
+    if squad_size >= 16:
+        return {
+            "blocked": True,
+            "note": "Kaderlimit 16/16",
+            "squad_size": squad_size,
+            "team_count": team_count,
+        }
+    if target_team_key and team_count >= 3:
+        return {
+            "blocked": True,
+            "note": "Vereinslimit 3/3",
+            "squad_size": squad_size,
+            "team_count": team_count,
+        }
+    if target_team_key and team_count == 2:
+        return {
+            "blocked": False,
+            "note": "würde 3/3 füllen",
+            "squad_size": squad_size,
+            "team_count": team_count,
+        }
+    return {"blocked": False, "note": "", "squad_size": squad_size, "team_count": team_count}
+
+
+def normalize_forecast_team_key(value):
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    normalized = str(value).lower().replace("ß", "ss")
+    normalized = "".join(char if char.isalnum() else " " for char in normalized)
+    return " ".join(normalized.split())
 
 
 def profile_avg(profile):
