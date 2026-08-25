@@ -355,6 +355,8 @@ def enrich_market_decisions_with_context(market_df, squad_df, manager_budgets_df
         return int(psychological_bid(raw_bid))
 
     result["max_bid"] = result.apply(strategic_max_bid, axis=1)
+    result["winning_bid"] = result.apply(estimated_winning_bid, axis=1)
+    result["bid_gap"] = result["max_bid"] - result["winning_bid"]
 
     status_ok = ~result["player_status"].isin(["Verletzt", "Reha", "Rotgesperrt", "Gelb-Rot-Sperre", "Nicht im Kader", "Nicht in Liga", "Abwesend"])
     keep_rows = (
@@ -400,10 +402,20 @@ def enrich_market_decisions_with_context(market_df, squad_df, manager_budgets_df
         "team_limit_warning",
         "opponent_pressure",
         "opponent_overpay_forecast",
+        "winning_bid",
+        "bid_gap",
         "opponent_overpay_details",
     ]
     remaining_columns = [col for col in result.columns if col not in ordered_columns]
     return result[ordered_columns + remaining_columns]
+
+
+def estimated_winning_bid(row):
+    mv = row.get("mv")
+    opponent_overpay = row.get("opponent_overpay_forecast")
+    if mv is None or pd.isna(mv) or opponent_overpay is None or pd.isna(opponent_overpay):
+        return np.nan
+    return int(psychological_bid(float(mv) + max(float(opponent_overpay), 0)))
 
 
 def add_opponent_overpay_forecast(market_df, manager_budgets_df=None):

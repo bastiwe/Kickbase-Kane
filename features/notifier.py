@@ -14,6 +14,8 @@ COLUMN_LABELS = {
     "team_limit_warning": "Limit",
     "opponent_pressure": "Gegnerdruck",
     "opponent_overpay_forecast": "Erw. Gegner-Overpay",
+    "winning_bid": "Sieggebot",
+    "bid_gap": "Gap",
     "opponent_overpay_details": "Overpay-Gegner",
     "player_display": "Spieler",
     "last_name": "Spieler",
@@ -415,6 +417,8 @@ def send_mail(budget_df, market_df, squad_df, email):
             if isinstance(opponent_overpay, Number) and opponent_overpay == opponent_overpay
             else "-"
         )
+        bid_gap = row.get("bid_gap")
+        bid_gap_text = colored_number(bid_gap, format_number(bid_gap)) if isinstance(bid_gap, Number) and bid_gap == bid_gap else "-"
         opponent_details = escape(str(row.get("opponent_overpay_details", "") or "-"))
         return (
             '<td style="vertical-align:top;padding:0 10px 12px 0;width:33.33%;">'
@@ -434,6 +438,10 @@ def send_mail(budget_df, market_df, squad_df, email):
             f'<td style="padding:3px 4px 3px 0;color:#6b7280;">Erw. 1T</td><td style="padding:3px 0;text-align:right;">{colored_number(row.get("predicted_mv_target"), format_number(row.get("predicted_mv_target")))}</td>'
             '</tr><tr>'
             f'<td style="padding:3px 4px 3px 0;color:#6b7280;">Max. Gebot</td><td style="padding:3px 0;text-align:right;font-weight:800;">{format_number(row.get("max_bid"))}</td>'
+            '</tr><tr>'
+            f'<td style="padding:3px 4px 3px 0;color:#6b7280;">Sieggebot</td><td style="padding:3px 0;text-align:right;font-weight:800;">{format_number(row.get("winning_bid"))}</td>'
+            '</tr><tr>'
+            f'<td style="padding:3px 4px 3px 0;color:#6b7280;">Gap</td><td style="padding:3px 0;text-align:right;font-weight:800;">{bid_gap_text}</td>'
             '</tr><tr>'
             f'<td style="padding:3px 4px 3px 0;color:#6b7280;">Gegnerdruck</td><td style="padding:3px 0;text-align:right;">{pressure_badge}</td>'
             '</tr><tr>'
@@ -794,7 +802,9 @@ def send_mail(budget_df, market_df, squad_df, email):
                 result[col] = result[col].map(lambda value: budget_value(value, format_number(value)))
             elif col == "Avg Overpay":
                 result[col] = result[col].map(lambda value: colored_number(value, format_number(value), positive_good=False))
-            elif col in {"mv", "max_bid", "opponent_overpay_forecast", "Budget", "Team Value", "Max Negative", "recent_starts", "recent_apps", "last_season_points", "last_season_avg_points"}:
+            elif col == "bid_gap":
+                result[col] = result[col].map(lambda value: colored_number(value, format_number(value)))
+            elif col in {"mv", "max_bid", "winning_bid", "opponent_overpay_forecast", "Budget", "Team Value", "Max Negative", "recent_starts", "recent_apps", "last_season_points", "last_season_avg_points"}:
                 result[col] = result[col].map(format_number)
             elif col == "hours_to_exp":
                 result[col] = result[col].map(hours_value)
@@ -876,6 +886,12 @@ def send_mail(budget_df, market_df, squad_df, email):
                 wird mehr vom 1T/3T/7T-Upside eingepreist, danach auf psychologisch sinnvolle Gebotsstufen aufgerundet
                 und mit kleinem Overbid versehen, um runde Konkurrenzgebote zu schlagen.
                 Kritische Spielerstatus wie {badge("Verletzt")} oder {badge("Reha")} reduzieren Priorität und Max. Gebot deutlich.
+            </p>
+            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
+                <b>Sieggebot & Gap:</b>
+                Sieggebot ist Marktwert plus erwarteter stärkster Gegner-Overpay, psychologisch aufgerundet.
+                Gap = Max. Gebot minus Sieggebot. Positiver Gap bedeutet: dein Value-Limit reicht voraussichtlich;
+                negativer Gap bedeutet: zum Gewinnen müsstest du über dein rationales Limit gehen.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Status:</b>

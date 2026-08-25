@@ -47,6 +47,8 @@ def build_player_payload(market_df):
             "imageUrl": clean_value(row.get("image_url"), ""),
             "marketValue": number_value(row.get("mv")),
             "maxBid": number_value(row.get("max_bid")),
+            "winningBid": number_value(row.get("winning_bid")),
+            "bidGap": number_value(row.get("bid_gap")),
             "expectedChange": number_value(row.get("predicted_mv_target")),
             "buyType": clean_value(row.get("buy_type"), "-"),
             "priority": clean_value(row.get("buy_priority"), "-"),
@@ -206,7 +208,7 @@ def render_overpay_tool(payload):
     .low {{ background: #dcfce7; color: var(--green); }}
     .grid {{
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(3, 1fr);
       gap: 10px;
       margin-top: 14px;
     }}
@@ -295,6 +297,7 @@ def render_overpay_tool(payload):
     const fmt = new Intl.NumberFormat('de-DE', {{ maximumFractionDigits: 0 }});
     const money = value => value === null || Number.isNaN(value) ? '-' : fmt.format(value) + ' €';
     const plusMoney = value => value === null || Number.isNaN(value) ? '-' : '+' + money(value);
+    const signedMoney = value => value === null || Number.isNaN(value) ? '-' : (value > 0 ? '+' : '') + money(value);
     const byId = id => document.getElementById(id);
 
     function pressureClass(value) {{
@@ -309,6 +312,13 @@ def render_overpay_tool(payload):
       if (['Angeschlagen', 'Reha', 'Gelbsperre'].includes(value)) return 'mid';
       if (value && value !== '-') return 'high';
       return '';
+    }}
+
+    function gapClass(value) {{
+      if (value === null || Number.isNaN(value)) return '';
+      if (value >= 0) return 'low';
+      if (value >= -500000) return 'mid';
+      return 'high';
     }}
 
     function initials(name) {{
@@ -367,6 +377,8 @@ def render_overpay_tool(payload):
         <div class="grid">
           <div class="metric"><span>Marktwert</span><strong>${{money(player.marketValue)}}</strong></div>
           <div class="metric"><span>Max. Gebot</span><strong>${{money(player.maxBid)}}</strong></div>
+          <div class="metric"><span>Sieggebot</span><strong>${{money(player.winningBid)}}</strong></div>
+          <div class="metric"><span>Gap</span><strong><span class="chip ${{gapClass(player.bidGap)}}">${{signedMoney(player.bidGap)}}</span></strong></div>
           <div class="metric"><span>Erw. 1T</span><strong>${{plusMoney(player.expectedChange)}}</strong></div>
           <div class="metric"><span>Erw. Gegner-Overpay</span><strong>${{plusMoney(player.opponentOverpay)}}</strong></div>
         </div>
