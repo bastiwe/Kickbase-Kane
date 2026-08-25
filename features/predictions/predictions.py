@@ -213,8 +213,8 @@ def squad_position_needs(squad_df):
     return {pos for pos, amount in best_missing.items() if amount > 0}
 
 
-def enrich_market_decisions_with_context(market_df, squad_df):
-    """Add buy type, priority, team-limit warnings and strategic max bids."""
+def enrich_market_decisions_with_context(market_df, squad_df, manager_budgets_df=None):
+    """Add buy type, priority, team-limit warnings, overpay pressure and strategic max bids."""
 
     if market_df is None or market_df.empty:
         return market_df
@@ -314,6 +314,7 @@ def enrich_market_decisions_with_context(market_df, squad_df):
         "Kader-Kauf",
         "Trading-Kauf",
     )
+    result = add_opponent_overpay_forecast(result, manager_budgets_df)
 
     def strategic_max_bid(row):
         mv = row.get("mv", 0)
@@ -382,9 +383,168 @@ def enrich_market_decisions_with_context(market_df, squad_df):
         "buy_type",
         "buy_priority",
         "team_limit_warning",
+        "opponent_pressure",
+        "opponent_overpay_forecast",
+        "opponent_overpay_details",
     ]
     remaining_columns = [col for col in result.columns if col not in ordered_columns]
     return result[ordered_columns + remaining_columns]
+
+
+def add_opponent_overpay_forecast(market_df, manager_budgets_df=None):
+    result = market_df.copy()
+    result["opponent_overpay_forecast"] = np.nan
+    result["opponent_overpay_details"] = ""
+    result["opponent_pressure"] = "Unklar"
+
+    if manager_budgets_df is None or not hasattr(manager_budgets_df, "attrs"):
+        return result
+
+    profiles = manager_budgets_df.attrs.get("overpay_profiles") or {}
+    if not profiles:
+        return result
+
+    own_user = manager_budgets_df.attrs.get("own_user")
+    manager_rows = manager_budgets_df.to_dict("records") if not manager_budgets_df.empty else []
+
+    def row_forecast(row):
+        forecasts = []
+        for manager in manager_rows:
+            name = manager.get("User")
+            if not name or name == own_user:
+                continue
+            available_budget = manager.get("Available Budget")
+            if pd.notna(available_budget) and pd.notna(row.get("mv")) and float(available_budget) < float(row.get("mv")):
+                continue
+
+            overpay = forecast_manager_overpay(
+                profiles.get(name),
+                profiles.get("__league__", {}),
+                row.get("mv"),
+                row.get("top_player_tag"),
+                row.get("buy_type"),
+            )
+            if overpay is None:
+                continue
+            forecasts.append((name, overpay))
+
+        if not forecasts:
+            return pd.Series({
+                "opponent_overpay_forecast": np.nan,
+                "opponent_overpay_details": "",
+                "opponent_pressure": "Unklar",
+            })
+
+        forecasts = sorted(forecasts, key=lambda item: item[1], reverse=True)
+        top_overpay = max(0, round(float(forecasts[0][1]), 0))
+        details = ", ".join(f"{name}: +{format_short_money(max(0, value))}" for name, value in forecasts[:3])
+        mv = row.get("mv")
+        mv = 0 if mv is None or pd.isna(mv) else float(mv)
+        pressure = overpay_pressure(top_overpay, mv)
+        return pd.Series({
+            "opponent_overpay_forecast": top_overpay,
+            "opponent_overpay_details": details,
+            "opponent_pressure": pressure,
+        })
+
+    result[["opponent_overpay_forecast", "opponent_overpay_details", "opponent_pressure"]] = result.apply(row_forecast, axis=1)
+    return result
+
+
+def forecast_manager_overpay(manager_profile, league_profile, market_value, top_player_tag="", buy_type=""):
+    if market_value is None or pd.isna(market_value):
+        return None
+
+    manager_profile = manager_profile or {}
+    league_profile = league_profile or {}
+    bucket = market_value_bucket_for_forecast(market_value)
+    manager_samples = int(manager_profile.get("samples") or 0)
+    league_avg = profile_avg(league_profile)
+    manager_avg = profile_avg(manager_profile)
+    league_segment = segment_avg(league_profile, bucket)
+    manager_segment = segment_avg(manager_profile, bucket)
+
+    if league_avg is None and manager_avg is None:
+        return None
+
+    base = first_valid(manager_segment, manager_avg, league_segment, league_avg, 0)
+    if manager_segment is not None:
+        segment_samples = int(manager_profile.get("segments", {}).get(bucket, {}).get("samples") or 0)
+        segment_weight = min(segment_samples / 4, 0.75)
+        fallback = first_valid(manager_avg, league_segment, league_avg, 0)
+        base = (manager_segment * segment_weight) + (fallback * (1 - segment_weight))
+    else:
+        manager_weight = min(manager_samples / 8, 0.65)
+        base = (first_valid(manager_avg, 0) * manager_weight) + (first_valid(league_segment, league_avg, 0) * (1 - manager_weight))
+
+    quality_factor = overpay_quality_factor(market_value, top_player_tag, buy_type)
+    return max(0, base * quality_factor)
+
+
+def profile_avg(profile):
+    value = (profile or {}).get("avg_overpay")
+    return None if value is None or pd.isna(value) else float(value)
+
+
+def segment_avg(profile, bucket):
+    value = (profile or {}).get("segments", {}).get(bucket, {}).get("avg_overpay")
+    return None if value is None or pd.isna(value) else float(value)
+
+
+def first_valid(*values):
+    for value in values:
+        if value is not None and not pd.isna(value):
+            return float(value)
+    return None
+
+
+def overpay_quality_factor(market_value, top_player_tag="", buy_type=""):
+    tag = str(top_player_tag or "")
+    buy_type = str(buy_type or "")
+    market_value = float(market_value or 0)
+    factor = 1.0
+    if market_value >= 30_000_000:
+        factor += 0.35
+    elif market_value >= 15_000_000:
+        factor += 0.18
+    if tag == "Elite-Spieler":
+        factor += 0.30
+    elif tag == "Top-Spieler":
+        factor += 0.18
+    if buy_type == "Kader-Kauf":
+        factor += 0.10
+    return factor
+
+
+def overpay_pressure(overpay, market_value):
+    pct = (overpay / market_value) * 100 if market_value else 0
+    if overpay >= 1_000_000 or pct >= 5:
+        return "Hoch"
+    if overpay >= 350_000 or pct >= 2:
+        return "Mittel"
+    return "Niedrig"
+
+
+def market_value_bucket_for_forecast(market_value):
+    if market_value is None or pd.isna(market_value):
+        return "unknown"
+    market_value = float(market_value)
+    if market_value >= 30_000_000:
+        return "30m_plus"
+    if market_value >= 15_000_000:
+        return "15m_30m"
+    if market_value >= 5_000_000:
+        return "5m_15m"
+    return "under_5m"
+
+
+def format_short_money(value):
+    if value is None or pd.isna(value):
+        return "-"
+    value = float(value)
+    if value >= 1_000_000:
+        return f"{value / 1_000_000:.1f} Mio"
+    return f"{value / 1_000:.0f}k"
 
 
 def join_current_squad(token, league_id, today_df_results, current_user_id=None):

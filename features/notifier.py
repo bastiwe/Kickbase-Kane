@@ -12,6 +12,9 @@ COLUMN_LABELS = {
     "buy_type": "Kaufart",
     "buy_priority": "Priorität",
     "team_limit_warning": "Limit",
+    "opponent_pressure": "Gegnerdruck",
+    "opponent_overpay_forecast": "Erw. Gegner-Overpay",
+    "opponent_overpay_details": "Overpay-Gegner",
     "player_display": "Spieler",
     "last_name": "Spieler",
     "position": "Pos",
@@ -69,6 +72,7 @@ DISPLAY_LABELS = {
     "Hoch": "Hoch",
     "Mittel": "Mittel",
     "Niedrig": "Niedrig",
+    "Unklar": "Unklar",
     "Vereinslimit voll": "Limit voll",
     "füllt 3/3": "füllt 3/3",
 }
@@ -105,6 +109,7 @@ BADGE_STYLES = {
     "Hoch": ("#dcfce7", "#166534"),
     "Mittel": ("#fef3c7", "#92400e"),
     "Niedrig": ("#f3f4f6", "#374151"),
+    "Unklar": ("#f3f4f6", "#374151"),
     "Vereinslimit voll": ("#fee2e2", "#991b1b"),
     "füllt 3/3": ("#ffedd5", "#9a3412"),
 }
@@ -379,6 +384,14 @@ def send_mail(budget_df, market_df, squad_df, email):
         starter_text = format_percent(starter_rate) if isinstance(starter_rate, Number) and starter_rate == starter_rate else "-"
         tag_badge = badge(row.get("top_player_tag"))
         limit_badge = badge(row.get("team_limit_warning"))
+        pressure_badge = badge(row.get("opponent_pressure"))
+        opponent_overpay = row.get("opponent_overpay_forecast")
+        opponent_overpay_text = (
+            f'+{format_number(opponent_overpay)}'
+            if isinstance(opponent_overpay, Number) and opponent_overpay == opponent_overpay
+            else "-"
+        )
+        opponent_details = escape(str(row.get("opponent_overpay_details", "") or "-"))
         return (
             '<td style="vertical-align:top;padding:0 10px 12px 0;width:33.33%;">'
             f'<div style="border:1px solid #e5e7eb;border-top:5px solid {accent};border-radius:8px;'
@@ -397,6 +410,12 @@ def send_mail(budget_df, market_df, squad_df, email):
             f'<td style="padding:3px 4px 3px 0;color:#6b7280;">Erw. 1T</td><td style="padding:3px 0;text-align:right;">{colored_number(row.get("predicted_mv_target"), format_number(row.get("predicted_mv_target")))}</td>'
             '</tr><tr>'
             f'<td style="padding:3px 4px 3px 0;color:#6b7280;">Max. Gebot</td><td style="padding:3px 0;text-align:right;font-weight:800;">{format_number(row.get("max_bid"))}</td>'
+            '</tr><tr>'
+            f'<td style="padding:3px 4px 3px 0;color:#6b7280;">Gegnerdruck</td><td style="padding:3px 0;text-align:right;">{pressure_badge}</td>'
+            '</tr><tr>'
+            f'<td style="padding:3px 4px 3px 0;color:#6b7280;">Erw. Gegner</td><td style="padding:3px 0;text-align:right;font-weight:800;">{opponent_overpay_text}</td>'
+            '</tr><tr>'
+            f'<td style="padding:3px 4px 3px 0;color:#6b7280;">Top-Gegner</td><td style="padding:3px 0;text-align:right;">{opponent_details}</td>'
             '</tr><tr>'
             f'<td style="padding:3px 4px 3px 0;color:#6b7280;">LI %</td><td style="padding:3px 0;text-align:right;">{starter_text}</td>'
             '</tr><tr>'
@@ -725,7 +744,7 @@ def send_mail(budget_df, market_df, squad_df, email):
         )
 
         for col in result.columns:
-            if col in {"recommendation", "risk", "top_player_tag", "buy_type", "buy_priority", "team_limit_warning"}:
+            if col in {"recommendation", "risk", "top_player_tag", "buy_type", "buy_priority", "team_limit_warning", "opponent_pressure"}:
                 result[col] = result[col].map(badge)
             elif col == "mv_trend":
                 result[col] = result[col].map(trend_value)
@@ -739,7 +758,7 @@ def send_mail(budget_df, market_df, squad_df, email):
                 result[col] = result[col].map(lambda value: budget_value(value, format_number(value)))
             elif col == "Avg Overpay":
                 result[col] = result[col].map(lambda value: colored_number(value, format_number(value), positive_good=False))
-            elif col in {"mv", "max_bid", "Budget", "Team Value", "Max Negative", "recent_starts", "recent_apps", "last_season_points", "last_season_avg_points"}:
+            elif col in {"mv", "max_bid", "opponent_overpay_forecast", "Budget", "Team Value", "Max Negative", "recent_starts", "recent_apps", "last_season_points", "last_season_avg_points"}:
                 result[col] = result[col].map(format_number)
             elif col == "hours_to_exp":
                 result[col] = result[col].map(hours_value)
@@ -780,7 +799,7 @@ def send_mail(budget_df, market_df, squad_df, email):
             rows.append(f'<tr style="{row_style}">{cells}</tr>')
 
         return (
-            '<table style="width:100%;min-width:2050px;border-collapse:collapse;font-size:12px;'
+            '<table style="width:100%;min-width:2350px;border-collapse:collapse;font-size:12px;'
             f'margin:16px 0 24px 0;table-layout:auto;"><thead><tr>{header_html}</tr></thead>'
             f'<tbody>{"".join(rows)}</tbody></table>'
         )
@@ -819,6 +838,12 @@ def send_mail(budget_df, market_df, squad_df, email):
                 <b>Ø Overpay:</b>
                 Durchschnitt aus gezahltem Transferpreis minus Marktwert zum Transferdatum für Käufe seit Saisonstart.
                 Positive Werte bedeuten im Schnitt über Marktwert gekauft, negative Werte bedeuten unter Marktwert gekauft.
+            </p>
+            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
+                <b>Gegnerdruck:</b>
+                Schätzt den höchsten zu erwartenden Overpay deiner Gegner anhand bisheriger Käufe.
+                Berücksichtigt werden Marktwert-Segment, Top-/Eliteklasse, Kader-Kauf und verfügbare Budgets.
+                Das erkennt keine echten Mitbieter, sondern modelliert den wahrscheinlichen Preisdruck.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>MW-Tendenz:</b>

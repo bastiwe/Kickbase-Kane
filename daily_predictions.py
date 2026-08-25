@@ -123,6 +123,7 @@ display(squad_recommendations_df)
 market_recommendations_df = enrich_market_decisions_with_context(
     market_recommendations_df,
     squad_recommendations_df,
+    manager_budgets_df,
 )
 
 print("\n=== Market Recommendations ===")

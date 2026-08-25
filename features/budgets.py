@@ -69,7 +69,11 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget):
     # Initial cash budgets. Use all managers, not only users that already have transfer activities.
     budgets = {manager_name: start_budget for manager_name, _ in managers}
     manager_lookup = build_manager_lookup(managers)
-    average_overpay = calc_average_overpay_by_manager(activities_df, league_start_date, managers)
+    average_overpay, overpay_profiles = calc_overpay_analysis_by_manager(
+        activities_df,
+        league_start_date,
+        managers,
+    )
 
     for _, row in activities_df.iterrows():
         byr = normalize_activity_name(row.get("byr"), manager_lookup)
@@ -137,27 +141,45 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget):
 
     # Sort by available budget ascending
     budget_df.sort_values("Available Budget", ascending=False, inplace=True, ignore_index=True)
+    budget_df.attrs["overpay_profiles"] = overpay_profiles
+    budget_df.attrs["own_user"] = own_username if "own_username" in locals() else None
 
     return budget_df
 
 def calc_average_overpay_by_manager(activities_df, league_start_date, managers=None):
     """Calculate average paid price above market value for current-season buys."""
 
+    average_overpay, _ = calc_overpay_analysis_by_manager(activities_df, league_start_date, managers)
+    return average_overpay
+
+def calc_overpay_analysis_by_manager(activities_df, league_start_date, managers=None):
+    """Calculate average overpay and context profiles for current-season buys."""
+
+    overpay_rows = build_overpay_rows(activities_df, league_start_date, managers)
+    if overpay_rows.empty:
+        return {}, {}
+
+    average_overpay = overpay_rows.groupby("User")["Overpay"].mean().round(0).to_dict()
+    return average_overpay, build_overpay_profiles(overpay_rows, managers)
+
+def build_overpay_rows(activities_df, league_start_date, managers=None):
+    """Return usable transfer rows with paid overpay and market-value context."""
+
     if activities_df.empty or not {"byr", "pi", "trp"}.issubset(activities_df.columns):
         print("Average overpay skipped: transfer activity fields are missing.")
-        return {}
+        return pd.DataFrame()
 
     market_values = load_market_values_for_overpay()
     if market_values.empty:
         print("Warning: Could not calculate average overpay because no market values are available.")
-        return {}
+        return pd.DataFrame()
 
     season_trades = activities_df.copy()
     season_trades = season_trades[season_trades["dt"].fillna("") >= league_start_date]
     season_trades = season_trades[season_trades["byr"].notna()]
     if season_trades.empty:
         print("Average overpay skipped: no current-season buys found in the activity feed.")
-        return {}
+        return pd.DataFrame()
 
     manager_lookup = build_manager_lookup(managers)
     rows = []
@@ -187,7 +209,15 @@ def calc_average_overpay_by_manager(activities_df, league_start_date, managers=N
         if market_value is None:
             missing_market_value += 1
             continue
-        rows.append({"User": buyer, "Overpay": price - market_value})
+        rows.append({
+            "User": buyer,
+            "PlayerId": player_id,
+            "Price": price,
+            "MarketValue": market_value,
+            "Overpay": price - market_value,
+            "OverpayPct": ((price - market_value) / market_value) * 100 if market_value else 0,
+            "MarketValueBucket": market_value_bucket(market_value),
+        })
 
     if not rows:
         print(
@@ -195,11 +225,66 @@ def calc_average_overpay_by_manager(activities_df, league_start_date, managers=N
             f"Checked {len(season_trades)} buys, missing player id: {missing_player_id}, "
             f"missing price: {missing_price}, missing market value: {missing_market_value}."
         )
-        return {}
+        return pd.DataFrame()
 
     overpay_df = pd.DataFrame(rows)
     print(f"Average overpay calculated from {len(overpay_df)} usable buys.")
-    return overpay_df.groupby("User")["Overpay"].mean().round(0).to_dict()
+    return overpay_df
+
+def build_overpay_profiles(overpay_df, managers=None):
+    if overpay_df.empty:
+        return {}
+
+    profiles = {}
+    league_profile = summarize_overpay_profile(overpay_df)
+    profiles["__league__"] = league_profile
+
+    manager_names = [manager_name for manager_name, _ in managers or []]
+    for manager_name in manager_names:
+        manager_rows = overpay_df[overpay_df["User"] == manager_name]
+        profiles[manager_name] = summarize_overpay_profile(manager_rows)
+
+    for manager_name, manager_rows in overpay_df.groupby("User"):
+        profiles.setdefault(manager_name, summarize_overpay_profile(manager_rows))
+
+    print(f"Overpay profiles built for {max(len(profiles) - 1, 0)} managers.")
+    return profiles
+
+def summarize_overpay_profile(rows):
+    if rows is None or rows.empty:
+        return {
+            "samples": 0,
+            "avg_overpay": None,
+            "avg_overpay_pct": None,
+            "segments": {},
+        }
+
+    segments = {}
+    for bucket, bucket_rows in rows.groupby("MarketValueBucket"):
+        segments[bucket] = {
+            "samples": int(len(bucket_rows)),
+            "avg_overpay": round(float(bucket_rows["Overpay"].mean()), 0),
+            "avg_overpay_pct": round(float(bucket_rows["OverpayPct"].mean()), 2),
+        }
+
+    return {
+        "samples": int(len(rows)),
+        "avg_overpay": round(float(rows["Overpay"].mean()), 0),
+        "avg_overpay_pct": round(float(rows["OverpayPct"].mean()), 2),
+        "segments": segments,
+    }
+
+def market_value_bucket(market_value):
+    if market_value is None or pd.isna(market_value):
+        return "unknown"
+    market_value = float(market_value)
+    if market_value >= 30_000_000:
+        return "30m_plus"
+    if market_value >= 15_000_000:
+        return "15m_30m"
+    if market_value >= 5_000_000:
+        return "5m_15m"
+    return "under_5m"
 
 def normalize_activity_name(value, manager_lookup=None):
     if isinstance(value, dict):
