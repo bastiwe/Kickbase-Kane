@@ -67,6 +67,7 @@ def build_player_payload(market_df):
                     "aggressionScore": number_value(item.get("aggression_score")),
                     "archetype": clean_value(item.get("archetype"), ""),
                     "pattern": clean_value(item.get("pattern"), ""),
+                    "explain": build_explain_payload(item.get("explain")),
                 }
                 for item in breakdown
             ],
@@ -93,6 +94,37 @@ def build_manager_payload(budget_df):
             "samples": number_value(profile.get("samples")),
         })
     return managers
+
+
+def build_explain_payload(explain):
+    if not isinstance(explain, dict):
+        return {}
+    keys = [
+        "base",
+        "bucket",
+        "manager_avg",
+        "manager_segment",
+        "league_avg",
+        "league_segment",
+        "segment_weight",
+        "manager_weight",
+        "quality_factor",
+        "pattern_factor",
+        "escalation_factor",
+        "position_factor",
+        "momentum_factor",
+        "class_factor",
+        "position_key",
+        "momentum_key",
+        "quality_key",
+    ]
+    return {key: clean_explain_value(explain.get(key)) for key in keys if explain.get(key) is not None}
+
+
+def clean_explain_value(value):
+    if isinstance(value, (int, float)):
+        return number_value(value)
+    return clean_value(value, "")
 
 
 def render_overpay_tool(payload):
@@ -298,6 +330,7 @@ def render_overpay_tool(payload):
     const money = value => value === null || Number.isNaN(value) ? '-' : fmt.format(value) + ' €';
     const plusMoney = value => value === null || Number.isNaN(value) ? '-' : '+' + money(value);
     const signedMoney = value => value === null || Number.isNaN(value) ? '-' : (value > 0 ? '+' : '') + money(value);
+    const factor = value => value === undefined || value === null || Number.isNaN(value) ? '-' : 'x' + Number(value).toFixed(2);
     const byId = id => document.getElementById(id);
 
     function pressureClass(value) {{
@@ -323,6 +356,28 @@ def render_overpay_tool(payload):
 
     function initials(name) {{
       return (name || '?').split(/\\s+/).slice(0, 2).map(part => part[0] || '').join('').toUpperCase();
+    }}
+
+    function formula(item) {{
+      const explain = item.explain || {{}};
+      if (!explain.base) return '-';
+      return `${{money(explain.base)}} × Qualität ${{factor(explain.quality_factor)}} × Muster ${{factor(explain.pattern_factor)}} × Eskalation ${{factor(explain.escalation_factor)}}`;
+    }}
+
+    function formulaTitle(item) {{
+      const explain = item.explain || {{}};
+      if (!explain.base) return '';
+      return [
+        `Basis: ${{money(explain.base)}}`,
+        `Segment: ${{explain.bucket || '-'}}`,
+        `Manager Ø: ${{money(explain.manager_avg)}}`,
+        `Manager Segment: ${{money(explain.manager_segment)}}`,
+        `Liga Ø: ${{money(explain.league_avg)}}`,
+        `Liga Segment: ${{money(explain.league_segment)}}`,
+        `Position ${{explain.position_key || '-'}}: ${{factor(explain.position_factor)}}`,
+        `Trend ${{explain.momentum_key || '-'}}: ${{factor(explain.momentum_factor)}}`,
+        `Klasse ${{explain.quality_key || '-'}}: ${{factor(explain.class_factor)}}`
+      ].join('\\n');
     }}
 
     function filteredPlayers() {{
@@ -387,7 +442,7 @@ def render_overpay_tool(payload):
       const maxOverpay = Math.max(...player.opponents.map(item => item.overpay || 0), 1);
       byId('opponentTable').innerHTML = player.opponents.length
         ? `<table>
-            <thead><tr><th>Manager</th><th>Erw. Overpay</th><th>Kaufkraft</th><th>Bietmuster</th><th>Limit-Hinweis</th><th>Relativ</th></tr></thead>
+            <thead><tr><th>Manager</th><th>Erw. Overpay</th><th>Kaufkraft</th><th>Bietmuster</th><th>Rechnung</th><th>Limit-Hinweis</th><th>Relativ</th></tr></thead>
             <tbody>
               ${{player.opponents.map(item => `
                 <tr>
@@ -395,6 +450,7 @@ def render_overpay_tool(payload):
                   <td>${{plusMoney(item.overpay)}}</td>
                   <td>${{money(item.availableBudget)}}</td>
                   <td>${{item.pattern || item.archetype || '-'}}</td>
+                  <td title="${{formulaTitle(item)}}">${{formula(item)}}</td>
                   <td>${{item.rosterNote || '-'}}</td>
                   <td><div class="barWrap"><div class="bar" style="width:${{Math.round(((item.overpay || 0) / maxOverpay) * 100)}}%"></div></div></td>
                 </tr>

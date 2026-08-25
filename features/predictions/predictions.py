@@ -450,7 +450,7 @@ def add_opponent_overpay_forecast(market_df, manager_budgets_df=None):
             if roster_block["blocked"]:
                 continue
 
-            overpay = forecast_manager_overpay(
+            forecast = forecast_manager_overpay(
                 profiles.get(name),
                 profiles.get("__league__", {}),
                 row.get("mv"),
@@ -458,9 +458,11 @@ def add_opponent_overpay_forecast(market_df, manager_budgets_df=None):
                 row.get("buy_type"),
                 row.get("position"),
                 row.get("predicted_mv_target"),
+                explain=True,
             )
-            if overpay is None:
+            if not forecast:
                 continue
+            overpay = forecast["overpay"]
             profile = profiles.get(name) or {}
             forecasts.append({
                 "name": name,
@@ -478,6 +480,7 @@ def add_opponent_overpay_forecast(market_df, manager_budgets_df=None):
                     row.get("top_player_tag"),
                     row.get("buy_type"),
                 ),
+                "explain": forecast,
             })
 
         if not forecasts:
@@ -519,6 +522,7 @@ def forecast_manager_overpay(
     buy_type="",
     position=None,
     predicted_change=None,
+    explain=False,
 ):
     if market_value is None or pd.isna(market_value):
         return None
@@ -548,7 +552,29 @@ def forecast_manager_overpay(
     quality_factor = overpay_quality_factor(market_value, top_player_tag, buy_type)
     pattern_factor = overpay_pattern_factor(manager_profile, position, predicted_change, market_value, top_player_tag)
     escalation_factor = overpay_escalation_factor(manager_profile)
-    return max(0, base * quality_factor * pattern_factor * escalation_factor)
+    overpay = max(0, base * quality_factor * pattern_factor * escalation_factor)
+    if not explain:
+        return overpay
+    return {
+        "overpay": overpay,
+        "base": base,
+        "bucket": bucket,
+        "manager_avg": manager_avg,
+        "manager_segment": manager_segment,
+        "league_avg": league_avg,
+        "league_segment": league_segment,
+        "segment_weight": segment_weight if manager_segment is not None else None,
+        "manager_weight": manager_weight if manager_segment is None else None,
+        "quality_factor": quality_factor,
+        "pattern_factor": pattern_factor,
+        "escalation_factor": escalation_factor,
+        "position_factor": profile_bias_factor(manager_profile, "position_bias", position_label_key(position), sample_target=4),
+        "momentum_factor": profile_bias_factor(manager_profile, "momentum_bias", forecast_momentum_key(predicted_change), sample_target=5),
+        "class_factor": profile_bias_factor(manager_profile, "quality_bias", forecast_quality_key(market_value, top_player_tag), sample_target=4),
+        "position_key": position_label_key(position),
+        "momentum_key": forecast_momentum_key(predicted_change),
+        "quality_key": forecast_quality_key(market_value, top_player_tag),
+    }
 
 
 def overpay_pattern_factor(manager_profile, position=None, predicted_change=None, market_value=None, top_player_tag=""):

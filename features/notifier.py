@@ -912,6 +912,13 @@ def send_mail(budget_df, market_df, squad_df, email):
                 Das erkennt keine echten Mitbieter, sondern modelliert den wahrscheinlichen Preisdruck.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
+                <b>Overpay-Multiplikatoren:</b>
+                Basis ist der geglättete historische Overpay des Managers im passenden Marktwert-Segment.
+                Qualitätsfaktor erhöht Top-/Elite- und Kader-Käufe.
+                Musterfaktor bündelt Positions-, Trend- und Klassenbias des Managers.
+                Eskalationsfaktor berücksichtigt Streuung, p75 und Max-Overpay, also ob ein Manager gelegentlich stark eskaliert.
+            </p>
+            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>MW-Tendenz:</b>
                 <span style="display:inline-block;background:#dcfce7;color:#166534;font-weight:800;border-radius:999px;padding:3px 8px;">↑</span> Erw. 1T ist höher als Letzte MW,
                 <span style="display:inline-block;background:#f3f4f6;color:#374151;font-weight:800;border-radius:999px;padding:3px 8px;">→</span> etwa gleich,
