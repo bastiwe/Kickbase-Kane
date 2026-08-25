@@ -13,11 +13,13 @@ def write_overpay_tool(market_df, budget_df, output_path="overpay_forecast.html"
     output_path = Path(output_path)
     players = build_player_payload(market_df)
     managers = build_manager_payload(budget_df)
+    recent_purchases = build_recent_purchase_payload(budget_df)
 
     payload = {
         "generatedAt": datetime.now(ZoneInfo("Europe/Berlin")).strftime("%d.%m.%Y %H:%M"),
         "players": players,
         "managers": managers,
+        "recentPurchases": recent_purchases,
     }
 
     html = render_overpay_tool(payload)
@@ -94,6 +96,54 @@ def build_manager_payload(budget_df):
             "samples": number_value(profile.get("samples")),
         })
     return managers
+
+
+def build_recent_purchase_payload(budget_df, limit=80):
+    if budget_df is None:
+        return []
+
+    overpay_rows = getattr(budget_df, "attrs", {}).get("overpay_rows")
+    if overpay_rows is None or overpay_rows.empty:
+        return []
+
+    rows = overpay_rows.copy()
+    own_user = getattr(budget_df, "attrs", {}).get("own_user")
+    if own_user and "User" in rows:
+        rows = rows[rows["User"] != own_user]
+    if rows.empty:
+        return []
+
+    rows["_sort_date"] = pd.to_datetime(rows.get("Date"), errors="coerce")
+    rows = rows.sort_values(["_sort_date", "User"], ascending=[False, True]).head(limit)
+
+    purchases = []
+    for _, row in rows.iterrows():
+        purchases.append({
+            "date": format_purchase_date(row.get("Date")),
+            "manager": clean_value(row.get("User"), "-"),
+            "player": clean_value(row.get("Player"), "Unbekannt"),
+            "position": clean_value(row.get("Position"), "-"),
+            "price": number_value(row.get("Price")),
+            "marketValue": number_value(row.get("MarketValue")),
+            "overpay": number_value(row.get("Overpay")),
+            "overpayPct": number_value(row.get("OverpayPct")),
+            "marketValueBucket": clean_value(row.get("MarketValueBucket"), "-"),
+            "momentumBucket": clean_value(row.get("MomentumBucket"), "-"),
+            "qualityBucket": clean_value(row.get("QualityBucket"), "-"),
+        })
+    return purchases
+
+
+def format_purchase_date(value):
+    if value is None or pd.isna(value):
+        return "-"
+    try:
+        parsed = pd.to_datetime(value)
+        if pd.isna(parsed):
+            return clean_value(value, "-")
+        return parsed.strftime("%d.%m.%Y %H:%M")
+    except Exception:
+        return clean_value(value, "-")
 
 
 def build_explain_payload(explain):
@@ -288,6 +338,9 @@ def render_overpay_tool(payload):
       background: #0ea5e9;
     }}
     .muted {{ color: var(--muted); }}
+    .pos {{ color: var(--green); font-weight: 800; }}
+    .neg {{ color: var(--red); font-weight: 800; }}
+    .tableScroll {{ overflow-x: auto; }}
     @media (max-width: 780px) {{
       main {{ padding: 12px; }}
       .controls, .hero, .grid {{ grid-template-columns: 1fr; }}
@@ -323,6 +376,11 @@ def render_overpay_tool(payload):
       <h2 style="font-size:18px;margin:0 0 10px;">Manager-Profil</h2>
       <div id="managerTable"></div>
     </section>
+    <section class="panel">
+      <h2 style="font-size:18px;margin:0 0 10px;">Letzte Käufe der Mitmanager</h2>
+      <p class="sub" style="margin-bottom:10px;">Tatsächlicher Overpay = gezahlter Kaufpreis minus Marktwert zum Transferzeitpunkt.</p>
+      <div id="purchaseTable"></div>
+    </section>
   </main>
   <script>
     const DATA = {data};
@@ -330,6 +388,8 @@ def render_overpay_tool(payload):
     const money = value => value === null || Number.isNaN(value) ? '-' : fmt.format(value) + ' €';
     const plusMoney = value => value === null || Number.isNaN(value) ? '-' : '+' + money(value);
     const signedMoney = value => value === null || Number.isNaN(value) ? '-' : (value > 0 ? '+' : '') + money(value);
+    const signedClass = value => value === null || Number.isNaN(value) ? '' : value < 0 ? 'neg' : value > 0 ? 'pos' : '';
+    const pct = value => value === null || Number.isNaN(value) ? '-' : Number(value).toFixed(1).replace('.', ',') + '%';
     const factor = value => value === undefined || value === null || Number.isNaN(value) ? '-' : 'x' + Number(value).toFixed(2);
     const byId = id => document.getElementById(id);
 
@@ -480,11 +540,37 @@ def render_overpay_tool(payload):
         : '<p class="muted">Keine Managerdaten verfügbar.</p>';
     }}
 
+    function renderPurchases() {{
+      byId('purchaseTable').innerHTML = DATA.recentPurchases && DATA.recentPurchases.length
+        ? `<div class="tableScroll"><table>
+            <thead><tr><th>Datum</th><th>Manager</th><th>Spieler</th><th>Pos</th><th>Kaufpreis</th><th>MW bei Kauf</th><th>Tats. Overpay</th><th>Overpay %</th><th>Segment</th><th>Form</th><th>Klasse</th></tr></thead>
+            <tbody>
+              ${{DATA.recentPurchases.map(item => `
+                <tr>
+                  <td>${{item.date}}</td>
+                  <td><strong>${{item.manager}}</strong></td>
+                  <td>${{item.player}}</td>
+                  <td>${{item.position}}</td>
+                  <td>${{money(item.price)}}</td>
+                  <td>${{money(item.marketValue)}}</td>
+                  <td class="${{signedClass(item.overpay)}}">${{signedMoney(item.overpay)}}</td>
+                  <td class="${{signedClass(item.overpay)}}">${{pct(item.overpayPct)}}</td>
+                  <td>${{item.marketValueBucket}}</td>
+                  <td>${{item.momentumBucket}}</td>
+                  <td>${{item.qualityBucket}}</td>
+                </tr>
+              `).join('')}}
+            </tbody>
+          </table></div>`
+        : '<p class="muted">Keine Kaufhistorie der Mitmanager verfügbar.</p>';
+    }}
+
     byId('generatedAt').textContent = DATA.generatedAt;
     byId('search').addEventListener('input', () => fillSelect());
     byId('playerSelect').addEventListener('change', renderSelected);
     fillSelect();
     renderManagers();
+    renderPurchases();
   </script>
 </body>
 </html>

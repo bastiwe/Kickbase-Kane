@@ -71,7 +71,7 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget):
     # Initial cash budgets. Use all managers, not only users that already have transfer activities.
     budgets = {manager_name: start_budget for manager_name, _ in managers}
     manager_lookup = build_manager_lookup(managers)
-    average_overpay, overpay_profiles = calc_overpay_analysis_by_manager(
+    average_overpay, overpay_profiles, overpay_rows = calc_overpay_analysis_by_manager(
         activities_df,
         league_start_date,
         managers,
@@ -144,6 +144,7 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget):
     # Sort by available budget ascending
     budget_df.sort_values("Available Budget", ascending=False, inplace=True, ignore_index=True)
     budget_df.attrs["overpay_profiles"] = overpay_profiles
+    budget_df.attrs["overpay_rows"] = overpay_rows
     budget_df.attrs["roster_profiles"] = roster_profiles
     budget_df.attrs["own_user"] = own_username if "own_username" in locals() else None
 
@@ -152,7 +153,7 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget):
 def calc_average_overpay_by_manager(activities_df, league_start_date, managers=None):
     """Calculate average paid price above market value for current-season buys."""
 
-    average_overpay, _ = calc_overpay_analysis_by_manager(activities_df, league_start_date, managers)
+    average_overpay, _, _ = calc_overpay_analysis_by_manager(activities_df, league_start_date, managers)
     return average_overpay
 
 def calc_overpay_analysis_by_manager(activities_df, league_start_date, managers=None):
@@ -160,10 +161,10 @@ def calc_overpay_analysis_by_manager(activities_df, league_start_date, managers=
 
     overpay_rows = build_overpay_rows(activities_df, league_start_date, managers)
     if overpay_rows.empty:
-        return {}, {}
+        return {}, {}, overpay_rows
 
     average_overpay = overpay_rows.groupby("User")["Overpay"].mean().round(0).to_dict()
-    return average_overpay, build_overpay_profiles(overpay_rows, managers)
+    return average_overpay, build_overpay_profiles(overpay_rows, managers), overpay_rows
 
 def build_overpay_rows(activities_df, league_start_date, managers=None):
     """Return usable transfer rows with paid overpay and market-value context."""
@@ -214,7 +215,9 @@ def build_overpay_rows(activities_df, league_start_date, managers=None):
             missing_market_value += 1
             continue
         rows.append({
+            "Date": trade.get("dt"),
             "User": buyer,
+            "Player": trade.get("pn"),
             "PlayerId": player_id,
             "Price": price,
             "MarketValue": market_value,
