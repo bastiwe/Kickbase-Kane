@@ -116,10 +116,30 @@ def table_html(df, is_market):
         )
         rows.append(f'<tr style="background:#ffffff;">{cells}</tr>')
 
+    footer = ""
+    if not is_market:
+        total_market_value = numeric_sum(df.get("mv", []))
+        total_profit_loss = numeric_sum(df.get("squad_profit_loss", []))
+        footer_cells = []
+        for index, (title, _) in enumerate(columns):
+            if index == 0:
+                value = "<strong>Summe</strong>"
+            elif title == "Marktwert":
+                value = f"<strong>{format_number(total_market_value)}</strong>"
+            elif title == "G/V":
+                value = colored_number(total_profit_loss)
+            else:
+                value = ""
+            footer_cells.append(
+                '<td style="padding:8px 7px;border-top:2px solid #cbd5e1;'
+                f'background:#f8fafc;vertical-align:middle;">{value}</td>'
+            )
+        footer = f"<tfoot><tr>{''.join(footer_cells)}</tr></tfoot>"
+
     return (
         '<div style="overflow-x:auto;">'
         '<table style="width:100%;min-width:1050px;border-collapse:collapse;font-size:12px;">'
-        f"<thead><tr>{head}</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+        f"<thead><tr>{head}</tr></thead><tbody>{''.join(rows)}</tbody>{footer}</table></div>"
     )
 
 
@@ -156,6 +176,14 @@ def colored_pct(value):
         return "-"
     color = "#166534" if value > 0 else "#991b1b" if value < 0 else "#374151"
     return f'<span style="color:{color};font-weight:800;">{value:.2f}%</span>'
+
+
+def numeric_sum(values):
+    total = 0
+    for value in values:
+        if isinstance(value, Number) and not isinstance(value, bool) and value == value:
+            total += value
+    return total
 
 
 def format_number(value):

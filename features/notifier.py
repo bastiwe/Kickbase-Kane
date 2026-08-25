@@ -223,6 +223,13 @@ def send_mail(budget_df, market_df, squad_df, email):
             return f"{value:.2f}%"
         return "-"
 
+    def numeric_sum(values):
+        total = 0
+        for value in values:
+            if isinstance(value, Number) and not isinstance(value, bool) and value == value:
+                total += value
+        return total
+
     def badge(value):
         if value is None or str(value) == "":
             return ""
@@ -856,10 +863,30 @@ def send_mail(budget_df, market_df, squad_df, email):
             )
             rows.append(f'<tr style="{row_style}">{cells}</tr>')
 
+        footer_html = ""
+        if {"mv", "squad_profit_loss"}.issubset(df.columns):
+            total_market_value = numeric_sum(df["mv"])
+            total_profit_loss = numeric_sum(df["squad_profit_loss"])
+            footer_cells = []
+            for index, col in enumerate(visible_cols):
+                if index == 0:
+                    value = "<strong>Summe</strong>"
+                elif col == "Marktwert":
+                    value = f"<strong>{format_number(total_market_value)}</strong>"
+                elif col == "G/V":
+                    value = colored_number(total_profit_loss, format_number(total_profit_loss))
+                else:
+                    value = ""
+                footer_cells.append(
+                    '<td style="padding:7px 6px;border-top:2px solid #cbd5e1;'
+                    f'background:#f8fafc;vertical-align:middle;">{value}</td>'
+                )
+            footer_html = f'<tfoot><tr>{"".join(footer_cells)}</tr></tfoot>'
+
         return (
             '<table style="width:100%;min-width:2350px;border-collapse:collapse;font-size:12px;'
             f'margin:16px 0 24px 0;table-layout:auto;"><thead><tr>{header_html}</tr></thead>'
-            f'<tbody>{"".join(rows)}</tbody></table>'
+            f'<tbody>{"".join(rows)}</tbody>{footer_html}</table>'
         )
 
     action_legend = f"""
