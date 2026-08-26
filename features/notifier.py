@@ -760,16 +760,16 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 if image_url == image_url and image_url:
                     image = (
                         f'<img src="{escape(str(image_url), quote=True)}" alt="{name}" '
-                        'width="42" height="42" '
-                        'style="width:42px;height:42px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:10px;background:#e5e7eb;">'
+                        'width="34" height="34" '
+                        'style="width:34px;height:34px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:7px;background:#e5e7eb;">'
                     )
                 else:
                     image = (
-                        '<span style="display:inline-block;width:42px;height:42px;border-radius:50%;'
-                        'background:#e5e7eb;vertical-align:middle;margin-right:10px;"></span>'
+                        '<span style="display:inline-block;width:34px;height:34px;border-radius:50%;'
+                        'background:#e5e7eb;vertical-align:middle;margin-right:7px;"></span>'
                     )
                 content = (
-                    '<div style="display:flex;align-items:center;min-width:145px;">'
+                    '<div style="display:flex;align-items:center;min-width:118px;max-width:170px;">'
                     f'{image}<span style="font-weight:600;color:#1f2933;">{name}</span></div>'
                 )
                 ligainsider_url = row.get("ligainsider_url")
@@ -842,9 +842,20 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
             "Overpay-Gegner",
         }
         visible_cols = [col for col in result.columns if col not in hidden_cols]
+
+        def column_style(col, is_header=False):
+            base = "background:#2c3e50;color:white;" if is_header else ""
+            if col == "Action":
+                return base + "padding:4px;text-align:center;width:76px;max-width:76px;white-space:nowrap;"
+            if col == "Spieler":
+                return base + "padding:4px 5px;text-align:left;width:180px;max-width:180px;"
+            if col == "MW-Tendenz":
+                return base + "padding:4px;text-align:center;width:54px;max-width:54px;white-space:nowrap;"
+            return base + "padding:6px;text-align:left;white-space:nowrap;"
+
         header_html = "".join(
-            '<th style="background:#2c3e50;color:white;padding:6px;text-align:left;'
-            f'border-bottom:1px solid #ddd;white-space:nowrap;">{escape(str(col))}</th>'
+            f'<th style="{column_style(col, is_header=True)}'
+            f'border-bottom:1px solid #ddd;">{escape(str(col))}</th>'
             for col in visible_cols
         )
         rows = []
@@ -858,7 +869,7 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
             else:
                 row_style = "background:#fefefe;"
             cells = "".join(
-                '<td style="padding:6px;border-bottom:1px solid #eee;vertical-align:middle;">'
+                f'<td style="{column_style(col)}border-bottom:1px solid #eee;vertical-align:middle;">'
                 f'{"" if row.get(col) is None else row.get(col)}</td>'
                 for col in visible_cols
             )
@@ -879,13 +890,13 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 else:
                     value = ""
                 footer_cells.append(
-                    '<td style="padding:7px 6px;border-top:2px solid #cbd5e1;'
+                    f'<td style="{column_style(col)}border-top:2px solid #cbd5e1;'
                     f'background:#f8fafc;vertical-align:middle;">{value}</td>'
                 )
             footer_html = f'<tfoot><tr>{"".join(footer_cells)}</tr></tfoot>'
 
         return (
-            '<table style="width:100%;min-width:2350px;border-collapse:collapse;font-size:12px;'
+            '<table style="width:100%;min-width:2050px;border-collapse:collapse;font-size:12px;'
             f'margin:16px 0 24px 0;table-layout:auto;"><thead><tr>{header_html}</tr></thead>'
             f'<tbody>{"".join(rows)}</tbody>{footer_html}</table>'
         )
