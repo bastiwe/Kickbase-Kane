@@ -179,6 +179,12 @@ def clean_explain_value(value):
 
 def render_overpay_tool(payload):
     data = json.dumps(payload, ensure_ascii=False)
+    generated_at = escape(clean_value(payload.get("generatedAt"), "-"))
+    first_player = (payload.get("players") or [None])[0]
+    static_player_panel = render_static_player_panel(first_player)
+    static_opponent_table = render_static_opponent_table(first_player)
+    static_manager_table = render_static_manager_table(payload.get("managers") or [])
+    static_purchase_table = render_static_purchase_table(payload.get("recentPurchases") or [])
     return f"""<!doctype html>
 <html lang="de">
 <head>
@@ -359,7 +365,7 @@ def render_overpay_tool(payload):
 <body>
   <main>
     <h1>Kickbase Overpay-Prognose</h1>
-    <p class="sub">Generiert am <span id="generatedAt"></span>. Modelliert aus bisherigem Bietverhalten, Marktwert-Segmenten und Spielerklasse.</p>
+    <p class="sub">Generiert am <span id="generatedAt">{generated_at}</span>. Modelliert aus bisherigem Bietverhalten, Marktwert-Segmenten und Spielerklasse.</p>
 
     <section class="panel">
       <div class="controls">
@@ -374,19 +380,19 @@ def render_overpay_tool(payload):
       </div>
     </section>
 
-    <section class="panel" id="playerPanel"></section>
+    <section class="panel" id="playerPanel">{static_player_panel}</section>
     <section class="panel">
       <h2 style="font-size:18px;margin:0 0 10px;">Erwarteter Gegner-Overpay</h2>
-      <div id="opponentTable"></div>
+      <div id="opponentTable">{static_opponent_table}</div>
     </section>
     <section class="panel">
       <h2 style="font-size:18px;margin:0 0 10px;">Manager-Profil</h2>
-      <div id="managerTable"></div>
+      <div id="managerTable">{static_manager_table}</div>
     </section>
     <section class="panel">
       <h2 style="font-size:18px;margin:0 0 10px;">Letzte Käufe der Mitmanager</h2>
       <p class="sub" style="margin-bottom:10px;">Tatsächlicher Overpay = gezahlter Kaufpreis minus Marktwert zum Transferzeitpunkt.</p>
-      <div id="purchaseTable"></div>
+      <div id="purchaseTable">{static_purchase_table}</div>
     </section>
   </main>
   <script>
@@ -591,6 +597,252 @@ def render_overpay_tool(payload):
 </body>
 </html>
 """
+
+
+def render_static_player_panel(player):
+    if not player:
+        return '<p class="muted">Keine Spieler im aktuellen Report.</p>'
+
+    name = escape(clean_value(player.get("name"), "-"))
+    image_url = clean_value(player.get("imageUrl"), "")
+    if image_url:
+        photo = (
+            f'<img class="photo" src="{escape(image_url, quote=True)}" alt="{name}">'
+        )
+    else:
+        photo = f'<div class="photoFallback">{escape(initials(player.get("name")))}</div>'
+
+    class_tag = clean_value(player.get("classTag"), "")
+    class_badge = f'<span class="chip">{escape(class_tag)}</span>' if class_tag else ""
+    bid_gap = player.get("bidGap")
+    return f"""
+        <div class="hero">
+          {photo}
+          <div>
+            <h2 style="margin:0;font-size:24px;">{name}</h2>
+            <div class="muted">{escape(clean_value(player.get("position"), "-"))} · {escape(clean_value(player.get("team"), "-"))}</div>
+            <div class="chips">
+              <span class="chip {status_class(player.get("status"))}">Status: {escape(clean_value(player.get("status"), "-"))}</span>
+              <span class="chip {pressure_class(player.get("pressure"))}">Gegnerdruck: {escape(clean_value(player.get("pressure"), "-"))}</span>
+              <span class="chip">{escape(clean_value(player.get("buyType"), "-"))}</span>
+              <span class="chip">Priorität: {escape(clean_value(player.get("priority"), "-"))}</span>
+              {class_badge}
+            </div>
+          </div>
+        </div>
+        <div class="grid">
+          <div class="metric"><span>Marktwert</span><strong>{html_money(player.get("marketValue"))}</strong></div>
+          <div class="metric"><span>Max. Gebot</span><strong>{html_money(player.get("maxBid"))}</strong></div>
+          <div class="metric"><span>Sieggebot</span><strong>{html_money(player.get("winningBid"))}</strong></div>
+          <div class="metric"><span>Gap</span><strong><span class="chip {gap_class(bid_gap)}">{html_signed_money(bid_gap)}</span></strong></div>
+          <div class="metric"><span>Erw. 1T</span><strong>{html_plus_money(player.get("expectedChange"))}</strong></div>
+          <div class="metric"><span>Erw. Gegner-Overpay</span><strong>{html_plus_money(player.get("opponentOverpay"))}</strong></div>
+        </div>
+    """
+
+
+def render_static_opponent_table(player):
+    if not player:
+        return '<p class="muted">Keine belastbare Gegnerprognose verfügbar.</p>'
+
+    opponents = player.get("opponents") or []
+    if not opponents:
+        return '<p class="muted">Keine belastbare Gegnerprognose verfügbar.</p>'
+
+    max_overpay = max([item.get("overpay") or 0 for item in opponents] + [1])
+    rows = []
+    for item in opponents:
+        width = round(((item.get("overpay") or 0) / max_overpay) * 100)
+        rows.append(f"""
+            <tr>
+              <td><strong>{escape(clean_value(item.get("name"), "-"))}</strong></td>
+              <td>{html_plus_money(item.get("overpay"))}</td>
+              <td>{html_money(item.get("availableBudget"))}</td>
+              <td>{escape(clean_value(item.get("pattern") or item.get("archetype"), "-"))}</td>
+              <td title="{escape(static_formula_title(item), quote=True)}">{escape(static_formula(item))}</td>
+              <td>{escape(clean_value(item.get("rosterNote"), "-"))}</td>
+              <td><div class="barWrap"><div class="bar" style="width:{width}%"></div></div></td>
+            </tr>
+        """)
+
+    return (
+        "<table>"
+        "<thead><tr><th>Manager</th><th>Erw. Overpay</th><th>Kaufkraft</th><th>Bietmuster</th><th>Rechnung</th><th>Limit-Hinweis</th><th>Relativ</th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
+def render_static_manager_table(managers):
+    if not managers:
+        return '<p class="muted">Keine Managerdaten verfügbar.</p>'
+
+    rows = []
+    for manager in managers:
+        aggression = manager.get("aggressionScore")
+        aggression_text = "-" if aggression is None else f"{round(aggression)}/100"
+        rows.append(f"""
+            <tr>
+              <td><strong>{escape(clean_value(manager.get("name"), "-"))}</strong></td>
+              <td>{html_plus_money(manager.get("avgOverpay"))}</td>
+              <td>{escape(aggression_text)}</td>
+              <td>{escape(clean_value(manager.get("archetype"), "-"))}</td>
+              <td>{html_money(manager.get("availableBudget"))}</td>
+              <td>{html_money(manager.get("teamValue"))}</td>
+            </tr>
+        """)
+
+    return (
+        "<table>"
+        "<thead><tr><th>Manager</th><th>Ø Overpay</th><th>Aggro</th><th>Typ</th><th>Kaufkraft</th><th>Kaderwert</th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
+def render_static_purchase_table(purchases):
+    if not purchases:
+        return '<p class="muted">Keine Kaufhistorie der Mitmanager verfügbar.</p>'
+
+    return (
+        '<div class="tableScroll"><table>'
+        '<thead><tr><th>Datum</th><th>Spieler</th><th>Pos</th><th>Kaufpreis</th><th>MW bei Kauf</th><th>Tats. Overpay</th><th>Overpay %</th><th>Segment</th><th>Form</th><th>Klasse</th></tr></thead>'
+        f'<tbody>{render_static_purchase_rows(purchases)}</tbody></table></div>'
+    )
+
+
+def render_static_purchase_rows(purchases):
+    rows = []
+    current_manager = None
+    for item in purchases:
+        manager = clean_value(item.get("manager"), "-")
+        if manager != current_manager:
+            rows.append(f'<tr class="groupRow"><td colspan="10">{escape(manager)}</td></tr>')
+            current_manager = manager
+        rows.append(f"""
+            <tr>
+              <td>{escape(clean_value(item.get("date"), "-"))}</td>
+              <td>{escape(clean_value(item.get("player"), "-"))}</td>
+              <td>{escape(clean_value(item.get("position"), "-"))}</td>
+              <td>{html_money(item.get("price"))}</td>
+              <td>{html_money(item.get("marketValue"))}</td>
+              <td class="{signed_class(item.get("overpay"))}">{html_signed_money(item.get("overpay"))}</td>
+              <td class="{signed_class(item.get("overpay"))}">{html_pct(item.get("overpayPct"))}</td>
+              <td>{escape(clean_value(item.get("marketValueBucket"), "-"))}</td>
+              <td>{escape(clean_value(item.get("momentumBucket"), "-"))}</td>
+              <td>{escape(clean_value(item.get("qualityBucket"), "-"))}</td>
+            </tr>
+        """)
+    return "".join(rows)
+
+
+def html_money(value):
+    value = number_value(value)
+    if value is None:
+        return "-"
+    return f"{value:,.0f}".replace(",", ".") + " €"
+
+
+def html_plus_money(value):
+    value = number_value(value)
+    if value is None:
+        return "-"
+    return "+" + html_money(value)
+
+
+def html_signed_money(value):
+    value = number_value(value)
+    if value is None:
+        return "-"
+    prefix = "+" if value > 0 else ""
+    return prefix + html_money(value)
+
+
+def html_pct(value):
+    value = number_value(value)
+    if value is None:
+        return "-"
+    return f"{value:.1f}".replace(".", ",") + "%"
+
+
+def signed_class(value):
+    value = number_value(value)
+    if value is None:
+        return ""
+    if value < 0:
+        return "neg"
+    if value > 0:
+        return "pos"
+    return ""
+
+
+def pressure_class(value):
+    if value == "Hoch":
+        return "high"
+    if value == "Mittel":
+        return "mid"
+    if value == "Niedrig":
+        return "low"
+    return ""
+
+
+def status_class(value):
+    if value == "Fit":
+        return "low"
+    if value in {"Angeschlagen", "Reha", "Gelbsperre"}:
+        return "mid"
+    if value and value != "-":
+        return "high"
+    return ""
+
+
+def gap_class(value):
+    value = number_value(value)
+    if value is None:
+        return ""
+    if value >= 0:
+        return "low"
+    if value >= -500_000:
+        return "mid"
+    return "high"
+
+
+def initials(name):
+    parts = str(name or "?").split()
+    return "".join(part[0] for part in parts[:2]).upper() or "?"
+
+
+def static_formula(item):
+    explain = item.get("explain") or {}
+    if not explain.get("base"):
+        return "-"
+    return (
+        f"{html_money(explain.get('base'))} x Qualität {static_factor(explain.get('quality_factor'))} "
+        f"x Muster {static_factor(explain.get('pattern_factor'))} "
+        f"x Eskalation {static_factor(explain.get('escalation_factor'))}"
+    )
+
+
+def static_formula_title(item):
+    explain = item.get("explain") or {}
+    if not explain.get("base"):
+        return ""
+    return "\n".join([
+        f"Basis: {html_money(explain.get('base'))}",
+        f"Segment: {clean_value(explain.get('bucket'), '-')}",
+        f"Manager Ø: {html_money(explain.get('manager_avg'))}",
+        f"Manager Segment: {html_money(explain.get('manager_segment'))}",
+        f"Liga Ø: {html_money(explain.get('league_avg'))}",
+        f"Liga Segment: {html_money(explain.get('league_segment'))}",
+        f"Position {clean_value(explain.get('position_key'), '-')}: {static_factor(explain.get('position_factor'))}",
+        f"Trend {clean_value(explain.get('momentum_key'), '-')}: {static_factor(explain.get('momentum_factor'))}",
+        f"Klasse {clean_value(explain.get('quality_key'), '-')}: {static_factor(explain.get('class_factor'))}",
+    ])
+
+
+def static_factor(value):
+    value = number_value(value)
+    if value is None:
+        return "-"
+    return f"x{value:.2f}"
 
 
 def clean_value(value, default=None):
