@@ -200,9 +200,11 @@ def build_overpay_rows(activities_df, league_start_date, managers=None):
             trade.get("dt"),
             trade.get("pn"),
         )
-        market_value = first_number(trade.get("mv"), trade.get("mvo"))
+        # Prefer our historical market value for the activity timestamp. Kickbase activity
+        # fields can reflect a later/current value and create impossible underpays.
+        market_value = market_context.get("mv")
         if market_value is None:
-            market_value = market_context.get("mv")
+            market_value = first_number(trade.get("mv"), trade.get("mvo"))
         if not buyer:
             continue
         if player_id is None:
