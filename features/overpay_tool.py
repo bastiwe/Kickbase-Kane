@@ -114,7 +114,7 @@ def build_recent_purchase_payload(budget_df, limit=80):
         return []
 
     rows["_sort_date"] = pd.to_datetime(rows.get("Date"), errors="coerce")
-    rows = rows.sort_values(["_sort_date", "User"], ascending=[False, True]).head(limit)
+    rows = rows.sort_values(["User", "_sort_date"], ascending=[True, False]).head(limit)
 
     purchases = []
     for _, row in rows.iterrows():
@@ -341,6 +341,13 @@ def render_overpay_tool(payload):
     .pos {{ color: var(--green); font-weight: 800; }}
     .neg {{ color: var(--red); font-weight: 800; }}
     .tableScroll {{ overflow-x: auto; }}
+    .groupRow td {{
+      background: #eef2ff;
+      color: #1e3a8a;
+      font-weight: 900;
+      border-top: 2px solid #c7d2fe;
+      border-bottom: 1px solid #c7d2fe;
+    }}
     @media (max-width: 780px) {{
       main {{ padding: 12px; }}
       .controls, .hero, .grid {{ grid-template-columns: 1fr; }}
@@ -543,26 +550,35 @@ def render_overpay_tool(payload):
     function renderPurchases() {{
       byId('purchaseTable').innerHTML = DATA.recentPurchases && DATA.recentPurchases.length
         ? `<div class="tableScroll"><table>
-            <thead><tr><th>Datum</th><th>Manager</th><th>Spieler</th><th>Pos</th><th>Kaufpreis</th><th>MW bei Kauf</th><th>Tats. Overpay</th><th>Overpay %</th><th>Segment</th><th>Form</th><th>Klasse</th></tr></thead>
+            <thead><tr><th>Datum</th><th>Spieler</th><th>Pos</th><th>Kaufpreis</th><th>MW bei Kauf</th><th>Tats. Overpay</th><th>Overpay %</th><th>Segment</th><th>Form</th><th>Klasse</th></tr></thead>
             <tbody>
-              ${{DATA.recentPurchases.map(item => `
-                <tr>
-                  <td>${{item.date}}</td>
-                  <td><strong>${{item.manager}}</strong></td>
-                  <td>${{item.player}}</td>
-                  <td>${{item.position}}</td>
-                  <td>${{money(item.price)}}</td>
-                  <td>${{money(item.marketValue)}}</td>
-                  <td class="${{signedClass(item.overpay)}}">${{signedMoney(item.overpay)}}</td>
-                  <td class="${{signedClass(item.overpay)}}">${{pct(item.overpayPct)}}</td>
-                  <td>${{item.marketValueBucket}}</td>
-                  <td>${{item.momentumBucket}}</td>
-                  <td>${{item.qualityBucket}}</td>
-                </tr>
-              `).join('')}}
+              ${{purchaseRows(DATA.recentPurchases)}}
             </tbody>
           </table></div>`
         : '<p class="muted">Keine Kaufhistorie der Mitmanager verfügbar.</p>';
+    }}
+
+    function purchaseRows(items) {{
+      let currentManager = null;
+      return items.map(item => {{
+        const group = item.manager !== currentManager
+          ? `<tr class="groupRow"><td colspan="10">${{item.manager}}</td></tr>`
+          : '';
+        currentManager = item.manager;
+        return `${{group}}
+          <tr>
+            <td>${{item.date}}</td>
+            <td>${{item.player}}</td>
+            <td>${{item.position}}</td>
+            <td>${{money(item.price)}}</td>
+            <td>${{money(item.marketValue)}}</td>
+            <td class="${{signedClass(item.overpay)}}">${{signedMoney(item.overpay)}}</td>
+            <td class="${{signedClass(item.overpay)}}">${{pct(item.overpayPct)}}</td>
+            <td>${{item.marketValueBucket}}</td>
+            <td>${{item.momentumBucket}}</td>
+            <td>${{item.qualityBucket}}</td>
+          </tr>`;
+      }}).join('');
     }}
 
     byId('generatedAt').textContent = DATA.generatedAt;
