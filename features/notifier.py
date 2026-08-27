@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 import json
 import smtplib
 import os
+import pandas as pd
 
 COLUMN_LABELS = {
     "recommendation": "Action",
@@ -650,7 +651,17 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
         def numeric_or_none(value):
             if isinstance(value, Number) and value == value:
                 return float(value)
-            return None
+            if value is None:
+                return None
+            try:
+                normalized = str(value).strip()
+                if normalized in {"", "-", "nan", "NaN", "None"}:
+                    return None
+                if "," in normalized:
+                    normalized = normalized.replace(".", "").replace(",", ".")
+                return float(normalized)
+            except (TypeError, ValueError):
+                return None
 
         def has_points(column):
             return column in squad_df and squad_df[column].apply(lambda value: numeric_or_none(value) is not None).any()
@@ -661,6 +672,7 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 "current_season_points": "aktuelle Saison",
                 "last_season_avg_points": "Vorsaison Ø",
                 "last_season_points": "Vorsaison gesamt",
+                "lineup_score": "beste verfügbare Punktebasis",
             }.get(column, "Punktebasis")
 
         def best_lineup(score_column):
@@ -795,21 +807,45 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
         possible_text = ", ".join(possible) if possible else "noch keine"
         counts_text = " / ".join(f"{POSITION_LABELS[pos]} {counts.get(pos, 0)}" for pos in [1, 2, 3, 4])
 
-        if has_points("last_3_points"):
-            primary_column = "last_3_points"
-            secondary_column = "current_season_points" if has_points("current_season_points") else "last_season_points"
-        elif has_points("current_season_points"):
-            primary_column = "current_season_points"
-            secondary_column = "last_season_points" if has_points("last_season_points") else "last_season_avg_points"
-        elif has_points("last_season_avg_points"):
-            primary_column = "last_season_avg_points"
-            secondary_column = "last_season_points" if has_points("last_season_points") else "last_season_avg_points"
-        else:
-            primary_column = "last_season_points"
-            secondary_column = "last_season_points"
+        usable_score_columns = [
+            column
+            for column in [
+                "last_3_points",
+                "current_season_points",
+                "last_season_avg_points",
+                "last_season_points",
+                "lineup_score",
+            ]
+            if has_points(column)
+        ]
 
-        primary = best_lineup(primary_column)
-        secondary = best_lineup(secondary_column)
+        primary = None
+        primary_column = usable_score_columns[0] if usable_score_columns else "lineup_score"
+        for score_column in usable_score_columns:
+            primary = best_lineup(score_column)
+            if primary:
+                primary_column = score_column
+                break
+        if primary is None:
+            primary = best_lineup("lineup_score")
+            primary_column = "lineup_score"
+
+        secondary = None
+        secondary_column = primary_column
+        for score_column in usable_score_columns:
+            if score_column == primary_column:
+                continue
+            secondary = best_lineup(score_column)
+            if secondary:
+                secondary_column = score_column
+                break
+
+        print(
+            "Squad lineup analysis: "
+            f"counts={counts_text}, usable score columns={usable_score_columns or ['none']}, "
+            f"selected basis={primary_column if primary else 'none'}, "
+            f"formation={primary[0] if primary else 'none'}."
+        )
 
         if primary:
             primary_formation, primary_total, primary_selected = primary
