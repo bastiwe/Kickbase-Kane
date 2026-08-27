@@ -1,4 +1,5 @@
 from features.predictions.predictions import (
+    add_prediction_confidence,
     enrich_market_decisions_with_context,
     live_data_predictions,
     join_current_market,
@@ -125,6 +126,7 @@ market_recommendations_df, squad_recommendations_df = enrich_reports_with_ligain
     market_recommendations_df,
     squad_recommendations_df,
 )
+squad_recommendations_df = add_prediction_confidence(squad_recommendations_df)
 market_recommendations_df = enrich_market_decisions_with_context(
     market_recommendations_df,
     squad_recommendations_df,

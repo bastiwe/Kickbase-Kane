@@ -18,6 +18,13 @@ STATUS_STYLES = {
     "Nicht im Kader": ("#fee2e2", "#991b1b"),
     "Nicht in Liga": ("#fee2e2", "#991b1b"),
     "Abwesend": ("#fee2e2", "#991b1b"),
+    "Hoch": ("#dcfce7", "#166534"),
+    "Mittel": ("#fef3c7", "#92400e"),
+    "Niedrig": ("#f3f4f6", "#374151"),
+    "Vor 22 Uhr verkaufen": ("#fee2e2", "#991b1b"),
+    "Verkauf prüfen": ("#fef3c7", "#92400e"),
+    "Kaderkern/Halten": ("#dcfce7", "#166534"),
+    "Halten": ("#f3f4f6", "#374151"),
 }
 
 POSITION_LABELS = {1: "TW", 2: "ABW", 3: "MIT", 4: "ST", "1": "TW", "2": "ABW", "3": "MIT", "4": "ST"}
@@ -87,6 +94,7 @@ def table_html(df, is_market):
         ("Pos", lambda row: escape(position_label(row.get("position")))),
         ("Team", lambda row: escape(str(row.get("team_name", "-")))),
         ("Status", lambda row: status_badge(row.get("player_status"))),
+        ("Vertrauen", lambda row: status_badge(row.get("prediction_confidence"))),
         ("Marktwert", lambda row: format_number(row.get("mv"))),
         ("Kaufpreis", lambda row: format_number(row.get("purchase_price"))),
         ("G/V", lambda row: colored_number(row.get("squad_profit_loss"))),
@@ -102,6 +110,7 @@ def table_html(df, is_market):
             ("Gebot", lambda row: "ja" if bool(row.get("has_open_bid", False)) else "-"),
         ])
     else:
+        columns.append(("Ampel", lambda row: status_badge(row.get("sell_advice"))))
         columns.append(("Angeboten", lambda row: "ja" if bool(row.get("is_listed_for_sale", False)) else "-"))
 
     head = "".join(

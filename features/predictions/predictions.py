@@ -44,6 +44,11 @@ def add_recommendation_columns(df, is_market):
     """Add trading-oriented columns to make the predictions easier to act on."""
 
     df = df.copy()
+    for column in ["predicted_mv_target", "predicted_mv_target_3d", "predicted_mv_target_7d", "mv"]:
+        if column not in df:
+            df[column] = np.nan
+    if "top_player_tag" not in df:
+        df["top_player_tag"] = ""
     df["expected_change_pct"] = np.where(
         df["mv"] > 0,
         np.round((df["predicted_mv_target"] / df["mv"]) * 100, 2),
@@ -89,8 +94,71 @@ def add_recommendation_columns(df, is_market):
             ["Sell", "Consider sell", "Keep"],
             default="Hold"
         )
+        df["sell_advice"] = np.select(
+            [
+                (df["predicted_mv_target"] <= -200_000) | (df["expected_change_pct"] <= -2.0),
+                (df["predicted_mv_target"] <= -75_000) | (df["expected_change_pct"] <= -0.75),
+                df["top_player_tag"].fillna("").astype(str).ne("")
+                | (df["predicted_mv_target"] >= 100_000)
+                | (df["expected_change_pct"] >= 1.0),
+            ],
+            ["Vor 22 Uhr verkaufen", "Verkauf prüfen", "Kaderkern/Halten"],
+            default="Halten"
+        )
+
+    df = add_prediction_confidence(df)
 
     return df
+
+
+def add_prediction_confidence(df):
+    """Classify how much context the report has for a player's 1-day prediction."""
+
+    result = df.copy()
+    score = pd.Series(0, index=result.index, dtype="float64")
+
+    if "predicted_mv_target" in result:
+        score += result["predicted_mv_target"].notna().astype(int) * 35
+    if "mv_change_1d" in result:
+        score += result["mv_change_1d"].notna().astype(int) * 20
+    if "mv_change_yesterday" in result:
+        score += result["mv_change_yesterday"].notna().astype(int) * 20
+    if "mv" in result:
+        score += result["mv"].notna().astype(int) * 15
+    if "last_season_points" in result:
+        score += result["last_season_points"].notna().astype(int) * 12
+    if "last_season_avg_points" in result:
+        score += result["last_season_avg_points"].notna().astype(int) * 8
+    if "top_player_tag" in result:
+        score += result["top_player_tag"].fillna("").astype(str).ne("").astype(int) * 8
+    if "starter_rate" in result:
+        score += pd.to_numeric(result["starter_rate"], errors="coerce").notna().astype(int) * 8
+
+    if "player_status" in result:
+        critical_status = result["player_status"].isin([
+            "Verletzt",
+            "Reha",
+            "Rotgesperrt",
+            "Gelb-Rot-Sperre",
+            "Nicht im Kader",
+            "Nicht in Liga",
+            "Abwesend",
+        ])
+        warning_status = result["player_status"].isin(["Angeschlagen", "Gelbsperre"])
+        score -= critical_status.astype(int) * 22
+        score -= warning_status.astype(int) * 10
+
+    no_prediction = result["predicted_mv_target"].isna() if "predicted_mv_target" in result else pd.Series(True, index=result.index)
+    result["prediction_confidence"] = np.select(
+        [
+            no_prediction,
+            score >= 70,
+            score >= 45,
+        ],
+        ["Niedrig", "Hoch", "Mittel"],
+        default="Niedrig",
+    )
+    return result
 
 def live_data_predictions(today_df, models, features, history_df=None, season_start_date=None):
     """Make live data predictions for today_df using the trained model"""
@@ -253,6 +321,7 @@ def enrich_market_decisions_with_context(market_df, squad_df, manager_budgets_df
 
     result["team_limit_warning"] = result["team_name"].map(team_warning) if "team_name" in result else ""
     result["position_needed"] = result["position"].astype(str).isin([str(pos) for pos in needed_positions])
+    result = add_prediction_confidence(result)
 
     def priority_score(row):
         score = 0
@@ -401,6 +470,7 @@ def enrich_market_decisions_with_context(market_df, squad_df, manager_budgets_df
         "recommendation",
         "buy_type",
         "buy_priority",
+        "prediction_confidence",
         "team_limit_warning",
         "opponent_pressure",
         "opponent_overpay_forecast",
@@ -988,9 +1058,11 @@ def join_current_squad(token, league_id, today_df_results, current_user_id=None,
         "last_season_points",
         "last_season_avg_points",
         "top_player_tag",
+        "prediction_confidence",
         "expected_change_pct",
         "expected_change_pct_3d",
         "expected_change_pct_7d",
+        "sell_advice",
         "is_listed_for_sale",
     ]]
     purchase_prices_found = int(squad_df["purchase_price"].notna().sum())
@@ -1413,6 +1485,7 @@ def join_current_market(token, league_id, today_df_results, current_user_id=None
         "last_season_points",
         "last_season_avg_points",
         "top_player_tag",
+        "prediction_confidence",
         "expected_change_pct",
         "expected_change_pct_3d",
         "expected_change_pct_7d",

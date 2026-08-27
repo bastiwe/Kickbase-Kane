@@ -12,6 +12,8 @@ COLUMN_LABELS = {
     "recommendation": "Action",
     "buy_type": "Kaufart",
     "buy_priority": "Priorität",
+    "prediction_confidence": "Vertrauen",
+    "sell_advice": "Verkaufsampel",
     "team_limit_warning": "Limit",
     "opponent_pressure": "Gegnerdruck",
     "opponent_overpay_forecast": "Erw. Gegner-Overpay",
@@ -78,6 +80,10 @@ DISPLAY_LABELS = {
     "Hoch": "Hoch",
     "Mittel": "Mittel",
     "Niedrig": "Niedrig",
+    "Vor 22 Uhr verkaufen": "Vor 22 verkaufen",
+    "Verkauf prüfen": "Verkauf prüfen",
+    "Kaderkern/Halten": "Kaderkern",
+    "Halten": "Halten",
     "Unklar": "Unklar",
     "Vereinslimit voll": "Limit voll",
     "füllt 3/3": "füllt 3/3",
@@ -126,6 +132,10 @@ BADGE_STYLES = {
     "Hoch": ("#dcfce7", "#166534"),
     "Mittel": ("#fef3c7", "#92400e"),
     "Niedrig": ("#f3f4f6", "#374151"),
+    "Vor 22 Uhr verkaufen": ("#fee2e2", "#991b1b"),
+    "Verkauf prüfen": ("#fef3c7", "#92400e"),
+    "Kaderkern/Halten": ("#dcfce7", "#166534"),
+    "Halten": ("#f3f4f6", "#374151"),
     "Unklar": ("#f3f4f6", "#374151"),
     "Vereinslimit voll": ("#fee2e2", "#991b1b"),
     "füllt 3/3": ("#ffedd5", "#9a3412"),
@@ -323,9 +333,9 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
     def trend_value(value):
         if not isinstance(value, Number) or value != value:
             return "-"
-        if value > 25_000:
+        if value > 0:
             symbol, label, key = "↑", "Erw. 1T höher als Letzte MW", "trend_up"
-        elif value < -25_000:
+        elif value < 0:
             symbol, label, key = "↓", "Erw. 1T niedriger als Letzte MW", "trend_down"
         else:
             symbol, label, key = "→", "Erw. 1T ähnlich wie Letzte MW", "trend_flat"
@@ -420,6 +430,7 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
         tag_badge = badge(row.get("top_player_tag"))
         limit_badge = badge(row.get("team_limit_warning"))
         status_badge = badge(row.get("player_status"))
+        confidence_badge = badge(row.get("prediction_confidence"))
         pressure_badge = badge(row.get("opponent_pressure"))
         opponent_overpay = row.get("opponent_overpay_forecast")
         opponent_overpay_text = (
@@ -440,7 +451,7 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
             f'<div style="font-size:12px;color:#6b7280;font-weight:800;text-transform:uppercase;">{escape(title)}</div>'
             f'<div style="font-size:17px;font-weight:900;color:#111827;margin-top:4px;">{name_html}</div>'
             f'<div style="font-size:12px;color:#6b7280;margin-top:3px;">{position_label(row.get("position"))} · {escape(str(row.get("team_name", "-")))}</div>'
-            f'<div style="margin-top:8px;">{badge(row.get("buy_type"))} {badge(row.get("buy_priority"))} {status_badge} {tag_badge} {limit_badge}</div>'
+            f'<div style="margin-top:8px;">{badge(row.get("buy_type"))} {badge(row.get("buy_priority"))} {confidence_badge} {status_badge} {tag_badge} {limit_badge}</div>'
             '</td></tr></table>'
             '<div style="border-top:1px solid #eef2f7;margin-top:10px;padding-top:9px;">'
             '<table role="presentation" style="border-collapse:collapse;width:100%;font-size:12px;color:#374151;">'
@@ -482,23 +493,31 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
             ("top_player_tag", ""),
             ("starter_rate", 0),
             ("has_open_bid", False),
+            ("prediction_confidence", "Niedrig"),
         ]:
             if col not in candidates:
                 candidates[col] = default
 
+        candidates = candidates[
+            (candidates["predicted_mv_target"].fillna(0) > 0)
+            | candidates["top_player_tag"].fillna("").astype(str).ne("")
+            | candidates["buy_priority"].isin(["Hoch", "Mittel"])
+        ]
         candidates["big_boy_rank"] = candidates["buy_type"].eq("Kader-Kauf") | candidates["top_player_tag"].fillna("").astype(str).ne("")
         candidates["priority_rank"] = candidates["buy_priority"].map({"Hoch": 0, "Mittel": 1, "Niedrig": 2}).fillna(3)
+        candidates["confidence_rank"] = candidates["prediction_confidence"].map({"Hoch": 0, "Mittel": 1, "Niedrig": 2}).fillna(2)
         candidates["open_bid_rank"] = candidates["has_open_bid"].fillna(False).astype(bool).map({True: 0, False: 1})
         candidates = candidates.sort_values(
             [
                 "priority_rank",
+                "confidence_rank",
                 "big_boy_rank",
                 "buy_priority_score",
                 "predicted_mv_target",
                 "expected_change_pct",
                 "open_bid_rank",
             ],
-            ascending=[True, False, False, False, False, True],
+            ascending=[True, True, False, False, False, False, True],
         ).head(3)
         if candidates.empty:
             return ""
@@ -798,7 +817,7 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
         )
 
         for col in result.columns:
-            if col in {"recommendation", "risk", "top_player_tag", "buy_type", "buy_priority", "team_limit_warning", "opponent_pressure", "player_status"}:
+            if col in {"recommendation", "risk", "top_player_tag", "buy_type", "buy_priority", "prediction_confidence", "sell_advice", "team_limit_warning", "opponent_pressure", "player_status"}:
                 result[col] = result[col].map(badge)
             elif col == "mv_trend":
                 result[col] = result[col].map(trend_value)
@@ -918,7 +937,7 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 <b>Kaufart & Priorität:</b>
                 {badge("Kader-Kauf")} meint langfristige Kaderverstärkung, vor allem durch Vorsaisonklasse, hohe LI-Startelfquote oder passende Position.
                 {badge("Trading-Kauf")} ist primär ein Marktwert-Trade.
-                Die Priorität {badge("Hoch")} / {badge("Mittel")} / {badge("Niedrig")} kombiniert Vorsaisonklasse, LI %, mittelfristiges Marktwertsignal und deinen Positionsbedarf.
+                Die Priorität {badge("Hoch")} / {badge("Mittel")} / {badge("Niedrig")} kombiniert Vorsaisonklasse, LI %, interne Marktwertsignale und deinen Positionsbedarf.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Klasse:</b>
@@ -928,7 +947,7 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Max. Gebot:</b>
                 Trading-Käufe bleiben konservativ. Bei {badge("Kader-Kauf")} und besonders bei {badge("Elite-Spieler")}
-                wird mehr vom 1T/3T/7T-Upside eingepreist, danach auf psychologisch sinnvolle Gebotsstufen aufgerundet
+                wird mehr vom kurzfristigen Upside eingepreist, danach auf psychologisch sinnvolle Gebotsstufen aufgerundet
                 und mit kleinem Overbid versehen, um runde Konkurrenzgebote zu schlagen.
                 Kritische Spielerstatus wie {badge("Verletzt")} oder {badge("Reha")} reduzieren Priorität und Max. Gebot deutlich.
             </p>
@@ -943,6 +962,18 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 Kommt aus dem Kickbase-Spielerstatus im Markt- oder Kaderpayload.
                 {badge("Fit")} ist unkritisch; {badge("Angeschlagen")} / {badge("Gelbsperre")} sind Warnsignale;
                 {badge("Verletzt")} / {badge("Reha")} / Sperren werden aus Top-Chance-Kacheln ausgeschlossen.
+            </p>
+            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
+                <b>Vertrauen:</b>
+                {badge("Hoch")} bedeutet: Prognose, letzter MW-Wert, Marktwert und zusätzliche Kontextsignale sind vorhanden.
+                {badge("Mittel")} bedeutet: die 1T-Prognose ist nutzbar, aber die Datenbasis ist dünner.
+                {badge("Niedrig")} bedeutet: fehlende Prognose-/Historienwerte, frischer Kontext oder ein kritischer Status machen die Einschätzung unsicherer.
+            </p>
+            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
+                <b>Verkaufsampel:</b>
+                {badge("Vor 22 Uhr verkaufen")} markiert eigene Spieler mit stark negativer 1T-Prognose vor der Marktwert-Neuberechnung.
+                {badge("Verkauf prüfen")} ist ein mittleres Warnsignal.
+                {badge("Kaderkern/Halten")} schützt positive Prognosen, Topspieler und langfristig wertvolle Kaderspieler vor vorschnellem Verkauf.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Ø Overpay:</b>
