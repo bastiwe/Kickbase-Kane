@@ -348,7 +348,19 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
         )
 
     def position_label(value):
-        return POSITION_LABELS.get(value, POSITION_LABELS.get(str(value), "-"))
+        canonical = canonical_position(value)
+        return POSITION_LABELS.get(canonical, POSITION_LABELS.get(str(canonical), "-"))
+
+    def canonical_position(value):
+        if isinstance(value, Number) and value == value:
+            return int(value)
+        try:
+            numeric = float(str(value).strip())
+            if numeric == numeric:
+                return int(numeric)
+        except (TypeError, ValueError):
+            return value
+        return value
 
     def player_name(row):
         first_name = "" if row.get("first_name") != row.get("first_name") else str(row.get("first_name", ""))
@@ -692,7 +704,7 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 selected_parts = []
                 complete = True
                 for pos, amount in required.items():
-                    position_pool = pool[pool["position"].astype(str) == str(pos)].copy()
+                    position_pool = pool[pool["position"].map(canonical_position) == pos].copy()
                     position_pool = position_pool.sort_values(
                         ["_lineup_score", "last_season_avg_points", "mv"],
                         ascending=[False, False, False],
@@ -734,7 +746,7 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
             if selected is None or selected.empty:
                 return None
             position_scores = (
-                selected.groupby(selected["position"].astype(str))["_lineup_score"]
+                selected.groupby(selected["position"].map(canonical_position))["_lineup_score"]
                 .mean()
                 .sort_values()
             )
@@ -745,7 +757,8 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
         def market_fit_for_position(position):
             if position is None or market_df.empty or "position" not in market_df:
                 return ""
-            candidates = market_df[market_df["position"].astype(str) == str(position)].copy()
+            position_key = canonical_position(position)
+            candidates = market_df[market_df["position"].map(canonical_position) == position_key].copy()
             if candidates.empty:
                 return ""
             if "player_status" in candidates:
@@ -793,7 +806,8 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 f'Erw. 1T {colored_number(candidate.get("predicted_mv_target"), format_number(candidate.get("predicted_mv_target")))}'
             )
 
-        counts = {pos: int((squad_df["position"].astype(str) == str(pos)).sum()) for pos in [1, 2, 3, 4]}
+        squad_positions = squad_df["position"].map(canonical_position)
+        counts = {pos: int((squad_positions == pos).sum()) for pos in [1, 2, 3, 4]}
         possible = []
         missing_by_formation = []
         for name, required in FORMATIONS:
@@ -927,7 +941,7 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
             if "top_player_tag" not in candidates:
                 candidates["top_player_tag"] = ""
             if needed_positions:
-                position_match = candidates["position"].astype(str).isin([str(pos) for pos in needed_positions])
+                position_match = candidates["position"].map(canonical_position).isin(needed_positions)
                 top_player_match = candidates["top_player_tag"].astype(str).ne("")
                 candidates = candidates[position_match | top_player_match]
             candidates["recommendation_rank"] = candidates["recommendation"].map({"Strong buy": 0, "Buy": 1}).fillna(2)
