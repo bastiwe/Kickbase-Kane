@@ -8,11 +8,17 @@ def preprocess_player_data(df):
     
     # 1. Sort and filter
     df = df.sort_values(["player_id", "date"])
-    df = df[     # Keep rows where team_id matches t1 or t2 OR where both t1 and t2 are missing
-        (df["team_id"] == df["t1"]) |
-        (df["team_id"] == df["t2"]) |
-        (df["t1"].isna() & df["t2"].isna())
-    ]
+    # Do not drop rows only because the current team no longer matches the old
+    # match context. Recently transferred players would otherwise lose their
+    # market-value history and disappear from live predictions.
+    stale_team_context = (
+        df["t1"].notna()
+        & df["t2"].notna()
+        & (df["team_id"].astype(str) != df["t1"].astype(str))
+        & (df["team_id"].astype(str) != df["t2"].astype(str))
+    )
+    if stale_team_context.any():
+        print(f"Preprocessing kept {int(stale_team_context.sum())} rows with stale team match context.")
 
     # Convert date columns to datetime
     df["date"] = pd.to_datetime(df["date"])
