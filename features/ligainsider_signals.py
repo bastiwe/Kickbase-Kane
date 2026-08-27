@@ -305,15 +305,12 @@ def parse_bundesliga_starter_rate(text):
         return None
 
     section = before_marker(section, ["LIGA-RANKING", "DATEN POWERED", "NEWS"])
-    rates = re.findall(r"STARTELF:\s*([0-9]+(?:[,.][0-9]+)?)%", section.upper())
-    if not rates:
+    upper_section = section.upper()
+    match = re.search(r"STARTELF\s*:?\s*(?:\n|\r|\s)*([0-9]+(?:[,.][0-9]+)?)\s*%", upper_section)
+    if not match:
         return None
 
-    if "BUNDESLIGA" not in section.upper():
-        return None
-
-    target_index = 1 if len(rates) > 1 else 0
-    return float(rates[target_index].replace(",", "."))
+    return float(match.group(1).replace(",", "."))
 
 
 def resolve_player_signal(player, page_signal, player_rate=None, player_url=None):
@@ -321,7 +318,7 @@ def resolve_player_signal(player, page_signal, player_rate=None, player_url=None
     if player_rate is not None:
         return {
             "starter_rate": player_rate,
-            "lineup_scope": "LI-Bundesliga",
+            "lineup_scope": "LI-Spielerseite",
             "li_status": "Startelfquote",
             "ligainsider_url": player_url,
         }

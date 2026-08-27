@@ -63,6 +63,7 @@ DISPLAY_LABELS = {
     "LI-Startelf": "LI-Startelf",
     "LI-Kader": "LI-Kader",
     "LI-Bundesliga": "LI-Bundesliga",
+    "LI-Spielerseite": "LI-Spielerseite",
     "Startelf": "Startelf",
     "Startelfquote": "Startelfquote",
     "Kader": "Kader",
@@ -115,6 +116,7 @@ BADGE_STYLES = {
     "LI-Startelf": ("#dcfce7", "#166534"),
     "LI-Kader": ("#fef3c7", "#92400e"),
     "LI-Bundesliga": ("#dcfce7", "#166534"),
+    "LI-Spielerseite": ("#dcfce7", "#166534"),
     "Startelf": ("#dcfce7", "#166534"),
     "Startelfquote": ("#dcfce7", "#166534"),
     "Kader": ("#fef3c7", "#92400e"),
@@ -1270,7 +1272,7 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>LI-Signal:</b>
                 LI % kommt ausschließlich aus der öffentlichen LigaInsider-Spielerseite im Bereich Einsatzquote.
-                {badge("LI-Bundesliga")} bedeutet: LI % ist die historische Startelfquote im Bundesliga-Wettbewerb.
+                {badge("LI-Spielerseite")} bedeutet: LI % ist die Startelfquote aus dem Einsatzquote-Block der Spielerseite.
                 Teamseiten-Fallbacks wie {badge("LI-Startelf")} oder {badge("LI-Kader")} setzen keine künstliche Prozentzahl mehr.
                 Das ist eine Historienquote, keine offizielle Kickbase- oder LigaInsider-Prognose für den nächsten Spieltag.
             </p>
