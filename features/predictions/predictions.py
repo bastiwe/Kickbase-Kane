@@ -201,6 +201,10 @@ def live_data_predictions(today_df, models, features, history_df=None, season_st
         "predicted_mv_target_7d",
         "last_season_points",
         "last_season_avg_points",
+        "last_3_points",
+        "current_season_points",
+        "lineup_score",
+        "lineup_score_basis",
         "top_player_tag",
     ]]
 
@@ -208,11 +212,15 @@ def live_data_predictions(today_df, models, features, history_df=None, season_st
 
 
 def add_player_quality_signals(today_df_results, history_df=None, season_start_date=None):
-    """Add last-season quality markers based on deduplicated matchday points."""
+    """Add quality and lineup scoring signals based on deduplicated matchday points."""
 
     result = today_df_results.copy()
     result["last_season_points"] = np.nan
     result["last_season_avg_points"] = np.nan
+    result["last_3_points"] = np.nan
+    result["current_season_points"] = np.nan
+    result["lineup_score"] = np.nan
+    result["lineup_score_basis"] = "Keine Daten"
     result["top_player_tag"] = ""
 
     if history_df is None or history_df.empty or not {"player_id", "md", "p"}.issubset(history_df.columns):
@@ -221,49 +229,103 @@ def add_player_quality_signals(today_df_results, history_df=None, season_start_d
     history = history_df.copy()
     history["md"] = pd.to_datetime(history["md"], errors="coerce")
     history = history.dropna(subset=["player_id", "md", "p"])
-    if season_start_date:
-        season_start = pd.to_datetime(season_start_date)
-        history = history[(history["md"] < season_start) & (history["md"] >= season_start - pd.Timedelta(days=370))]
-
     history = history.sort_values("md").drop_duplicates(["player_id", "md"], keep="last")
     if history.empty:
         return result
 
-    quality = (
-        history.groupby("player_id")
-        .agg(
-            last_season_points=("p", "sum"),
-            last_season_avg_points=("p", "mean"),
-            last_season_games=("p", "count"),
+    current_quality = pd.DataFrame(columns=["player_id", "last_3_points", "current_season_points"])
+    last_season_history = history
+    if season_start_date:
+        season_start = pd.to_datetime(season_start_date)
+        current_history = history[history["md"] >= season_start].copy()
+        last_season_history = history[(history["md"] < season_start) & (history["md"] >= season_start - pd.Timedelta(days=370))]
+
+        if not current_history.empty:
+            current_history = current_history.sort_values(["player_id", "md"])
+            current_history["recent_rank"] = current_history.groupby("player_id")["md"].rank(method="first", ascending=False)
+            current_quality = (
+                current_history.groupby("player_id")
+                .agg(current_season_points=("p", "sum"))
+                .reset_index()
+            )
+            recent_quality = (
+                current_history[current_history["recent_rank"] <= 3]
+                .groupby("player_id")
+                .agg(last_3_points=("p", "sum"))
+                .reset_index()
+            )
+            current_quality = current_quality.merge(recent_quality, on="player_id", how="left")
+
+    if last_season_history.empty:
+        quality = pd.DataFrame(columns=["player_id", "last_season_points", "last_season_avg_points", "top_player_tag"])
+    else:
+        quality = (
+            last_season_history.groupby("player_id")
+            .agg(
+                last_season_points=("p", "sum"),
+                last_season_avg_points=("p", "mean"),
+                last_season_games=("p", "count"),
+            )
+            .reset_index()
         )
-        .reset_index()
-    )
-    quality = quality[quality["last_season_games"] >= 10]
-    if quality.empty:
-        return result
+        quality = quality[quality["last_season_games"] >= 10]
+        if not quality.empty:
+            quality["quality_rank"] = quality["last_season_points"].rank(method="min", ascending=False)
+            enough_players_for_rank = len(quality) >= 50
+            quality["top_player_tag"] = np.select(
+                [
+                    (quality["last_season_points"] >= 3000) | (enough_players_for_rank & (quality["quality_rank"] <= 10)),
+                    (quality["last_season_points"] >= 2200)
+                    | (enough_players_for_rank & (quality["quality_rank"] <= 30))
+                    | ((quality["last_season_avg_points"] >= 110) & (quality["last_season_games"] >= 15)),
+                ],
+                ["Elite-Spieler", "Top-Spieler"],
+                default="",
+            )
+        quality = quality[[
+            "player_id",
+            "last_season_points",
+            "last_season_avg_points",
+            "top_player_tag",
+        ]]
 
-    quality["quality_rank"] = quality["last_season_points"].rank(method="min", ascending=False)
-    enough_players_for_rank = len(quality) >= 50
-    quality["top_player_tag"] = np.select(
-        [
-            (quality["last_season_points"] >= 3000) | (enough_players_for_rank & (quality["quality_rank"] <= 10)),
-            (quality["last_season_points"] >= 2200)
-            | (enough_players_for_rank & (quality["quality_rank"] <= 30))
-            | ((quality["last_season_avg_points"] >= 110) & (quality["last_season_games"] >= 15)),
-        ],
-        ["Elite-Spieler", "Top-Spieler"],
-        default="",
-    )
-
-    quality = quality[[
-        "player_id",
+    result = result.drop(columns=[
         "last_season_points",
         "last_season_avg_points",
+        "last_3_points",
+        "current_season_points",
+        "lineup_score",
+        "lineup_score_basis",
         "top_player_tag",
-    ]]
-    result = result.drop(columns=["last_season_points", "last_season_avg_points", "top_player_tag"])
+    ])
     result = result.merge(quality, on="player_id", how="left")
+    result = result.merge(current_quality, on="player_id", how="left")
     result["top_player_tag"] = result["top_player_tag"].fillna("")
+    result["lineup_score"] = np.select(
+        [
+            result["last_3_points"].notna(),
+            result["current_season_points"].notna(),
+            result["last_season_avg_points"].notna(),
+            result["last_season_points"].notna(),
+        ],
+        [
+            result["last_3_points"],
+            result["current_season_points"],
+            result["last_season_avg_points"],
+            result["last_season_points"],
+        ],
+        default=np.nan,
+    )
+    result["lineup_score_basis"] = np.select(
+        [
+            result["last_3_points"].notna(),
+            result["current_season_points"].notna(),
+            result["last_season_avg_points"].notna(),
+            result["last_season_points"].notna(),
+        ],
+        ["Letzte 3 Spiele", "Aktuelle Saison", "Vorsaison Ø", "Vorsaison gesamt"],
+        default="Keine Daten",
+    )
     return result
 
 
@@ -1057,6 +1119,10 @@ def join_current_squad(token, league_id, today_df_results, current_user_id=None,
         "predicted_mv_target_7d",
         "last_season_points",
         "last_season_avg_points",
+        "last_3_points",
+        "current_season_points",
+        "lineup_score",
+        "lineup_score_basis",
         "top_player_tag",
         "prediction_confidence",
         "expected_change_pct",
@@ -1484,6 +1550,10 @@ def join_current_market(token, league_id, today_df_results, current_user_id=None
         "predicted_mv_target_7d",
         "last_season_points",
         "last_season_avg_points",
+        "last_3_points",
+        "current_season_points",
+        "lineup_score",
+        "lineup_score_basis",
         "top_player_tag",
         "prediction_confidence",
         "expected_change_pct",

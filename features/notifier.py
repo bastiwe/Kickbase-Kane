@@ -647,6 +647,140 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
         if squad_df.empty or "position" not in squad_df:
             return ""
 
+        def numeric_or_none(value):
+            if isinstance(value, Number) and value == value:
+                return float(value)
+            return None
+
+        def has_points(column):
+            return column in squad_df and squad_df[column].apply(lambda value: numeric_or_none(value) is not None).any()
+
+        def score_label(column):
+            return {
+                "last_3_points": "letzte 3 Spiele",
+                "current_season_points": "aktuelle Saison",
+                "last_season_avg_points": "Vorsaison Ø",
+                "last_season_points": "Vorsaison gesamt",
+            }.get(column, "Punktebasis")
+
+        def best_lineup(score_column):
+            if score_column not in squad_df:
+                return None
+
+            pool = squad_df.copy()
+            pool["_lineup_score"] = pool[score_column].apply(lambda value: numeric_or_none(value))
+            for fallback_column in ["last_season_avg_points", "mv"]:
+                if fallback_column not in pool:
+                    pool[fallback_column] = 0
+            if not pool["_lineup_score"].notna().any():
+                return None
+
+            options = []
+            for formation, required in FORMATIONS:
+                selected_parts = []
+                complete = True
+                for pos, amount in required.items():
+                    position_pool = pool[pool["position"].astype(str) == str(pos)].copy()
+                    position_pool = position_pool.sort_values(
+                        ["_lineup_score", "last_season_avg_points", "mv"],
+                        ascending=[False, False, False],
+                    )
+                    if len(position_pool) < amount:
+                        complete = False
+                        break
+                    selected_parts.append(position_pool.head(amount))
+                if not complete:
+                    continue
+
+                selected = pd.concat(selected_parts)
+                total = selected["_lineup_score"].fillna(0).sum()
+                options.append((formation, total, selected))
+
+            if not options:
+                return None
+            return sorted(options, key=lambda item: item[1], reverse=True)[0]
+
+        def lineup_players_html(selected):
+            rows = []
+            for _, row in selected.sort_values(["position", "_lineup_score"], ascending=[True, False]).iterrows():
+                name = escape(player_name(row))
+                url = player_url(row)
+                name_html = (
+                    f'<a href="{escape(url, quote=True)}" target="_blank" style="color:#111827;text-decoration:none;font-weight:700;">{name}</a>'
+                    if url else f'<b>{name}</b>'
+                )
+                rows.append(
+                    '<span style="display:inline-block;background:#ffffff;border:1px solid #e5e7eb;'
+                    'border-radius:6px;padding:5px 7px;margin:3px;font-size:12px;white-space:nowrap;">'
+                    f'{position_label(row.get("position"))} {name_html} '
+                    f'<span style="color:#6b7280;">{format_number(row.get("_lineup_score"))}</span>'
+                    '</span>'
+                )
+            return "".join(rows)
+
+        def weakest_position_from_lineup(selected):
+            if selected is None or selected.empty:
+                return None
+            position_scores = (
+                selected.groupby(selected["position"].astype(str))["_lineup_score"]
+                .mean()
+                .sort_values()
+            )
+            if position_scores.empty:
+                return None
+            return position_scores.index[0]
+
+        def market_fit_for_position(position):
+            if position is None or market_df.empty or "position" not in market_df:
+                return ""
+            candidates = market_df[market_df["position"].astype(str) == str(position)].copy()
+            if candidates.empty:
+                return ""
+            if "player_status" in candidates:
+                healthy_candidates = candidates[
+                    ~candidates["player_status"].isin([
+                        "Verletzt",
+                        "Reha",
+                        "Rotgesperrt",
+                        "Gelb-Rot-Sperre",
+                        "Nicht im Kader",
+                        "Nicht in Liga",
+                        "Abwesend",
+                    ])
+                ]
+                if not healthy_candidates.empty:
+                    candidates = healthy_candidates
+            if "team_limit_warning" in candidates:
+                limit_candidates = candidates[candidates["team_limit_warning"] != "Vereinslimit voll"]
+                if not limit_candidates.empty:
+                    candidates = limit_candidates
+            for col, default in [
+                ("buy_priority_score", 0),
+                ("predicted_mv_target", 0),
+                ("expected_change_pct", 0),
+                ("buy_priority", "Niedrig"),
+                ("prediction_confidence", "Niedrig"),
+            ]:
+                if col not in candidates:
+                    candidates[col] = default
+            candidates["priority_rank"] = candidates["buy_priority"].map({"Hoch": 0, "Mittel": 1, "Niedrig": 2}).fillna(3)
+            candidates["confidence_rank"] = candidates["prediction_confidence"].map({"Hoch": 0, "Mittel": 1, "Niedrig": 2}).fillna(2)
+            candidate = candidates.sort_values(
+                ["priority_rank", "confidence_rank", "buy_priority_score", "predicted_mv_target", "expected_change_pct"],
+                ascending=[True, True, False, False, False],
+            ).iloc[0]
+            name = escape(player_name(candidate))
+            url = player_url(candidate)
+            name_html = (
+                f'<a href="{escape(url, quote=True)}" target="_blank" style="color:#111827;text-decoration:none;font-weight:800;">{name}</a>'
+                if url else f'<b>{name}</b>'
+            )
+            return (
+                f'{name_html} ({position_label(candidate.get("position"))}, {escape(str(candidate.get("team_name", "-")))}) '
+                f'{badge(candidate.get("buy_priority"))} {badge(candidate.get("prediction_confidence"))} '
+                f'Erw. 1T {colored_number(candidate.get("predicted_mv_target"), format_number(candidate.get("predicted_mv_target")))}'
+            )
+
         counts = {pos: int((squad_df["position"].astype(str) == str(pos)).sum()) for pos in [1, 2, 3, 4]}
         possible = []
         missing_by_formation = []
@@ -660,6 +794,53 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
         best_options = sorted(missing_by_formation, key=lambda item: (item[1], item[0]))[:3]
         possible_text = ", ".join(possible) if possible else "noch keine"
         counts_text = " / ".join(f"{POSITION_LABELS[pos]} {counts.get(pos, 0)}" for pos in [1, 2, 3, 4])
+
+        if has_points("last_3_points"):
+            primary_column = "last_3_points"
+            secondary_column = "current_season_points" if has_points("current_season_points") else "last_season_points"
+        elif has_points("current_season_points"):
+            primary_column = "current_season_points"
+            secondary_column = "last_season_points" if has_points("last_season_points") else "last_season_avg_points"
+        elif has_points("last_season_avg_points"):
+            primary_column = "last_season_avg_points"
+            secondary_column = "last_season_points" if has_points("last_season_points") else "last_season_avg_points"
+        else:
+            primary_column = "last_season_points"
+            secondary_column = "last_season_points"
+
+        primary = best_lineup(primary_column)
+        secondary = best_lineup(secondary_column)
+
+        if primary:
+            primary_formation, primary_total, primary_selected = primary
+            weakest_position = weakest_position_from_lineup(primary_selected)
+            primary_html = (
+                '<div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;padding:11px 12px;margin:10px 0;">'
+                '<div style="font-size:12px;color:#6b7280;font-weight:800;text-transform:uppercase;">Beste Elf</div>'
+                f'<div style="font-size:18px;color:#111827;font-weight:900;margin-top:3px;">{escape(primary_formation)} '
+                f'<span style="font-size:13px;color:#6b7280;font-weight:700;">nach {escape(score_label(primary_column))}: {format_number(primary_total)}</span></div>'
+                f'<div style="margin-top:8px;">{lineup_players_html(primary_selected)}</div>'
+                '</div>'
+            )
+        else:
+            weakest_position = None
+            primary_html = (
+                '<div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;padding:11px 12px;margin:10px 0;">'
+                '<b>Beste Elf:</b> Noch keine vollständige Formation mit verwertbaren Punktdaten berechenbar.'
+                '</div>'
+            )
+
+        secondary_html = ""
+        if secondary and secondary_column != primary_column:
+            secondary_formation, secondary_total, secondary_selected = secondary
+            secondary_html = (
+                '<div style="font-size:13px;color:#374151;margin:8px 0 0 0;">'
+                f'<b>Vergleich nach {escape(score_label(secondary_column))}:</b> {escape(secondary_formation)} '
+                f'mit {format_number(secondary_total)} Punkten. '
+                f'<span style="color:#6b7280;">{escape(", ".join(player_name(row) for _, row in secondary_selected.iterrows()))}</span>'
+                '</div>'
+            )
+
         squad_size = len(squad_df)
         squad_slots_left = max(0, 16 - squad_size)
         if squad_size >= 16:
@@ -695,6 +876,15 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
             if pos in needs:
                 needed_positions.append(pos)
 
+        need_position = needed_positions[0] if needed_positions else weakest_position
+        need_label = position_label(need_position) if need_position is not None else "-"
+        if needed_positions:
+            need_reason = "Für die nächstliegende vollständige Formation fehlt dort am ehesten Tiefe."
+        elif need_position is not None:
+            need_reason = "Deine beste Elf ist vollständig; diese Position hat in der berechneten Startelf den niedrigsten Punkteschnitt."
+        else:
+            need_reason = "Aktuell fehlen verwertbare Punktdaten für eine klare Positionsdiagnose."
+
         market_rows = []
         if not market_df.empty and "position" in market_df:
             candidates = market_df.copy()
@@ -725,6 +915,13 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 status = f'<span style="color:#92400e;font-weight:700;">es fehlen {missing_text}</span>'
             option_rows.append(f"<li><b>{name}</b>: {status}</li>")
 
+        market_fit_html = market_fit_for_position(need_position)
+        strengthen_html = (
+            f'<p style="font-size:13px;color:#374151;margin:8px 0 0 0;"><b>Passender Marktspieler:</b> {market_fit_html}</p>'
+            if market_fit_html else
+            '<p style="font-size:13px;color:#6b7280;margin:8px 0 0 0;">Aktuell kein klar passender Marktspieler für diese Position im Report.</p>'
+        )
+
         market_html = (
             '<ul style="margin:8px 0 0 18px;padding:0;font-size:13px;color:#374151;">'
             + "".join(market_rows)
@@ -735,10 +932,12 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
 
         return f"""
             <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin:0 0 24px 0;">
-                <h3 style="color:#1f2933;margin:0 0 10px 0;font-size:16px;">Aufstellungsplaner</h3>
+                <h3 style="color:#1f2933;margin:0 0 10px 0;font-size:16px;">Kaderanalyse</h3>
                 <p style="font-size:13px;color:#4b5563;margin:0 0 8px 0;">
                     Kaderpositionen: <b>{counts_text}</b>. Mögliche Formationen mit aktuellem Kader: <b>{possible_text}</b>.
                 </p>
+                {primary_html}
+                {secondary_html}
                 <p style="font-size:13px;color:#4b5563;margin:0 0 8px 0;">
                     Kadergröße:
                     <span style="display:inline-block;{squad_size_style}font-weight:700;border-radius:999px;padding:4px 9px;white-space:nowrap;">{squad_size}/16</span>
@@ -748,6 +947,8 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 </p>
                 <p style="font-size:13px;color:#374151;margin:0 0 6px 0;"><b>Nächstliegende Formationen:</b></p>
                 <ul style="margin:0 0 10px 18px;padding:0;font-size:13px;color:#374151;">{''.join(option_rows)}</ul>
+                <p style="font-size:13px;color:#374151;margin:0 0 4px 0;"><b>Verstärkungspotenzial:</b> {need_label}. {need_reason}</p>
+                {strengthen_html}
                 <p style="font-size:13px;color:#374151;margin:0 0 4px 0;"><b>Sinnvolle Markt-Ergänzungen:</b></p>
                 {market_html}
             </div>
@@ -812,6 +1013,10 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 "predicted_mv_target_7d",
                 "expected_change_pct_3d",
                 "expected_change_pct_7d",
+                "last_3_points",
+                "current_season_points",
+                "lineup_score",
+                "lineup_score_basis",
             ],
             errors="ignore",
         )
@@ -974,6 +1179,12 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 {badge("Vor 22 Uhr verkaufen")} markiert eigene Spieler mit stark negativer 1T-Prognose vor der Marktwert-Neuberechnung.
                 {badge("Verkauf prüfen")} ist ein mittleres Warnsignal.
                 {badge("Kaderkern/Halten")} schützt positive Prognosen, Topspieler und langfristig wertvolle Kaderspieler vor vorschnellem Verkauf.
+            </p>
+            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
+                <b>Kaderanalyse:</b>
+                Wählt je Formation die punktstärksten passenden Spieler. Priorität der Punktebasis:
+                letzte 3 aktuelle Spiele, aktuelle Saison, danach Vorsaison-Ø bzw. Vorsaison-Gesamtpunkte, falls es noch keine aktuellen Saisonpunkte gibt.
+                Der Verstärkungshinweis nutzt fehlende Formationsteile oder die schwächste Position deiner berechneten besten Elf.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Ø Overpay:</b>
