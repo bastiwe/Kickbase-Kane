@@ -1,5 +1,6 @@
 from kickbase_api.league import get_league_activities, get_league_players_on_market
 from kickbase_api.user import get_players_in_squad, get_username
+from kickbase_api.config import get_cdn_url
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import pandas as pd
@@ -912,6 +913,8 @@ def join_current_squad(token, league_id, today_df_results, current_user_id=None,
     }
 
     squad_df = pd.DataFrame(squad_players["it"])
+    if "i" in squad_df:
+        squad_df["squad_player_id"] = squad_df["i"]
     squad_df["purchase_price"] = extract_purchase_price_column(squad_df)
     if "i" in squad_df:
         fallback_purchase_prices = load_own_purchase_prices_from_activities(token, league_id, league_start_date)
@@ -924,11 +927,30 @@ def join_current_squad(token, league_id, today_df_results, current_user_id=None,
     else:
         squad_df["is_listed_for_sale"] = False
 
-    # Join squad_df ("i") with today_df ("player_id")
+    squad_count_before_join = len(squad_df)
+
+    # Keep every current squad player. Some newly bought players can be missing from
+    # today's prediction rows or use a player id that does not match our historical data.
     squad_df = (
-        pd.merge(today_df_results, squad_df, left_on="player_id", right_on="i")
-        .drop(columns=["i"])
+        pd.merge(
+            squad_df,
+            today_df_results,
+            left_on="i",
+            right_on="player_id",
+            how="left",
+            suffixes=("_squad", ""),
+        )
+        .drop(columns=["i"], errors="ignore")
     )
+    squad_df = hydrate_squad_columns_from_kickbase_payload(squad_df)
+    missing_predictions = squad_df["predicted_mv_target"].isna() if "predicted_mv_target" in squad_df else pd.Series(True, index=squad_df.index)
+    missing_count = int(missing_predictions.sum())
+    if missing_count:
+        missing_names = squad_df.loc[missing_predictions].apply(report_player_name, axis=1).head(8).tolist()
+        print(
+            "Kickbase squad players without prediction match: "
+            f"{missing_count}/{squad_count_before_join} ({', '.join(missing_names)})."
+        )
     squad_df = add_player_status_column(squad_df)
 
     # Rename mv_change_1d to mv_change_yesterday for better understanding
@@ -973,6 +995,90 @@ def join_current_squad(token, league_id, today_df_results, current_user_id=None,
     print(f"Kickbase own transfer listings detected: {int(squad_df['is_listed_for_sale'].sum())}.")
 
     return squad_df 
+
+
+def hydrate_squad_columns_from_kickbase_payload(df):
+    result = df.copy()
+    fallback_columns = {
+        "player_id": ["player_id", "squad_player_id", "player_id_squad", "id", "pi"],
+        "first_name": ["first_name", "first_name_squad", "fn"],
+        "last_name": ["last_name", "last_name_squad", "ln", "n"],
+        "team_name": ["team_name", "team_name_squad", "tn"],
+        "position": ["position", "position_squad", "pos"],
+        "mv": ["mv", "mv_squad", "marketValue", "market_value"],
+    }
+    for target, candidates in fallback_columns.items():
+        result[target] = coalesce_columns(result, candidates)
+
+    if "image_url" not in result or result["image_url"].isna().all():
+        result["image_url"] = coalesce_columns(result, ["image_url", "image_url_squad"])
+    if "pim" in result:
+        image_from_payload = result["pim"].map(lambda value: get_cdn_url(value) if value == value and value else np.nan)
+        result["image_url"] = result["image_url"].fillna(image_from_payload)
+
+    numeric_columns = [
+        "player_id",
+        "position",
+        "mv",
+        "mv_change_1d",
+        "predicted_mv_target",
+        "predicted_mv_target_3d",
+        "predicted_mv_target_7d",
+        "expected_change_pct",
+        "expected_change_pct_3d",
+        "expected_change_pct_7d",
+        "last_season_points",
+        "last_season_avg_points",
+    ]
+    for column in numeric_columns:
+        if column in result:
+            result[column] = pd.to_numeric(result[column], errors="coerce")
+
+    string_defaults = {
+        "first_name": "",
+        "last_name": "",
+        "image_url": "",
+        "team_name": "-",
+        "top_player_tag": "",
+    }
+    for column, default in string_defaults.items():
+        if column not in result:
+            result[column] = default
+
+    return result
+
+
+def coalesce_columns(df, candidates):
+    values = pd.Series(np.nan, index=df.index)
+    for column in candidates:
+        if column in df:
+            values = values.fillna(df[column])
+    return values
+
+
+def report_player_name(row):
+    first_name = first_clean_report_value(row, ["first_name", "fn"])
+    last_name = first_clean_report_value(row, ["last_name", "ln", "n"])
+    return f"{first_name} {last_name}".strip() or str(row.get("player_id") or "Unbekannt")
+
+
+def first_clean_report_value(row, columns):
+    for column in columns:
+        value = clean_report_value(row.get(column))
+        if value:
+            return value
+    return ""
+
+
+def clean_report_value(value):
+    if value is None:
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    return str(value)
 
 
 def extract_purchase_price_column(squad_df):
