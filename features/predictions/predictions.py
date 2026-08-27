@@ -268,15 +268,17 @@ def add_player_quality_signals(today_df_results, history_df=None, season_start_d
             )
             .reset_index()
         )
-        quality = quality[quality["last_season_games"] >= 10]
+        quality = quality[quality["last_season_games"] >= 1]
         if not quality.empty:
             quality["quality_rank"] = quality["last_season_points"].rank(method="min", ascending=False)
-            enough_players_for_rank = len(quality) >= 50
+            rankable_quality = quality["last_season_games"] >= 10
+            enough_players_for_rank = int(rankable_quality.sum()) >= 50
             quality["top_player_tag"] = np.select(
                 [
-                    (quality["last_season_points"] >= 3000) | (enough_players_for_rank & (quality["quality_rank"] <= 10)),
-                    (quality["last_season_points"] >= 2200)
-                    | (enough_players_for_rank & (quality["quality_rank"] <= 30))
+                    ((quality["last_season_games"] >= 10) & (quality["last_season_points"] >= 3000))
+                    | (enough_players_for_rank & rankable_quality & (quality["quality_rank"] <= 10)),
+                    ((quality["last_season_games"] >= 10) & (quality["last_season_points"] >= 2200))
+                    | (enough_players_for_rank & rankable_quality & (quality["quality_rank"] <= 30))
                     | ((quality["last_season_avg_points"] >= 110) & (quality["last_season_games"] >= 15)),
                 ],
                 ["Elite-Spieler", "Top-Spieler"],
@@ -1170,6 +1172,9 @@ def hydrate_squad_columns_from_kickbase_payload(df):
         "expected_change_pct_7d",
         "last_season_points",
         "last_season_avg_points",
+        "last_3_points",
+        "current_season_points",
+        "lineup_score",
     ]
     for column in numeric_columns:
         if column in result:
@@ -1273,6 +1278,10 @@ def fill_missing_squad_predictions_by_full_name(squad_df, today_df_results):
         "predicted_mv_target_7d",
         "last_season_points",
         "last_season_avg_points",
+        "last_3_points",
+        "current_season_points",
+        "lineup_score",
+        "lineup_score_basis",
         "top_player_tag",
     ]
 
