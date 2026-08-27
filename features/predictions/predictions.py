@@ -943,6 +943,7 @@ def join_current_squad(token, league_id, today_df_results, current_user_id=None,
         .drop(columns=["i"], errors="ignore")
     )
     squad_df = hydrate_squad_columns_from_kickbase_payload(squad_df)
+    squad_df = fill_missing_squad_predictions_by_full_name(squad_df, today_df_results)
     missing_predictions = squad_df["predicted_mv_target"].isna() if "predicted_mv_target" in squad_df else pd.Series(True, index=squad_df.index)
     missing_count = int(missing_predictions.sum())
     if missing_count:
@@ -1003,9 +1004,9 @@ def hydrate_squad_columns_from_kickbase_payload(df):
         "player_id": ["player_id", "squad_player_id", "player_id_squad", "id", "pi"],
         "first_name": ["first_name", "first_name_squad", "fn"],
         "last_name": ["last_name", "last_name_squad", "ln", "n"],
-        "team_name": ["team_name", "team_name_squad", "tn"],
+        "team_name": ["team_name", "team_name_squad", "tn", "teamName", "clubName", "team"],
         "position": ["position", "position_squad", "pos"],
-        "mv": ["mv", "mv_squad", "marketValue", "market_value"],
+        "mv": ["mv", "mv_squad", "marketValue", "market_value", "market_value_squad", "mvo", "marketValueOld"],
     }
     for target, candidates in fallback_columns.items():
         result[target] = coalesce_columns(result, candidates)
@@ -1046,6 +1047,75 @@ def hydrate_squad_columns_from_kickbase_payload(df):
             result[column] = default
 
     return result
+
+
+def fill_missing_squad_predictions_by_full_name(squad_df, today_df_results):
+    if squad_df.empty or today_df_results is None or today_df_results.empty:
+        return squad_df
+
+    if "predicted_mv_target" not in squad_df:
+        squad_df["predicted_mv_target"] = np.nan
+
+    missing_mask = squad_df["predicted_mv_target"].isna()
+    if not missing_mask.any():
+        return squad_df
+
+    predictions = today_df_results.copy()
+    predictions["_full_name_key"] = predictions.apply(
+        lambda row: player_full_name_key(row.get("first_name"), row.get("last_name")),
+        axis=1,
+    )
+    prediction_counts = predictions["_full_name_key"].value_counts()
+    predictions = predictions[
+        predictions["_full_name_key"].ne("")
+        & predictions["_full_name_key"].map(prediction_counts).eq(1)
+    ].drop_duplicates("_full_name_key", keep="last")
+    if predictions.empty:
+        return squad_df
+
+    prediction_by_name = predictions.set_index("_full_name_key")
+    prediction_columns = [
+        "first_name",
+        "last_name",
+        "image_url",
+        "position",
+        "team_name",
+        "date",
+        "mv_change_1d",
+        "mv_trend_1d",
+        "mv",
+        "predicted_mv_target",
+        "predicted_mv_target_3d",
+        "predicted_mv_target_7d",
+        "last_season_points",
+        "last_season_avg_points",
+        "top_player_tag",
+    ]
+
+    matched = 0
+    for index in squad_df[missing_mask].index:
+        key = player_full_name_key(squad_df.at[index, "first_name"], squad_df.at[index, "last_name"])
+        if not key or key not in prediction_by_name.index:
+            continue
+        prediction = prediction_by_name.loc[key]
+        for column in prediction_columns:
+            if column in prediction:
+                squad_df.at[index, column] = prediction[column]
+        matched += 1
+
+    if matched:
+        print(f"Kickbase squad prediction name fallback matched: {matched}.")
+    return squad_df
+
+
+def player_full_name_key(first_name, last_name):
+    return normalize_text_key(f"{clean_report_value(first_name)} {clean_report_value(last_name)}")
+
+
+def normalize_text_key(value):
+    return " ".join(
+        "".join(char.lower() if char.isalnum() else " " for char in str(value).replace("ß", "ss")).split()
+    )
 
 
 def coalesce_columns(df, candidates):
