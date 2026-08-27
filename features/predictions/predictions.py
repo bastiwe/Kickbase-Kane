@@ -1045,6 +1045,8 @@ def hydrate_squad_columns_from_kickbase_payload(df):
     for column, default in string_defaults.items():
         if column not in result:
             result[column] = default
+        else:
+            result[column] = result[column].fillna(default)
 
     return result
 
@@ -1056,24 +1058,6 @@ def fill_missing_squad_predictions_by_full_name(squad_df, today_df_results):
     if "predicted_mv_target" not in squad_df:
         squad_df["predicted_mv_target"] = np.nan
 
-    missing_mask = squad_df["predicted_mv_target"].isna()
-    if not missing_mask.any():
-        return squad_df
-
-    predictions = today_df_results.copy()
-    predictions["_full_name_key"] = predictions.apply(
-        lambda row: player_full_name_key(row.get("first_name"), row.get("last_name")),
-        axis=1,
-    )
-    prediction_counts = predictions["_full_name_key"].value_counts()
-    predictions = predictions[
-        predictions["_full_name_key"].ne("")
-        & predictions["_full_name_key"].map(prediction_counts).eq(1)
-    ].drop_duplicates("_full_name_key", keep="last")
-    if predictions.empty:
-        return squad_df
-
-    prediction_by_name = predictions.set_index("_full_name_key")
     prediction_columns = [
         "first_name",
         "last_name",
@@ -1092,6 +1076,25 @@ def fill_missing_squad_predictions_by_full_name(squad_df, today_df_results):
         "top_player_tag",
     ]
 
+    missing_mask = squad_df["predicted_mv_target"].isna()
+    if not missing_mask.any():
+        return squad_df
+
+    predictions = today_df_results.copy()
+    predictions["_full_name_key"] = predictions.apply(
+        lambda row: player_full_name_key(row.get("first_name"), row.get("last_name")),
+        axis=1,
+    )
+    prediction_counts = predictions["_full_name_key"].value_counts()
+    predictions = predictions[
+        predictions["_full_name_key"].ne("")
+        & predictions["_full_name_key"].map(prediction_counts).eq(1)
+    ].drop_duplicates("_full_name_key", keep="last")
+    if predictions.empty:
+        return fill_missing_squad_predictions_by_identity(squad_df, today_df_results, prediction_columns)
+
+    prediction_by_name = predictions.set_index("_full_name_key")
+
     matched = 0
     for index in squad_df[missing_mask].index:
         key = player_full_name_key(squad_df.at[index, "first_name"], squad_df.at[index, "last_name"])
@@ -1105,6 +1108,49 @@ def fill_missing_squad_predictions_by_full_name(squad_df, today_df_results):
 
     if matched:
         print(f"Kickbase squad prediction name fallback matched: {matched}.")
+    return fill_missing_squad_predictions_by_identity(squad_df, today_df_results, prediction_columns)
+
+
+def fill_missing_squad_predictions_by_identity(squad_df, today_df_results, prediction_columns):
+    missing_mask = squad_df["predicted_mv_target"].isna()
+    if not missing_mask.any():
+        return squad_df
+
+    predictions = today_df_results.copy()
+    predictions["_last_name_key"] = predictions["last_name"].map(normalize_text_key) if "last_name" in predictions else ""
+    predictions["_position_key"] = pd.to_numeric(predictions.get("position"), errors="coerce")
+    predictions["_mv_key"] = pd.to_numeric(predictions.get("mv"), errors="coerce")
+
+    matched = 0
+    for index in squad_df[missing_mask].index:
+        last_name_key = normalize_text_key(squad_df.at[index, "last_name"])
+        position = numeric_value(squad_df.at[index, "position"])
+        market_value = numeric_value(squad_df.at[index, "mv"])
+        if not last_name_key or position is None or market_value is None:
+            continue
+
+        candidates = predictions[
+            predictions["_last_name_key"].eq(last_name_key)
+            & predictions["_position_key"].eq(position)
+            & predictions["_mv_key"].notna()
+        ].copy()
+        if candidates.empty:
+            continue
+
+        candidates["_mv_distance"] = (candidates["_mv_key"] - market_value).abs()
+        max_distance = max(150_000, market_value * 0.03)
+        candidates = candidates[candidates["_mv_distance"] <= max_distance].sort_values("_mv_distance")
+        if len(candidates) != 1:
+            continue
+
+        prediction = candidates.iloc[0]
+        for column in prediction_columns:
+            if column in prediction:
+                squad_df.at[index, column] = prediction[column]
+        matched += 1
+
+    if matched:
+        print(f"Kickbase squad prediction identity fallback matched: {matched}.")
     return squad_df
 
 
