@@ -119,7 +119,7 @@ live_predictions_df = live_data_predictions(today_df, models, features, proc_pla
 market_recommendations_df = join_current_market(token, league_id, live_predictions_df, current_user_id)
 
 # Join with current players on the team
-squad_recommendations_df = join_current_squad(token, league_id, live_predictions_df, current_user_id, league_start_date)
+squad_recommendations_df = join_current_squad(token, league_id, live_predictions_df, current_user_id, league_start_date, competition_ids[0])
 
 market_recommendations_df, squad_recommendations_df = enrich_reports_with_ligainsider_signals(
     market_recommendations_df,

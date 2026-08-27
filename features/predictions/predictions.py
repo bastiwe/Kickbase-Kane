@@ -1,6 +1,7 @@
 from kickbase_api.league import get_league_activities, get_league_players_on_market
 from kickbase_api.user import get_players_in_squad, get_username
 from kickbase_api.config import get_cdn_url
+from kickbase_api.player import get_player_info
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import pandas as pd
@@ -903,7 +904,7 @@ def format_short_money(value):
     return f"{value / 1_000:.0f}k"
 
 
-def join_current_squad(token, league_id, today_df_results, current_user_id=None, league_start_date=None):
+def join_current_squad(token, league_id, today_df_results, current_user_id=None, league_start_date=None, competition_id=1):
     squad_players = get_players_in_squad(token, league_id)
     players_on_market = get_league_players_on_market(token, league_id, current_user_id)
     listed_player_ids = {
@@ -943,6 +944,7 @@ def join_current_squad(token, league_id, today_df_results, current_user_id=None,
         .drop(columns=["i"], errors="ignore")
     )
     squad_df = hydrate_squad_columns_from_kickbase_payload(squad_df)
+    squad_df = hydrate_missing_squad_details(token, competition_id, squad_df)
     squad_df = fill_missing_squad_predictions_by_full_name(squad_df, today_df_results)
     missing_predictions = squad_df["predicted_mv_target"].isna() if "predicted_mv_target" in squad_df else pd.Series(True, index=squad_df.index)
     missing_count = int(missing_predictions.sum())
@@ -1049,6 +1051,66 @@ def hydrate_squad_columns_from_kickbase_payload(df):
             result[column] = result[column].fillna(default)
 
     return result
+
+
+def hydrate_missing_squad_details(token, competition_id, squad_df):
+    if squad_df.empty or "player_id" not in squad_df:
+        return squad_df
+
+    result = squad_df.copy()
+    detail_rows = result[result.apply(needs_player_detail_hydration, axis=1)]
+    if detail_rows.empty:
+        return result
+
+    enriched = 0
+    failed = 0
+    for index, row in detail_rows.iterrows():
+        player_id = numeric_value(row.get("player_id"))
+        if player_id is None:
+            continue
+        try:
+            info = get_player_info(token, competition_id, int(player_id))
+        except Exception as exc:
+            failed += 1
+            print(f"Warning: Could not fetch squad player details for {report_player_name(row)} ({int(player_id)}): {exc}")
+            continue
+
+        fill_missing_value(result, index, "first_name", info.get("first_name"))
+        fill_missing_value(result, index, "last_name", info.get("last_name"))
+        fill_missing_value(result, index, "team_name", info.get("team_name"))
+        fill_missing_value(result, index, "position", info.get("position"))
+        fill_missing_value(result, index, "image_url", info.get("image_url"))
+        enriched += 1
+
+    if enriched or failed:
+        print(f"Kickbase squad detail fallback: {enriched} enriched, {failed} failed.")
+    return result
+
+
+def needs_player_detail_hydration(row):
+    return (
+        is_missing_display_value(row.get("first_name"))
+        or is_missing_display_value(row.get("team_name"))
+        or is_missing_display_value(row.get("last_name"))
+    )
+
+
+def fill_missing_value(df, index, column, value):
+    if value is None:
+        return
+    if column not in df or is_missing_display_value(df.at[index, column]):
+        df.at[index, column] = value
+
+
+def is_missing_display_value(value):
+    if value is None:
+        return True
+    try:
+        if pd.isna(value):
+            return True
+    except (TypeError, ValueError):
+        pass
+    return str(value).strip() in {"", "-", "nan", "NaN", "None"}
 
 
 def fill_missing_squad_predictions_by_full_name(squad_df, today_df_results):

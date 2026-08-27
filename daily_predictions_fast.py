@@ -68,7 +68,7 @@ live_predictions_df = live_data_predictions(
 )
 
 market_df = join_current_market(token, league_id, live_predictions_df, current_user_id)
-squad_df = join_current_squad(token, league_id, live_predictions_df, current_user_id, league_start_date)
+squad_df = join_current_squad(token, league_id, live_predictions_df, current_user_id, league_start_date, competition_ids[0])
 
 market_count_before_filter = len(market_df)
 market_df = market_df[market_df["predicted_mv_target"].fillna(0) > min_market_prediction].copy()
