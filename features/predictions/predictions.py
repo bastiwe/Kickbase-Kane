@@ -1500,9 +1500,25 @@ def join_current_market(token, league_id, today_df_results, current_user_id=None
     """Join the live predictions with the current market data to get bid recommendations"""
 
     players_on_market = get_league_players_on_market(token, league_id, current_user_id)
+    own_squad_ids = set()
+    try:
+        squad_payload = get_players_in_squad(token, league_id)
+        own_squad_ids = {
+            str(player.get("i"))
+            for player in squad_payload.get("it", [])
+            if player.get("i") is not None
+        }
+    except Exception as exc:
+        print(f"Warning: Could not fetch own squad for market exclusion: {exc}")
 
     # players_on_market to DataFrame
     market_df = pd.DataFrame(players_on_market)
+    own_listing_count = int(market_df.get("is_own_listing", pd.Series(False, index=market_df.index)).fillna(False).astype(bool).sum())
+    own_squad_market_count = int(market_df["id"].astype(str).isin(own_squad_ids).sum()) if "id" in market_df else 0
+    if own_listing_count or own_squad_market_count:
+        own_listing_mask = market_df.get("is_own_listing", pd.Series(False, index=market_df.index)).fillna(False).astype(bool)
+        own_squad_mask = market_df["id"].astype(str).isin(own_squad_ids) if "id" in market_df else pd.Series(False, index=market_df.index)
+        market_df = market_df[~(own_listing_mask | own_squad_mask)].copy()
 
     # Join market_df ("id") with today_df ("player_id")
     bid_df = (
@@ -1575,6 +1591,7 @@ def join_current_market(token, league_id, today_df_results, current_user_id=None
     ]]
     print(
         f"Kickbase own open bids detected: {own_open_bids_total} total, "
+        f"{own_listing_count} own listings and {own_squad_market_count} own squad players excluded, "
         "final market recommendations are filtered after squad and LigaInsider context."
     )
 
