@@ -1373,6 +1373,11 @@ def attach_file(msg, attachment_path):
     if not attachment_path:
         return
 
+    if isinstance(attachment_path, (list, tuple)):
+        for path in attachment_path:
+            attach_file(msg, path)
+        return
+
     path = Path(attachment_path)
     if not path.exists():
         print(f"\nWarning: Email attachment not found, skipping: {path}")

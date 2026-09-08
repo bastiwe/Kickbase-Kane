@@ -79,6 +79,13 @@ jobs:
           name: overpay-forecast-tool
           path: overpay_forecast.html
 
+      - name: Upload lineup optimizer
+        if: steps.berlin-time.outputs.run == 'true' && hashFiles('startelf_optimizer.html') != ''
+        uses: actions/upload-artifact@v6
+        with:
+          name: startelf-optimizer
+          path: startelf_optimizer.html
+
       - name: Save player data cache
         if: steps.berlin-time.outputs.run == 'true' && hashFiles('player_data_total.db') != ''
         uses: actions/cache/save@v5

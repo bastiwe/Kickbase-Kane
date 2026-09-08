@@ -68,3 +68,31 @@
   <li>Overpay calculator, based on budget and more</li>
   <li>Improve the notifier; using email is not optimal</li>
 </ul>
+# Startelf-Optimierer
+
+Der Workflow **Run Daily Predictions Spaet** erstellt zusätzlich
+`startelf_optimizer.html`. Die Datei wird als Mail-Anhang und als GitHub-Artefakt
+**startelf-optimizer** bereitgestellt. Sie enthält einen privaten Datenstand
+deines Kaders und deiner erkannten offenen Gebote. Im Browser lassen sich zehn
+Formationen vergleichen, Spieler wechseln, Käufe und Verkäufe planen und das
+Endbudget kontrollieren. Die Datei führt keine Aktionen in Kickbase aus.
+
+Das Endbudget entspricht Cash minus eingeplanten Geboten plus geplanten
+Verkaufserlösen. Bankspieler werden nur mit aktivierter Option „Bank verkaufen“
+als Verkauf gerechnet. Fehlende Gebotspreise müssen ergänzt werden. Das
+16-Spieler-Limit und das einstellbare Vereinslimit gelten für den gesamten
+verbleibenden Kader. Die historische Punktwertung berücksichtigt keine
+Budgetbeschränkung bei der automatischen Auswahl der besten Elf.
+
+L3 und Saison verwenden abgeschlossene, eindeutige Spieltage der aktuellen
+Saison (ab 1. Juli), mit Vorsaison-Fallback. Null Punkte sind ein gültiger Wert.
+Die angezeigte Basis ermöglicht die Einordnung gemischter Datenstände.
+Gegner und Einzel-Spieltagspunkte erscheinen nur, wenn die Daten vorliegen.
+Lokale Speicherung sowie JSON-Export und -Import erlauben mehrere Planszenarien.
+Mail- und iPhone-Dateivorschauen können JavaScript deaktivieren; für die
+interaktive Ansicht ist ein Browser erforderlich.
+
+Prüfung: `python -m unittest discover -s tests -p 'test_lineup_optimizer.py'`.
+Die Browserprüfung `node tests/optimizer_browser.cjs` benötigt Playwright und
+Edge (alternativ `BROWSER_CHANNEL=chrome`). Sie erzeugt ausschließlich
+Testdaten unter dem ignorierten Verzeichnis `test-output`.

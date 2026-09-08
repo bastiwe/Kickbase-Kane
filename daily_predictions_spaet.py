@@ -11,6 +11,7 @@ from kickbase_api.league import get_league_id
 from kickbase_api.user import get_user_id, login
 from features.notifier import send_mail
 from features.overpay_tool import write_overpay_tool
+from features.lineup_optimizer import write_lineup_optimizer
 from features.predictions.data_handler import (
     create_player_data_table,
     check_if_data_reload_needed,
@@ -140,6 +141,15 @@ print("\n=== Squad Recommendations ===")
 display(squad_recommendations_df)
 
 overpay_tool_path = write_overpay_tool(market_recommendations_df, manager_budgets_df)
+optimizer_path = None
+try:
+    optimizer_path = write_lineup_optimizer(
+        token, league_id, current_user_id, squad_recommendations_df, live_predictions_df,
+        history_df=player_df,
+    )
+except Exception as exc:
+    print(f"Warning: Startelf optimizer could not be generated: {exc}")
 
 # Send email with recommendations
-send_mail(manager_budgets_df, market_recommendations_df, squad_recommendations_df, email, overpay_tool_path)
+send_mail(manager_budgets_df, market_recommendations_df, squad_recommendations_df, email,
+          [overpay_tool_path, optimizer_path])

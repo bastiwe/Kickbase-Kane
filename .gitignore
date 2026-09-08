@@ -3,3 +3,7 @@ __pycache__
 .venv
 model_backtest_summary.json
 player_data_total.db
+.testdeps/
+test-output/
+startelf_optimizer.html
+overpay_forecast.html
