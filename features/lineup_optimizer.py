@@ -55,7 +55,8 @@ def own_bid_amount(item, user_id):
 
 def write_lineup_optimizer(token, league_id, user_id, squad_df, predictions_df,
                            output_path='startelf_optimizer.html', history_df=None,
-                           refresh_missing_history=False, competition_id=1, history_note=None):
+                           refresh_missing_history=False, competition_id=1, history_note=None,
+                           forecast_snapshot=None):
     squad = get_players_in_squad(token, league_id).get('it', [])
     market = get_json_with_token(f'{BASE_URL}/leagues/{league_id}/market', token).get('it', [])
     predictions = {str(row['player_id']): row for row in predictions_df.to_dict('records')}
@@ -105,14 +106,36 @@ def write_lineup_optimizer(token, league_id, user_id, squad_df, predictions_df,
             'l3': None, 'season': None,
             'average': number(row.get('last_season_avg_points')),
             'li': number(row.get('starter_rate')),
-            'change': number(row.get('predicted_mv_target')),
+            'change': number((forecast_snapshot or {}).get('predictions', {}).get(player_id)),
         })
         if player_history is not None and not player_history.empty:
             players[-1].update(history_context(player_history, player_id))
     payload = {'players': players, 'budget': number(get_budget(token, league_id)),
                'league': str(league_id), 'user': str(user_id), 'historyNote': history_note,
+               'forecast': {key: forecast_snapshot.get(key) for key in ('generatedAt', 'source')}
+               if forecast_snapshot else None,
+               'forecastHorizon': forecast_horizon(history_df),
                'generated': datetime.now(ZoneInfo('Europe/Berlin')).strftime('%d.%m.%Y %H:%M')}
     return render_optimizer(payload, output_path)
+
+
+def forecast_horizon(history, now=None):
+    """Count 22:00 updates strictly before the next cached fixture date.
+
+    The database stores dates, not kickoff times, so the fixture day's update
+    is excluded rather than assuming a kickoff time.
+    """
+    if history is None or history.empty or not {'md', 'p'}.issubset(history.columns):
+        return None
+    now = now or datetime.now(ZoneInfo('Europe/Berlin'))
+    now = now.astimezone(ZoneInfo('Europe/Berlin'))
+    dates = pd.to_datetime(history['md'], errors='coerce', utc=True).dt.tz_localize(None)
+    future = dates[(dates >= pd.Timestamp(now.date())) & pd.to_numeric(history['p'], errors='coerce').isna()]
+    if future.empty:
+        return None
+    next_date = future.min().date()
+    updates = max(0, (next_date - now.date()).days - (1 if now.hour >= 22 else 0))
+    return {'date': next_date.isoformat(), 'updates': updates}
 
 
 def history_context(history, player_id):

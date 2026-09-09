@@ -1,4 +1,5 @@
 from features.fast_notifier import send_fast_mail
+from features.predictions.snapshot import write_prediction_snapshot
 from features.predictions.data_handler import (
     check_if_data_reload_needed,
     create_player_data_table,
@@ -66,6 +67,8 @@ live_predictions_df = live_data_predictions(
     features,
     None,
 )
+
+write_prediction_snapshot(live_predictions_df, 'Fast 1T', competition_ids[0])
 
 market_df = join_current_market(token, league_id, live_predictions_df, current_user_id)
 squad_df = join_current_squad(token, league_id, live_predictions_df, current_user_id, league_start_date, competition_ids[0])

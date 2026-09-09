@@ -83,6 +83,19 @@ Bei einem Mailfehler bleibt die erzeugte Datei ebenfalls als Artefakt verfügbar
 Lokal: `pip install -r requirements-optimizer.txt`, dann
 `python startelf_optimizer.py` mit den Zugangsdaten in `.env`.
 
+Die Bank zeigt gespeicherte 1T-Marktwertprognosen aus **Fast 1T** oder **Spaet**.
+Nach dem Update muss mindestens eine dieser Prognose-Actions einmal laufen,
+damit der gemeinsame Cache `prediction_snapshot_1t.json` angelegt wird. Die
+Optimizer-Action liest ausschließlich diesen Cache und trainiert kein Modell.
+Prognosestand und Quelle stehen unter der Bankliste; fehlende Werte werden
+ausgewiesen, Summen gegebenenfalls als Teilsumme gekennzeichnet.
+Die Summen gelten für alle nicht aufgestellten eigenen Spieler und eingeplanten
+Gebote, unabhängig vom Suchfilter und vor simulierten Bankverkäufen.
+Die Summe bis zum nächsten im Daten-Cache enthaltenen Spieltermin ist eine
+lineare Hochrechnung: 1T-Summe mal Anzahl verbleibender 22-Uhr-Updates vor dem
+Spieltagsdatum. Das Update am Spieltag selbst wird mangels Anstoßzeit nicht
+mitgezählt. Dies ist keine neu berechnete Mehrtagesprognose.
+
 Der Workflow **Run Daily Predictions Spaet** erstellt zusätzlich
 `startelf_optimizer.html`. Die Datei wird als Mail-Anhang und als GitHub-Artefakt
 **startelf-optimizer** bereitgestellt. Sie enthält einen privaten Datenstand

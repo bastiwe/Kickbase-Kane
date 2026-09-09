@@ -86,6 +86,13 @@ jobs:
           name: startelf-optimizer
           path: startelf_optimizer.html
 
+      - name: Save completed 1T forecasts
+        if: ${{ !cancelled() && steps.berlin-time.outputs.run == 'true' && hashFiles('prediction_snapshot_1t.json') != '' }}
+        uses: actions/cache/save@v5
+        with:
+          path: prediction_snapshot_1t.json
+          key: ${{ runner.os }}-kickbase-1t-forecast-${{ github.run_id }}-${{ github.run_attempt }}
+
       - name: Save player data cache
         if: steps.berlin-time.outputs.run == 'true' && hashFiles('player_data_total.db') != ''
         uses: actions/cache/save@v5

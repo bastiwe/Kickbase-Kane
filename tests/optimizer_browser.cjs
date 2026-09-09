@@ -6,18 +6,31 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 
 (async()=>{
  const players=Array.from({length:20},(_,i)=>({id:String(i),name:'Testspieler '+i,owned:i<16,position:i<2?1:i<8?2:i<15?3:4,team:'Verein '+i%8,teamId:String(i%8),mv:1000000,bid:1200000,image:'',status:'Fit',l3:100+i,season:200+i,previous:1000,average:80,recent:[30,40,50],li:null}));
- const payload={players,budget:5000000,league:'test',user:'test',generated:'TESTDATEN'};
+ players.forEach((p,i)=>{p.change=i===0?null:i%2?-50000:100000;});
+ const payload={players,budget:5000000,league:'test',user:'test',generated:'TESTDATEN',forecast:{generatedAt:'2026-09-09T12:00:00+02:00',source:'Fast 1T'},forecastHorizon:{date:'2026-09-11',updates:2}};
  const html=fs.readFileSync('features/lineup_optimizer.html','utf8').replace('__PAYLOAD__',JSON.stringify(payload));
  fs.mkdirSync('test-output',{recursive:true});fs.writeFileSync('test-output/optimizer-test.html',html);
  const browser=await chromium.launch({headless:true,channel:process.env.BROWSER_CHANNEL||'msedge'});const page=await browser.newPage({viewport:{width:1600,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto(pathToFileURL(path.resolve('test-output/optimizer-test.html')).href);
  assert.equal(await page.locator('[data-formation]').count(),10);
  assert.equal(await page.locator('.pitch .player').count(),11);
+ async function checkBankForecast(){
+  const expected=await page.evaluate(()=>{
+   const bank=players.filter(p=>!state.selection.includes(p.id)&&(p.owned||state.plans[p.id].action==='buy'));
+   const sum=bank.reduce((s,p)=>s+(p.change??0),0);
+   return [changeMoney(sum),changeMoney(sum*2)];
+  });
+  assert.deepEqual(await page.locator('#bank-forecast strong').allTextContents(),expected);
+ }
+ await checkBankForecast();
+ assert.match(await page.locator('#bank-forecast').textContent(),/Teilsumme/);
+ await page.locator('#search').fill('nonexistent');await checkBankForecast();await page.locator('#search').fill('');
 
  assert.match(await page.locator('#endbudget').textContent(),/5.000.000/);
  assert.match(await page.locator('[data-formation="4-4-2"]').getAttribute('class'),/incomplete/);
  await page.locator('#planbids').check();
  await page.locator('#best').click();
+ await checkBankForecast();
  assert.match(await page.locator('#endbudget').textContent(),/200.000/);
  assert.doesNotMatch(await page.locator('[data-formation="4-4-2"]').getAttribute('class'),/incomplete|overbudget/);
  await page.locator('#budget').fill('-1000000');await page.locator('#budget').dispatchEvent('change');
@@ -31,6 +44,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
  await page.locator('#roster [data-player="'+defender+'"]').dragTo(page.locator('[data-slot="1"]'));
  assert.equal(await page.evaluate(()=>state.selection[1]),defender);
  assert.equal(await page.locator('#roster [data-player="'+replaced+'"]').count(),1);
+ await checkBankForecast();
  // A goalkeeper cannot be dropped onto a midfield slot.
  const keeper=await page.evaluate(()=>players.find(p=>p.position===1&&!state.selection.includes(p.id)).id);
  const unchanged=await page.evaluate(()=>[...state.selection]);

@@ -11,6 +11,7 @@ import pandas as pd
 from dotenv import load_dotenv
 
 from features.lineup_optimizer import write_lineup_optimizer
+from features.predictions.snapshot import read_prediction_snapshot
 from kickbase_api.league import get_league_id
 from kickbase_api.user import get_user_id, login
 
@@ -77,6 +78,7 @@ def main():
     path = write_lineup_optimizer(
         token, league_id, user_id, pd.DataFrame(), latest, history_df=history,
         refresh_missing_history=True, history_note=note,
+        forecast_snapshot=read_prediction_snapshot(),
     )
     send_optimizer_mail(path)
 

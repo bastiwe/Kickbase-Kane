@@ -29,6 +29,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-kickbase-player-data-
 
+      - name: Restore completed 1T forecasts
+        uses: actions/cache/restore@v5
+        with:
+          path: prediction_snapshot_1t.json
+          key: ${{ runner.os }}-kickbase-1t-forecast-read-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-kickbase-1t-forecast-
+
       - name: Install optimizer dependencies
         run: python -m pip install -r requirements-optimizer.txt
 

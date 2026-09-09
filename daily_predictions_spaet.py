@@ -12,6 +12,7 @@ from kickbase_api.user import get_user_id, login
 from features.notifier import send_mail
 from features.overpay_tool import write_overpay_tool
 from features.lineup_optimizer import write_lineup_optimizer
+from features.predictions.snapshot import write_prediction_snapshot
 from features.predictions.data_handler import (
     create_player_data_table,
     check_if_data_reload_needed,
@@ -116,6 +117,7 @@ for prediction_column, target in prediction_targets.items():
 
 # Make live data predictions
 live_predictions_df = live_data_predictions(today_df, models, features, proc_player_df, league_start_date)
+forecast_snapshot = write_prediction_snapshot(live_predictions_df, 'Spaet', competition_ids[0])
 
 # Join with current available players on the market
 market_recommendations_df = join_current_market(token, league_id, live_predictions_df, current_user_id)
@@ -146,6 +148,7 @@ try:
     optimizer_path = write_lineup_optimizer(
         token, league_id, current_user_id, squad_recommendations_df, live_predictions_df,
         history_df=player_df,
+        forecast_snapshot=forecast_snapshot,
     )
 except Exception as exc:
     print(f"Warning: Startelf optimizer could not be generated: {exc}")

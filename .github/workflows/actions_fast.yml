@@ -40,6 +40,13 @@ jobs:
         run: |
           python daily_predictions_fast.py
 
+      - name: Save completed 1T forecasts
+        if: ${{ !cancelled() && hashFiles('prediction_snapshot_1t.json') != '' }}
+        uses: actions/cache/save@v5
+        with:
+          path: prediction_snapshot_1t.json
+          key: ${{ runner.os }}-kickbase-1t-forecast-${{ github.run_id }}-${{ github.run_attempt }}
+
       - name: Save player data cache
         if: hashFiles('player_data_total.db') != ''
         uses: actions/cache/save@v5
