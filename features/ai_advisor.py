@@ -112,10 +112,14 @@ def calculate_plan(players, state):
             else:
                 warnings.append('Verein unbekannt: ' + player['name'])
     end = None if unknown else state['budget'] - purchases + sales
+    # Kickbase permits a negative cash balance up to roughly one third of the
+    # retained squad value. Prefer an API/report value when available.
+    retained_value = sum((players[player_id].get('mv') or 0) for player_id in retained)
+    min_budget = -retained_value * 0.33 if retained_value else None
     if unknown:
         warnings.append('Budget unvollständig: Preis oder Cash-Budget fehlt.')
-    elif end < 0:
-        warnings.append('Negatives Endbudget.')
+    elif end < 0 and (min_budget is None or end < min_budget):
+        warnings.append('Minuslimit überschritten.')
     if len(retained) > 16:
         warnings.append('Mehr als 16 Spieler im Restkader.')
     if len(selected) != 11:
@@ -127,7 +131,10 @@ def calculate_plan(players, state):
     return {'endBudget': end, 'purchases': purchases, 'sales': sales,
             'rosterSize': len(retained), 'retainedIds': retained, 'soldIds': sold,
             'clubViolations': blocked, 'warnings': warnings,
-            'lineupPoints': sum(v or 0 for v in scores), 'missingScores': sum(v is None for v in scores)}
+            'lineupPoints': sum(v or 0 for v in scores), 'missingScores': sum(v is None for v in scores),
+            'minAllowedBudget': min_budget,
+            'budgetStatus': ('unbekannt' if end is None or min_budget is None else
+                             'positiv' if end >= 0 else 'im erlaubten Minus' if end >= min_budget else 'Minuslimit überschritten')}
 
 
 def prepare_context(report, raw_state):
@@ -162,10 +169,13 @@ def prepare_context(report, raw_state):
         result = calculate_plan(candidate_players, candidate)
         target_score, _ = points(target, state['mode'])
         old_score, _ = points(players[replaced_id], state['mode'])
-        scenarios.append({'buyId': target['id'], 'replaceId': replaced_id, 'price': price,
+        scenarios.append({'buyId': target['id'], 'buyName': target['name'], 'buyTeam': target['team'],
+                          'replaceId': replaced_id, 'replaceName': players[replaced_id]['name'],
+                          'price': price,
                           'priceBasis': price_basis, 'endBudget': result['endBudget'],
                           'warnings': result['warnings'], 'rosterSize': result['rosterSize'],
-                          'pointsGain': target_score - old_score if target_score is not None and old_score is not None else None})
+                          'pointsGain': target_score - old_score if target_score is not None and old_score is not None else None,
+                          'budgetStatus': result['budgetStatus'], 'minAllowedBudget': result['minAllowedBudget']})
     return {'reportDate': report.get('generated'), 'forecastDate': report.get('forecast'),
             'pointDataNote': report.get('historyNote'), 'marketAvailable': 'marketPlayers' in report,
             'players': list(players.values()), 'marketPlayers': market, 'currentPlan': state,
@@ -183,9 +193,16 @@ Aussagen mit Quellen und Datum. Erfinde keine aktuellen Verletzungen, Marktwerte
 Private Budgets, Konten, Liga-/Managerdaten und Chatverläufe gehören niemals in Suchanfragen.
 Bei fehlender Bestätigung benenne die Unsicherheit. Recherchiere öffentlich nur die benötigten
 Spielernamen oder allgemeinen Regelbegriffe. Stelle Datenlücken klar dar.
-Gib konkrete nächste Schritte und begründe Empfehlungen mit vorhandenen Zahlen. Unterscheide
+Gib konkrete nächste Schritte und begründe Empfehlungen mit vorhandenen Zahlen. Schreibe für
+den Nutzer verständlich: keine Spieler-IDs, JSON-Feldnamen, Variablennamen oder Rohdatenbegriffe.
+Nenne Spieler immer mit Namen und Verein, Eurobeträge gerundet und mit klarer Bedeutung.
+Unterscheide
 Trading und sportliche Verstärkung. Eigene Spieler sind keine Kaufempfehlungen. Berücksichtige
 Cash, geplante Käufe, Verkäufe, 16er-Kaderlimit, Vereinslimit, Status und Ablaufzeiten.
+Ein negatives Endbudget ist nicht automatisch ein Ausschluss: Wenn das Minuslimit bekannt ist,
+ist ein Kauf bis zu diesem Limit möglich. Kennzeichne klar „sofort positiv“, „im erlaubten Minus“
+oder „Minuslimit überschritten“. Wenn das Minuslimit fehlt, sage ausdrücklich, dass die Budgetprüfung
+nicht abschließend ist.
 Gesperrte Spieler bleiben im Kader, auch auf der Bank; schlage keinen Verkauf dieser Spieler vor.
 Historische Punkteschnitte und gespeicherte MW-Prognosen sind keine sicheren Spieltagswerte.
 Die serverseitig geprüften Budgets und Einzeltausch-Szenarien sind die Rechengrundlage.

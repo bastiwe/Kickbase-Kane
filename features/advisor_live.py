@@ -93,7 +93,8 @@ class LiveKickbase:
         state['selection'] = [p if p in ids else None for p in state['selection']]
         state['plans'] = plans
         state['budget'] = budget
-        current = {**report, 'players': current_players, 'marketPlayers': available, 'budget': budget}
+        current = {**report, 'players': current_players, 'marketPlayers': available, 'budget': budget,
+                   'maxNegative': -sum((p.get('mv') or 0) for p in owned) * 0.33}
         changes = {'addedOwnedIds': sorted(own_ids - {p['id'] for p in report['players'] if p['owned']}),
                    'removedPlanIds': sorted(set(previous_plans) - ids),
                    'cashBefore': raw_state.get('budget'), 'cashNow': budget}

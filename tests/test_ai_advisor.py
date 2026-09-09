@@ -33,6 +33,14 @@ class AdviserTests(unittest.TestCase):
         state['sellbench'] = True
         self.assertEqual(prepare_context(report, state)['checkedSinglePlayerSwaps'][0]['endBudget'], 80)
 
+    def test_negative_cash_within_team_value_limit_is_allowed(self):
+        report, state = fixture()
+        state['budget'] = -20
+        report['maxNegative'] = -30
+        result = prepare_context(report, state)['checkedCurrentPlan']
+        self.assertEqual(result['budgetStatus'], 'im erlaubten Minus')
+        self.assertNotIn('Minuslimit überschritten.', result['warnings'])
+
     def test_missing_price_and_illegal_positions_are_not_accepted_as_valid(self):
         report, state = fixture()
         state['plans']['bench'] = {'action': 'sell', 'price': None}
