@@ -77,6 +77,17 @@ deines Kaders und deiner erkannten offenen Gebote. Im Browser lassen sich zehn
 Formationen vergleichen, Spieler wechseln, Käufe und Verkäufe planen und das
 Endbudget kontrollieren. Die Datei führt keine Aktionen in Kickbase aus.
 
+Links stehen ausschließlich nicht aufgestellte Spieler. Per Drag & Drop lassen
+sie sich auf passende Positionen ziehen; belegte Plätze werden getauscht.
+Ein Klick auf einen Spielfeldplatz öffnet alternativ die Spielerauswahl.
+Offene Gebote sind zunächst nicht eingeplant. „Gebote einplanen“ aktiviert alle,
+„Kauf einplanen“ einen einzelnen Spieler, jeweils einschließlich seiner Kosten.
+Die Formationsfarben zeigen Rot bei unzureichender Positionsbesetzung, Gelb bei
+negativem oder unbekanntem Endbudget und Grün bei einer möglichen Elf mit
+Endbudget ab null. Die aktuell gewählte Formation berücksichtigt manuelle
+Spielerwechsel; die übrigen zeigen jeweils ihren automatisch vorgeschlagenen
+Kader und das zugehörige Endbudget.
+
 Das Endbudget entspricht Cash minus eingeplanten Geboten plus geplanten
 Verkaufserlösen. Bankspieler werden nur mit aktivierter Option „Bank verkaufen“
 als Verkauf gerechnet. Fehlende Gebotspreise müssen ergänzt werden. Das
@@ -84,8 +95,11 @@ als Verkauf gerechnet. Fehlende Gebotspreise müssen ergänzt werden. Das
 verbleibenden Kader. Die historische Punktwertung berücksichtigt keine
 Budgetbeschränkung bei der automatischen Auswahl der besten Elf.
 
-L3 und Saison verwenden abgeschlossene, eindeutige Spieltage der aktuellen
-Saison (ab 1. Juli), mit Vorsaison-Fallback. Null Punkte sind ein gültiger Wert.
+L3 und Saison zeigen Durchschnittspunkte abgeschlossener, eindeutiger Spieltage
+der aktuellen Saison (ab 1. Juli), mit Vorsaison-Durchschnitt als Fallback.
+L3 berücksichtigt die letzten bis zu drei dokumentierten Spieltage. Null Punkte
+zählen mit, fehlende Punktdaten werden nicht als null gewertet. Die Wertung der
+Elf ist die Summe der elf Spielerschnitte.
 Die angezeigte Basis ermöglicht die Einordnung gemischter Datenstände.
 Gegner und Einzel-Spieltagspunkte erscheinen nur, wenn die Daten vorliegen.
 Lokale Speicherung sowie JSON-Export und -Import erlauben mehrere Planszenarien.

@@ -18,7 +18,20 @@ class OptimizerTests(unittest.TestCase):
         result = history_context(history, '1')
         self.assertEqual(result['recent'], [0])
         self.assertEqual(result['season'], 0)
-        self.assertEqual(result['previous'], 80)
+        self.assertEqual(result['average'], 80)
+
+    def test_history_averages_last_three_and_whole_season(self):
+        today = pd.Timestamp.now()
+        start = pd.Timestamp(year=today.year if today.month >= 7 else today.year - 1, month=7, day=1)
+        rows = [
+            {'player_id': '1', 'md': str((start + pd.Timedelta(days=i)).date()),
+             'p': points, 'team_id': 1, 'team_name': 'A'}
+            for i, points in enumerate([100, 0, 60, 120])
+        ]
+        rows.append(dict(rows[-1]))
+        result = history_context(pd.DataFrame(rows), '1')
+        self.assertEqual(result['l3'], 60)
+        self.assertEqual(result['season'], 70)
 
     def test_bid_is_not_asking_price_or_another_managers_bid(self):
         item = {'prc': 12000000, 'ownBid': True,

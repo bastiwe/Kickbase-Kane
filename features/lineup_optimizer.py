@@ -88,8 +88,7 @@ def write_lineup_optimizer(token, league_id, user_id, squad_df, predictions_df,
             'status': (normalize_player_status(player_status_value(item))
                        if player_status_value(item) is not None
                        else text(row.get('player_status')) or 'Unbekannt'),
-            'l3': number(row.get('last_3_points')), 'season': number(row.get('current_season_points')),
-            'previous': number(row.get('last_season_points')),
+            'l3': None, 'season': None,
             'average': number(row.get('last_season_avg_points')),
             'li': number(row.get('starter_rate')),
             'change': number(row.get('predicted_mv_target')),
@@ -116,9 +115,8 @@ def history_context(history, player_id):
     previous = completed[(completed['_day'] < season_start) & (completed['_day'] >= season_start - pd.DateOffset(years=1))]
     recent = current.tail(3)
     result = {'recent': [number(v) for v in recent['p']],
-              'l3': number(recent['p'].sum()) if not recent.empty else None,
-              'season': number(current['p'].sum()) if not current.empty else None,
-              'previous': number(previous['p'].sum()) if not previous.empty else None,
+              'l3': number(recent['p'].mean()) if not recent.empty else None,
+              'season': number(current['p'].mean()) if not current.empty else None,
               'average': number(previous['p'].mean()) if not previous.empty else None,
               'opponent': None}
     upcoming = rows[(rows['_day'] >= today) & rows['p'].isna()].sort_values('_day')
