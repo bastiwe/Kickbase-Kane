@@ -1,0 +1,50 @@
+name: Run Startelf Optimizer
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  startelf-optimizer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements-optimizer.txt
+
+      - name: Restore existing player data
+        uses: actions/cache/restore@v5
+        with:
+          path: player_data_total.db
+          key: ${{ runner.os }}-kickbase-player-data-optimizer-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-kickbase-player-data-
+
+      - name: Install optimizer dependencies
+        run: python -m pip install -r requirements-optimizer.txt
+
+      - name: Generate and email lineup optimizer
+        env:
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          KICK_USER: ${{ secrets.KICK_USER }}
+          KICK_PASS: ${{ secrets.KICK_PASS }}
+        run: python startelf_optimizer.py
+
+      - name: Upload lineup optimizer
+        if: ${{ !cancelled() && hashFiles('startelf_optimizer.html') != '' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: startelf-optimizer
+          path: startelf_optimizer.html
+          if-no-files-found: error
+          retention-days: 30

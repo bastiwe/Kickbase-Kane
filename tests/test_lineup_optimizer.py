@@ -57,6 +57,19 @@ class OptimizerTests(unittest.TestCase):
         self.assertIsNone(payload['players'][1]['bid'])
         self.assertEqual(payload['budget'], -1000000)
 
+    @patch('features.lineup_optimizer.get_player_performance', return_value=[])
+    @patch('features.lineup_optimizer.get_player_info', return_value={'player_id': '1', 'team_name': 'A', 'team_id': 1})
+    @patch('features.lineup_optimizer.render_optimizer')
+    @patch('features.lineup_optimizer.get_budget', return_value=100)
+    @patch('features.lineup_optimizer.get_json_with_token', return_value={'it': []})
+    @patch('features.lineup_optimizer.get_players_in_squad', return_value={'it': [{'i': '1', 'pos': 1}]})
+    def test_missing_cache_fetches_only_candidate_history(self, squad, market, budget, render, info, performance):
+        write_lineup_optimizer('token', 'league', 'me', pd.DataFrame(), pd.DataFrame(columns=['player_id']),
+                               refresh_missing_history=True, history_df=pd.DataFrame(columns=['player_id']))
+        info.assert_called_once_with('token', 1, '1')
+        performance.assert_called_once_with('token', 1, '1', 50, 1)
+        self.assertEqual(render.call_args.args[0]['players'][0]['team'], 'A')
+
 
 if __name__ == '__main__':
     unittest.main()

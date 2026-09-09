@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 from kickbase_api.config import BASE_URL, get_cdn_url, get_json_with_token
 from kickbase_api.league import has_user_market_offer, player_status_value
 from kickbase_api.user import get_budget, get_players_in_squad
+from kickbase_api.player import get_player_info, get_player_performance
 from features.predictions.predictions import normalize_player_status
 
 
@@ -53,7 +54,8 @@ def own_bid_amount(item, user_id):
 
 
 def write_lineup_optimizer(token, league_id, user_id, squad_df, predictions_df,
-                           output_path='startelf_optimizer.html', history_df=None):
+                           output_path='startelf_optimizer.html', history_df=None,
+                           refresh_missing_history=False, competition_id=1, history_note=None):
     squad = get_players_in_squad(token, league_id).get('it', [])
     market = get_json_with_token(f'{BASE_URL}/leagues/{league_id}/market', token).get('it', [])
     predictions = {str(row['player_id']): row for row in predictions_df.to_dict('records')}
@@ -72,6 +74,18 @@ def write_lineup_optimizer(token, league_id, user_id, squad_df, predictions_df,
             continue
         seen.add(player_id)
         row = dict(predictions.get(player_id, {}))
+        player_history = history_df
+        cached = (history_df is not None and not history_df.empty
+                  and history_df['player_id'].astype(str).eq(player_id).any())
+        if refresh_missing_history and not cached:
+            try:
+                info = get_player_info(token, competition_id, player_id)
+                row.update(info)
+                performance = get_player_performance(token, competition_id, player_id, 50, info.get('team_id'))
+                player_history = pd.DataFrame([{**game, **info} for game in performance])
+                print(f'Optimizer: loaded missing history for player {player_id}.')
+            except Exception as exc:
+                print(f'Warning: Optimizer history unavailable for player {player_id}: {exc}')
         name = ' '.join((text(item.get('fn') or row.get('first_name')),
                          text(item.get('ln') or row.get('last_name')))).strip()
         if owned and name in reports:
@@ -93,10 +107,10 @@ def write_lineup_optimizer(token, league_id, user_id, squad_df, predictions_df,
             'li': number(row.get('starter_rate')),
             'change': number(row.get('predicted_mv_target')),
         })
-        if history_df is not None:
-            players[-1].update(history_context(history_df, player_id))
+        if player_history is not None and not player_history.empty:
+            players[-1].update(history_context(player_history, player_id))
     payload = {'players': players, 'budget': number(get_budget(token, league_id)),
-               'league': str(league_id), 'user': str(user_id),
+               'league': str(league_id), 'user': str(user_id), 'historyNote': history_note,
                'generated': datetime.now(ZoneInfo('Europe/Berlin')).strftime('%d.%m.%Y %H:%M')}
     return render_optimizer(payload, output_path)
 

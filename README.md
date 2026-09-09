@@ -70,6 +70,19 @@
 </ul>
 # Startelf-Optimierer
 
+Für schnelle Aktualisierungen steht **Actions → Run Startelf Optimizer → Run
+workflow** bereit. Dieser manuelle Workflow lädt Kader, offene Gebote und Budget
+frisch, nutzt die vorhandene Spieler-Datenbank und lädt fehlende Spieler gezielt
+nach. Kein Modelltraining, keine Marktwertprognosen, keine Manager-Analyse und
+kein LigaInsider-Scraping. Der Cache-Datenstand wird in der HTML-Datei angegeben;
+Punktdaten bereits bekannter Spieler werden durch den regulären Report erneuert.
+Die Datei wird als Artefakt **startelf-optimizer** (30 Tage) und per Mail
+bereitgestellt. Es gelten dieselben Secrets `KICK_USER`, `KICK_PASS`, `EMAIL_USER`
+und `EMAIL_PASS`; ohne Mail-Secrets bleibt der Artefakt-Download verfügbar.
+Bei einem Mailfehler bleibt die erzeugte Datei ebenfalls als Artefakt verfügbar.
+Lokal: `pip install -r requirements-optimizer.txt`, dann
+`python startelf_optimizer.py` mit den Zugangsdaten in `.env`.
+
 Der Workflow **Run Daily Predictions Spaet** erstellt zusätzlich
 `startelf_optimizer.html`. Die Datei wird als Mail-Anhang und als GitHub-Artefakt
 **startelf-optimizer** bereitgestellt. Sie enthält einen privaten Datenstand
