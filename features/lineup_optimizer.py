@@ -3,12 +3,12 @@
 import json
 import math
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from kickbase_api.config import BASE_URL, get_cdn_url, get_json_with_token
-from kickbase_api.league import has_user_market_offer, player_status_value
+from kickbase_api.league import has_user_market_offer, is_user_market_listing, player_status_value
 from kickbase_api.user import get_budget, get_players_in_squad
 from kickbase_api.player import get_player_info, get_player_performance
 from features.predictions.predictions import normalize_player_status
@@ -111,12 +111,48 @@ def write_lineup_optimizer(token, league_id, user_id, squad_df, predictions_df,
         if player_history is not None and not player_history.empty:
             players[-1].update(history_context(player_history, player_id))
     payload = {'players': players, 'budget': number(get_budget(token, league_id)),
+               'marketPlayers': market_context(market, own_ids, user_id, predictions, history_df, forecast_snapshot),
                'league': str(league_id), 'user': str(user_id), 'historyNote': history_note,
                'forecast': {key: forecast_snapshot.get(key) for key in ('generatedAt', 'source')}
                if forecast_snapshot else None,
                'forecastHorizon': forecast_horizon(history_df),
                'generated': datetime.now(ZoneInfo('Europe/Berlin')).strftime('%d.%m.%Y %H:%M')}
     return render_optimizer(payload, output_path)
+
+
+def market_context(market, own_ids, user_id, predictions, history, forecasts):
+    """Include all offers for the local adviser, without loading more endpoints."""
+    result = []
+    seen = set()
+    now = datetime.now(ZoneInfo('Europe/Berlin'))
+    for item in market:
+        player_id = str(item.get('i'))
+        if player_id in own_ids or player_id in seen or is_user_market_listing(item, user_id):
+            continue
+        seen.add(player_id)
+        row = predictions.get(player_id, {})
+        name = ' '.join((text(item.get('fn') or row.get('first_name')),
+                         text(item.get('ln') or row.get('last_name')))).strip()
+        expiry = number(item.get('exs'))
+        position = number(item.get('pos') or row.get('position'))
+        player = {
+            'id': player_id, 'name': name or f'Spieler {player_id}', 'owned': False,
+            'team': text(item.get('tn') or row.get('team_name')) or 'Unbekannt',
+            'teamId': text(item.get('tid') or row.get('team_id') or row.get('team_name')),
+            'position': int(position) if position in (1, 2, 3, 4) else 0,
+            'mv': number(item.get('mv')) if number(item.get('mv')) is not None else number(row.get('mv')),
+            'askingPrice': number(item.get('prc')), 'bid': own_bid_amount(item, user_id),
+            'expiresAt': (now + timedelta(seconds=expiry)).isoformat()
+            if expiry is not None and 0 <= expiry <= 365 * 86400 else None,
+            'status': normalize_player_status(player_status_value(item))
+            if player_status_value(item) is not None else 'Unbekannt',
+            'change': number((forecasts or {}).get('predictions', {}).get(player_id)),
+            'l3': None, 'season': None, 'average': number(row.get('last_season_avg_points')),
+        }
+        if history is not None and not history.empty:
+            player.update(history_context(history, player_id))
+        result.append(player)
+    return result
 
 
 def forecast_horizon(history, now=None):

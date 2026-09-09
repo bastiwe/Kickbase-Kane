@@ -8,3 +8,8 @@ test-output/
 startelf_optimizer.html
 overpay_forecast.html
 prediction_snapshot_1t.json
+.venv-advisor/
+.advisor-*.log
+.advisor-*.pid
+.advisor-report.json
+.advisor-report.tmp

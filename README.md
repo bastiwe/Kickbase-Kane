@@ -70,6 +70,48 @@
 </ul>
 # Startelf-Optimierer
 
+## Interaktiver KI-Ratgeber auf dem PC
+
+`Start-KI-Ratgeber.cmd` per Doppelklick starten. Beim ersten Start werden die
+Python-Abhängigkeiten in `.venv-advisor` installiert. Ein lokaler Server öffnet
+den Optimierer im Browser, normalerweise unter `http://127.0.0.1:8765`.
+Das Startfenster offen lassen; mit Strg+C wird der Server beendet. Alternativ:
+`python advisor_server.py` nach Installation von `requirements-optimizer.txt`.
+
+1. Einen neuen Startelf-Report aus der Action herunterladen und über
+   **HTML-Report laden** in der lokalen Ansicht öffnen. Neu erzeugte Reports
+   enthalten auch den gesamten Transfermarkt. Der zuletzt importierte Report
+   bleibt lokal in der ignorierten Datei `.advisor-report.json` gespeichert.
+2. **KI-Ratgeber → KI-Einstellungen** öffnen und einen OpenAI-API-Schlüssel
+   hinterlegen. Der Schlüssel bleibt nur bis zum Beenden im Serverspeicher.
+   Für dauerhafte lokale Konfiguration kann `OPENAI_API_KEY` in der bereits
+   ignorierten `.env` hinterlegt werden. Niemals in GitHub oder Chatnachrichten
+   einfügen. Standardmodell: `gpt-5-mini`; `OPENAI_MODEL` kann lokal ein anderes
+   Responses-Modell mit Unterstützung für `reasoning.effort=low` auswählen.
+3. Die Aufstellung und Kauf-/Verkaufspläne bearbeiten und eine Frage senden.
+   Jede Frage enthält den aktuellen Plan. Ältere Antworten passen sich nicht
+   automatisch an spätere Änderungen an. **Neuer Chat** leert den Verlauf.
+
+Der Ratgeber sendet nur bei einer Frage den begrenzten Chatverlauf sowie
+Spieler-, Markt-, Prognose- und Planungsdaten an die OpenAI Responses API
+(`store=false`). API-Nutzung ist kostenpflichtig und benötigt ein entsprechend
+eingerichtetes OpenAI-API-Konto. Der API-Schlüssel und Kickbase-Zugangsdaten
+stehen nie im KI-Kontext oder HTML-Report. Der lokale Server bietet keine
+Dateifreigabe, bindet ausschließlich an 127.0.0.1 und prüft Origin und
+Sitzungstoken vor Schreib- und Chat-Anfragen.
+
+Budget, Kadergröße und Vereinslimits des aktuellen Plans werden serverseitig
+berechnet. Zusätzlich gibt es geprüfte Einzeltausch-Szenarien für besetzte
+Positionen. Angebotspreise/MW sind dabei ausdrücklich Rechenannahmen, keine
+garantierten Zuschlagspreise. Mehrere Einzelszenarien sind nicht automatisch
+zusammen finanzierbar. Es werden keine Aktionen in Kickbase ausgeführt und
+keine aktuellen Nachrichten aus dem Internet geladen. Kader und Markt bleiben
+auf dem Stand des geladenen Reports; eine neue Datei aktualisiert sie.
+
+Die heruntergeladene HTML-Datei funktioniert weiterhin ohne Server als
+Offline-Optimierer. Für den Chat muss sie über die lokale Oberfläche geladen
+werden. Chatverläufe werden nicht auf der Festplatte gespeichert.
+
 Für schnelle Aktualisierungen steht **Actions → Run Startelf Optimizer → Run
 workflow** bereit. Dieser manuelle Workflow lädt Kader, offene Gebote und Budget
 frisch, nutzt die vorhandene Spieler-Datenbank und lädt fehlende Spieler gezielt
@@ -136,3 +178,9 @@ Prüfung: `python -m unittest discover -s tests -p 'test_lineup_optimizer.py'`.
 Die Browserprüfung `node tests/optimizer_browser.cjs` benötigt Playwright und
 Edge (alternativ `BROWSER_CHANNEL=chrome`). Sie erzeugt ausschließlich
 Testdaten unter dem ignorierten Verzeichnis `test-output`.
+
+Spieler lassen sich im Optimierer mit dem Schloss-Symbol sperren. Gesperrte
+eigene Spieler bleiben immer im Kader, werden auch bei „Bank verkaufen“ nicht
+als Verkauf eingeplant und beeinflussen dadurch weiterhin Aufstellung,
+Kaderlimit und Endbudget. Bei gesperrten Spielern werden widersprüchliche
+Verkaufs- oder Ausschlussaktionen automatisch verhindert.

@@ -55,6 +55,11 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
  await page.locator('#best').click();
 
  await page.locator('#sellbench').check();
+ // Lock a bank player: bank sales must leave it in the retained roster.
+ const bankPlayer=await page.evaluate(()=>players.find(p=>p.owned&&!state.selection.includes(p.id)).id);
+ await page.locator('#roster [data-player="'+bankPlayer+'"] [data-lock]').click();
+ assert.equal(await page.evaluate(id=>accounting().retained.some(p=>p.id===id),bankPlayer),true);
+ await page.locator('#roster [data-player="'+bankPlayer+'"] [data-lock]').click();
  const end=await page.evaluate(()=>accounting());assert.equal(end.end,5000000-end.buys+end.sales);
  await page.locator('#sellbench').uncheck();
  await page.locator('[data-price="16"]').fill('');await page.locator('[data-price="16"]').dispatchEvent('change');assert.equal(await page.locator('#endbudget').textContent(),'Unbekannt');

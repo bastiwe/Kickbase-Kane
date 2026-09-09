@@ -1,0 +1,41 @@
+const assert = require('node:assert/strict');
+const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+
+(async () => {
+  const browser = await chromium.launch({headless:true, channel:process.env.BROWSER_CHANNEL || 'msedge'});
+  try {
+    const page = await browser.newPage({viewport:{width:1600,height:1000}});
+    const errors=[];page.on('pageerror',e=>errors.push(e.message));
+    await page.goto(process.env.ADVISOR_TEST_URL);
+    assert.equal(await page.locator('#advisor').isVisible(),true);
+    await page.locator('#advisor-report-file').setInputFiles(process.env.ADVISOR_TEST_REPORT);
+    await page.waitForFunction(()=>document.querySelector('#snapshot').textContent.includes('TEST'));
+    await page.locator('#advisor-toggle').click();
+    await page.locator('#advisor-question').fill('Was tun?');
+    await page.locator('#advisor-send').click();
+    await page.waitForFunction(()=>document.querySelector('#advisor-feedback').textContent.includes('API-Schlüssel'));
+    await page.locator('#advisor-settings-open').click();
+    await page.locator('#advisor-key').fill('sk-test-not-a-real-key');
+    await page.getByRole('button',{name:'Schlüssel übernehmen'}).click();
+    await page.waitForFunction(()=>!document.querySelector('#advisor-settings').open);
+    assert.equal(await page.locator('#advisor-key').inputValue(),'');
+    await page.locator('#advisor-send').click();
+    await page.waitForFunction(()=>document.querySelectorAll('.advisor-message.assistant').length===1);
+    assert.equal(await page.evaluate(()=>window.bad),undefined);
+    await page.locator('#budget').fill('-100');
+    await page.locator('#budget').dispatchEvent('change');
+    await page.locator('#advisor-question').fill('Und mit meinem neuen Budget?');
+    await page.locator('#advisor-send').click();
+    await page.waitForFunction(()=>document.querySelectorAll('.advisor-message.assistant').length===2);
+    assert.match(await page.locator('#advisor-feedback').textContent(),/-100/);
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+    await page.screenshot({path:'test-output/advisor-desktop.png',fullPage:true});
+    await page.setViewportSize({width:390,height:844});
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+    await page.screenshot({path:'test-output/advisor-mobile.png',fullPage:true});
+    await page.locator('#advisor-clear').click();
+    assert.equal(await page.locator('.advisor-message').count(),0);
+    assert.deepEqual(errors,[]);
+    console.log('Adviser browser tests passed: import, missing key, session key, live plan, safe text rendering, mobile.');
+  } finally {await browser.close();}
+})().catch(error=>{console.error(error);process.exit(1);});

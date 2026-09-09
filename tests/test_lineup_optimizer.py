@@ -70,6 +70,5 @@ class OptimizerTests(unittest.TestCase):
         performance.assert_called_once_with('token', 1, '1', 50, 1)
         self.assertEqual(render.call_args.args[0]['players'][0]['team'], 'A')
 
-
 if __name__ == '__main__':
     unittest.main()
