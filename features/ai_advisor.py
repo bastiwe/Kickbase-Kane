@@ -2,6 +2,7 @@
 
 import json
 import math
+import re
 
 import requests
 
@@ -176,7 +177,25 @@ def prepare_context(report, raw_state):
                           'warnings': result['warnings'], 'rosterSize': result['rosterSize'],
                           'pointsGain': target_score - old_score if target_score is not None and old_score is not None else None,
                           'budgetStatus': result['budgetStatus'], 'minAllowedBudget': result['minAllowedBudget']})
+    bank_sales = []
+    for target in market:
+        # Finance the user's current lineup, without inventing a starter sale.
+        candidate = {**state, 'sellbench': False, 'plans': {k: dict(v) for k, v in state['plans'].items()}}
+        for player_id, player in players.items():
+            if player['owned'] and player_id not in state['selection'] and not candidate['plans'][player_id].get('locked'):
+                candidate['plans'][player_id]['action'] = 'sell'
+        prior = candidate['plans'].get(target['id'], {})
+        price = prior.get('price') if prior.get('action') == 'buy' else next(
+            (v for v in (target['bid'], target['askingPrice'], target['mv']) if v is not None), None)
+        candidate['plans'][target['id']] = {**prior, 'action': 'buy', 'price': price}
+        result = calculate_plan({**players, target['id']: target}, candidate)
+        bank_sales.append({'Kauf': target['name'], 'Verein': target['team'], 'Kaufpreisannahme Euro': price,
+                           'Verkäufe': [players[i]['name'] for i in result['soldIds']],
+                           'Verkaufserlöse Euro': result['sales'], 'Restbudget Euro': result['endBudget'],
+                           'Hinweise': result['warnings'],
+                           'Basis': 'Aktuelle Bank verkaufen plus bereits geplante Verkäufe. Gesperrte Spieler bleiben. Kein automatischer Tausch in der Elf; kein zukünftiger MW-Gewinn eingerechnet. Einzelne Alternative, nicht mit anderen Käufen kombinieren.'})
     return {'reportDate': report.get('generated'), 'forecastDate': report.get('forecast'),
+            'bankSalePurchases': bank_sales,
             'pointDataNote': report.get('historyNote'), 'marketAvailable': 'marketPlayers' in report,
             'players': list(players.values()), 'marketPlayers': market, 'currentPlan': state,
             'checkedCurrentPlan': calculate_plan(players, state), 'checkedSinglePlayerSwaps': scenarios}
@@ -223,15 +242,18 @@ vor alten Chatnachrichten hat. Du kannst keine Käufe, Verkäufe oder Aufstellun
 Falls liveData vorhanden ist, wurden Markt, Besitz und Cash frisch aus Kickbase gelesen;
 nenne den Abrufstand und relevante Änderungen gegenüber dem Plan. Punkte und Prognosen
 behalten ihren Reportzeitpunkt. Das Spielfeld zeigt weiter den lokalen Plan.
-Antworte knapp, konkret und verständlich. Priorisiere höchstens drei nächste Schritte.
-Deine Antwort muss immer diese Struktur haben:
-1. „Meine Einschätzung“: ein klares sportliches Fazit in wenigen Sätzen.
-2. „Empfehlung“: maximal drei konkrete Kauf-/Verkaufsaktionen mit Spielername, Verein,
-   Rolle (Sofortverstärkung, Trading oder Kaderupdate), Gebotsspanne, Spieltagsnutzen,
-   Spielplantrend und Budgetstatus.
-3. „Nächster Spieltag“: stärkste realistische Elf, erwartete Schlüsselspieler und welche Aktion dafür nötig ist.
-4. „Mittelfristiger Plan“: maximal drei Prioritäten für die nächsten Wochen.
-5. „Risiken“: fehlende Daten, Einsatzrisiko, Ablaufzeit, schwieriger Spielplan oder Budgetrisiko.
+Antworte standardmäßig in höchstens 180 Wörtern: ein kurzes Fazit, eine relevante Budgetrechnung
+und höchstens drei nächste Schritte. Keine wiederholten Zusammenfassungen, keine feste Fünf-Abschnitte-Liste.
+Gehe auf den konkreten Plan des Nutzers ein. Bank und Startelf sind ausdrücklich gekennzeichnet.
+Bei 'Bank verkaufen' verwende die geprüften Bankverkaufsvarianten, nicht den Einzeltausch mit
+einem Starter. Nenne die betroffenen Bankspieler. Gesperrt bedeutet vor Verkauf geschützt, nicht
+zwangsläufig aufgestellt. Ungeplante Gebote gehören noch nicht zur Bank des geplanten Kaders.
+Gewinne bis zum Spieltag sind unsicher und keine garantierten Verkaufserlöse. Ein positives
+Restbudget nach Verkäufen beweist nicht, dass ein vorgezogener Kauf jetzt möglich ist.
+Erfinde keine Abhängigkeit zwischen Kauf und Verkauf. Behaupte ohne aktuelle Quelle weder
+'stabiler Starter' noch 'deutliche Verstärkung'. Kennzeichne sportliche Prognosen als Einschätzung.
+Biete niemals an, selbst zu tauschen, zu bieten oder zu verkaufen; du berätst ausschließlich.
+Alte Chatantworten können falsche Namen, Bankzuordnungen und Zahlen enthalten; aktuelle Daten haben Vorrang.
 Wenn kein Kauf sinnvoll ist, sage das ausdrücklich. Ersetze nie einen Spieler nur wegen
 eines höheren Marktwerts. Ziel ist ein möglichst starker Kader bei positivem Budget zum
 Spieltag; kurzfristiges Minus darf nur als Übergang erwähnt werden, wenn es innerhalb des
@@ -242,19 +264,37 @@ Minuslimits liegt und bis zum Spieltag realistisch ausgeglichen werden kann.
 def model_context(context):
     """Create a readable model view without internal ids or browser state."""
     players = context.get('players', [])
-    names = {p.get('id'): p.get('name', 'Unbekannt') for p in players}
+    def readable_name(value):
+        return re.sub(r'\bSpieler\s+\d+\b', 'Spieler (Name nicht verfügbar)', str(value or 'Name nicht verfügbar'))
+
+    names = {p.get('id'): readable_name(p.get('name')) for p in players}
 
     def player_view(player):
-        return {key: value for key, value in player.items()
-                if key not in ('id', 'teamId')}
+        labels = {'name': 'Name', 'team': 'Verein', 'position': 'Position', 'mv': 'Marktwert Euro',
+                  'l3': 'Punkteschnitt letzte drei Spiele', 'season': 'Punkteschnitt Saison',
+                  'average': 'Punkteschnitt Vorsaison', 'li': 'LI-Quote Prozent', 'status': 'Spielerstatus',
+                  'change': 'MW-Prognose morgen Euro', 'bid': 'Eigenes Gebot Euro',
+                  'askingPrice': 'Angebotspreis Euro', 'expiresAt': 'Ablauf', 'opponent': 'Nächster Gegner'}
+        result = {label: readable_name(player.get(key)) if key == 'name' else player.get(key) for key, label in labels.items()}
+        player_id = player.get('id')
+        entry = plan.get('plans', {}).get(player_id, {})
+        result.update({'Aufgestellt': player_id in plan.get('selection', []),
+                       'Bereits eigener Spieler': player.get('owned') is True,
+                       'Vor Verkauf geschützt': entry.get('locked') is True,
+                       'Plan': entry.get('action'), 'Geplanter Preis Euro': entry.get('price')})
+        return result
 
     plan = context.get('currentPlan', {})
     selected = [names.get(player_id, 'Unbekannt') for player_id in plan.get('selection', []) if player_id]
     plan_view = {key: value for key, value in plan.items() if key not in ('selection', 'plans')}
     plan_view['Startelf'] = selected
+    plan_view['Bank'] = [names[p['id']] for p in players if p['id'] not in plan.get('selection', [])
+                         and (p['owned'] or plan.get('plans', {}).get(p['id'], {}).get('action') == 'buy')]
+    plan_view['Freie Startelfplätze'] = sum(p is None for p in plan.get('selection', []))
     plan_view['Gesperrte Spieler'] = [names.get(player_id, 'Unbekannt') for player_id, value in plan.get('plans', {}).items()
                                       if value.get('locked')]
     checked = dict(context.get('checkedCurrentPlan', {}))
+    checked['Geplante Verkäufe'] = [names.get(i, 'Name nicht verfügbar') for i in checked.get('soldIds', [])]
     for key in ('retainedIds', 'soldIds', 'clubViolations'):
         checked.pop(key, None)
     scenarios = []
@@ -263,12 +303,26 @@ def model_context(context):
                           if key not in ('buyId', 'replaceId')})
     result = {key: value for key, value in context.items()
               if key not in ('players', 'marketPlayers', 'currentPlan', 'checkedCurrentPlan', 'checkedSinglePlayerSwaps')}
+    if 'liveData' in result:
+        live = result['liveData']
+        result['liveData'] = {key: value for key, value in live.items() if key != 'changes'}
+        result['liveData']['Änderungen seit Report'] = {
+            'Neue eigene Spieler': [names.get(i, 'Name nicht verfügbar') for i in live.get('changes', {}).get('addedOwnedIds', [])],
+            'Entfernte Planplätze': len(live.get('changes', {}).get('removedPlanIds', []))}
     result.update({'Kader': [player_view(p) for p in players],
                    'Transfermarkt': [player_view(p) for p in context.get('marketPlayers', [])],
                    'Aktueller Plan': plan_view,
                    'Geprüfte Planrechnung': checked,
                    'Geprüfte Einzeltausch-Szenarien': scenarios})
-    return result
+    def clean(value):
+        if isinstance(value, str):
+            return readable_name(value)
+        if isinstance(value, list):
+            return [clean(v) for v in value]
+        if isinstance(value, dict):
+            return {k: clean(v) for k, v in value.items()}
+        return value
+    return clean(result)
 
 
 def ask_advisor(api_key, model, context, message, history):

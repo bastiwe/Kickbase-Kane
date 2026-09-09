@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 import requests
 
 from advisor_server import create_server, read_report
-from features.ai_advisor import ask_advisor, prepare_context
+from features.ai_advisor import ask_advisor, prepare_context, model_context
 
 
 def fixture():
@@ -23,6 +23,28 @@ def fixture():
 
 
 class AdviserTests(unittest.TestCase):
+    def test_bank_and_starters_and_sale_financing_remain_distinct(self):
+        report, state = fixture()
+        context = prepare_context(report, state)
+        view = model_context(context)
+        self.assertEqual(view['Aktueller Plan']['Bank'], ['Bench'])
+        self.assertEqual(len(view['Aktueller Plan']['Startelf']), 11)
+        self.assertEqual(context['bankSalePurchases'][0]['Verkäufe'], ['Bench'])
+        self.assertEqual(context['bankSalePurchases'][0]['Restbudget Euro'], -20)
+        state['plans']['bench']['locked'] = True
+        context = prepare_context(report, state)
+        self.assertEqual(context['bankSalePurchases'][0]['Verkäufe'], [])
+        self.assertEqual(context['bankSalePurchases'][0]['Restbudget Euro'], -120)
+
+    def test_placeholder_names_and_live_change_ids_are_not_exposed(self):
+        report, state = fixture()
+        report['players'][0]['name'] = 'Spieler 987654'
+        context = prepare_context(report, state)
+        context['liveData'] = {'changes': {'addedOwnedIds': ['987654'], 'removedPlanIds': ['876543']}}
+        text = json.dumps(model_context(context))
+        self.assertNotIn('987654', text)
+        self.assertNotIn('876543', text)
+
     def test_current_plan_and_swap_are_calculated_not_taken_from_browser(self):
         report, state = fixture()
         state['endBudget'] = 999999

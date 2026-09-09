@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from urllib.parse import quote
 
 import requests
+import re
 
 from kickbase_api.config import BASE_URL
 from features.lineup_optimizer import market_context
@@ -53,12 +54,35 @@ class LiveKickbase:
             raise RuntimeError('Kickbase lieferte unvollständige Kader-/Marktdaten.')
         old = {str(p['id']): p for p in report['players'] + report.get('marketPlayers', [])}
         own_ids = {str(p['i']) for p in squad}
+        name_lookups = 0
 
         def convert(items, owned):
-            parsed = market_context(items, set(), user_id if not owned else None, {}, None, None)
+            nonlocal name_lookups
+            enriched = []
+            for item in items:
+                item = dict(item)
+                previous = old.get(str(item.get('i')), {})
+                known_name = previous.get('name', '')
+                if re.fullmatch(r'Spieler\s+\d+', known_name):
+                    known_name = ''
+                # The squad endpoint often omits names; keep the report identity.
+                if not item.get('ln') and not known_name and name_lookups < 8:
+                    name_lookups += 1
+                    try:
+                        detail = self.get('/competitions/1/players/' + quote(str(item.get('i')), safe=''))
+                        for field in ('fn', 'ln'):
+                            if detail.get(field):
+                                item[field] = detail[field]
+                    except requests.RequestException:
+                        pass
+                enriched.append(item)
+            parsed = market_context(enriched, set(), user_id if not owned else None, {}, None, None)
+            raw = {str(item.get('i')): item for item in enriched}
             result = []
             for player in parsed:
                 previous = old.get(player['id'], {})
+                if not raw[player['id']].get('ln') and previous.get('name') and not re.fullmatch(r'Spieler\s+\d+', previous['name']):
+                    player['name'] = previous['name']
                 for field in ('l3', 'season', 'average', 'li', 'change', 'opponent'):
                     player[field] = previous.get(field)
                 if player['team'] == 'Unbekannt' and player['teamId'] == previous.get('teamId'):

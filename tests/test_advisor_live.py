@@ -51,6 +51,20 @@ class LiveTests(unittest.TestCase):
         self.assertEqual(context['checkedCurrentPlan']['purchases'], 0)
         self.assertEqual(context['marketPlayers'], [])
 
+    def test_missing_live_name_keeps_full_report_identity(self):
+        client, report, state = self.setup_live()
+        report['players'][1]['name'] = 'Chrislain Matsima'
+        original = client.get.side_effect
+        def get(path):
+            result = original(path)
+            if path.endswith('/squad'):
+                for player in result['it']:
+                    player.pop('fn', None)
+            return result
+        client.get.side_effect = get
+        fresh, _, _ = client.refresh(report, state)
+        self.assertEqual(fresh['players'][1]['name'], 'Chrislain Matsima')
+
     def test_wrong_account_stops_before_league_data(self):
         client, report, state = self.setup_live()
         report['user'] = 'someone_else'
