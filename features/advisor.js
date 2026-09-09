@@ -21,7 +21,7 @@
       <textarea id="advisor-question" maxlength="4000" aria-label="Frage zum Kader" placeholder="Deine Frage zum Kader …" required></textarea>
       <div class="toolbar"><span id="advisor-state" class="muted"></span><button id="advisor-send" class="advisor-send" type="submit">Senden ↑</button></div>
       <div id="advisor-feedback" class="advisor-feedback" role="status"></div>
-      <p class="advisor-privacy">Beim Senden gehen Frage, Chatverlauf, Spieler- und Planungsdaten an OpenAI. API-Nutzung ist kostenpflichtig. Keine Aktionen in Kickbase.</p>
+      <p class="advisor-privacy">Beim Senden gehen Frage, Chatverlauf, Spieler- und Planungsdaten an OpenAI. Websuche für Regeln und Spielernews verfügbar. API und Websuche sind kostenpflichtig. Keine Aktionen in Kickbase.</p>
     </form>`;
   document.body.append(shell);
   const settings = document.createElement('dialog');
@@ -32,6 +32,13 @@
     <form id="advisor-key-form"><label for="advisor-key">OpenAI-API-Schlüssel</label><input id="advisor-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…" required>
     <div class="toolbar"><button type="submit">Schlüssel übernehmen</button><button id="advisor-forget-key" type="button">Schlüssel entfernen</button></div></form><p id="advisor-key-status" role="status"></p>`;
   document.body.append(settings);
+  const kickSettings = document.createElement('section');
+  kickSettings.innerHTML = `<h3>Kickbase-Livezugriff</h3>
+    <form id="advisor-kick-form"><label for="advisor-kick-user">Kickbase-E-Mail</label><input id="advisor-kick-user" type="email" autocomplete="off" required>
+    <label for="advisor-kick-pass">Kickbase-Passwort</label><input id="advisor-kick-pass" type="password" autocomplete="off" required>
+    <div class="toolbar"><button type="submit">Livezugriff aktivieren</button><button id="advisor-kick-remove" type="button">Trennen</button></div></form>
+    <p id="advisor-kick-status" role="status"></p>`;
+  settings.append(kickSettings);
   const toolbar = document.createElement('div');
   toolbar.className = 'toolbar';
   toolbar.innerHTML = '<button id="advisor-report-open">HTML-Report laden</button><button id="advisor-toggle" class="advisor-toggle">KI-Ratgeber</button><input id="advisor-report-file" class="advisor-file" type="file" accept=".html,text/html">';
@@ -39,7 +46,7 @@
 
   async function request(path, body) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 105000);
+    const timer = setTimeout(() => controller.abort(), 240000);
     try {
       const response = await fetch(path, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Advisor-Token': local.csrf}, body: JSON.stringify(body), signal: controller.signal});
       const result = await response.json();
@@ -57,8 +64,10 @@
       const result = await response.json();
       element('advisor-state').textContent = result.configured ? result.model : 'API-Schlüssel fehlt';
       element('advisor-key-status').textContent = result.configured ? 'Schlüssel im lokalen Server hinterlegt.' : 'Noch kein Schlüssel hinterlegt.';
+      element('advisor-kick-status').textContent = result.liveConfigured ? 'Liveabruf vor jeder Frage aktiviert. Zugang wird beim Abruf geprüft.' : 'Nicht verbunden. Beratung nutzt den Reportstand.';
       element('advisor-meta').textContent = `${data.generated} · ${data.players.length} Kaderspieler / Gebote · ${result.marketCount} Marktangebote`;
       if (!Object.hasOwn(data, 'marketPlayers')) element('advisor-meta').textContent += ' · Älterer Report ohne vollständigen Markt';
+      element('advisor-meta').textContent += result.liveConfigured ? ' · Kickbase-Liveabruf aktiv' : ' · Reportstand';
     } catch { element('advisor-feedback').textContent = 'Lokaler Server nicht erreichbar.'; }
   }
   function open() {
@@ -70,6 +79,18 @@
   element('advisor-close').onclick = () => {shell.hidden = true; document.body.classList.remove('advisor-open');};
   element('advisor-settings-open').onclick = () => {status(); settings.showModal();};
   element('advisor-settings-close').onclick = () => settings.close();
+  element('advisor-kick-form').onsubmit = async event => {
+    event.preventDefault();
+    try {
+      await request('/api/kickbase', {username: element('advisor-kick-user').value.trim(), password: element('advisor-kick-pass').value});
+      element('advisor-kick-user').value = ''; element('advisor-kick-pass').value = '';
+      await status();
+    } catch (error) {element('advisor-kick-status').textContent = error.message;}
+  };
+  element('advisor-kick-remove').onclick = async () => {
+    try {await request('/api/kickbase', {username: '', password: ''}); await status();}
+    catch (error) {element('advisor-kick-status').textContent = error.message;}
+  };
   element('advisor-key-form').onsubmit = async event => {
     event.preventDefault();
     const input = element('advisor-key');
@@ -93,7 +114,7 @@
     } catch (error) {element('advisor-feedback').textContent = error.message;}
     event.target.value = '';
   };
-  function addMessage(role, text) {
+  function addMessage(role, text, sources = []) {
     const container = element('advisor-messages');
     container.querySelector('.advisor-empty')?.remove();
     const article = document.createElement('article');
@@ -103,6 +124,16 @@
     const content = document.createElement('div');
     content.textContent = text;
     article.append(label, content);
+    for (const source of sources) {
+      try {
+        const url = new URL(source.url);
+        if (url.protocol !== 'https:') continue;
+        const link = document.createElement('a');
+        link.href = url.href; link.textContent = source.title || url.hostname;
+        link.target = '_blank'; link.rel = 'noopener noreferrer';
+        const line = document.createElement('p'); line.append(link); article.append(line);
+      } catch { /* Ignore invalid citation URLs. */ }
+    }
     container.append(article);
     article.scrollIntoView({block: 'nearest'});
   }
@@ -131,12 +162,13 @@
     try {
       const result = await request('/api/chat', {revision: local.revision, state: plan, message: question, history: history.slice(-12)});
       addMessage('user', question);
-      addMessage('assistant', result.answer);
+      addMessage('assistant', result.answer, result.sources || []);
       history.push({role: 'user', content: question}, {role: 'assistant', content: result.answer.slice(0,16000)});
       history = history.slice(-12);
       lastPlan = signature;
       element('advisor-question').value = '';
       element('advisor-feedback').textContent = 'Geprüftes Endbudget: ' + money(result.checkedPlan.endBudget) + ' · ' + result.checkedPlan.rosterSize + '/16 Spieler';
+      if (result.liveData) element('advisor-feedback').textContent += ' · Live: ' + new Date(result.liveData.fetchedAt).toLocaleString('de-DE') + ' · ' + result.liveData.marketCount + ' Marktangebote. Beratung nutzt Live-Cash und Besitz; Spielfeld bleibt dein lokaler Plan.';
       element('advisor-plan-note').textContent = JSON.stringify(state) === signature ? 'Antwort bezieht sich auf den gesendeten Plan.' : 'Aufstellung inzwischen geändert. Die nächste Frage nutzt den neuen Plan.';
     } catch (error) {element('advisor-feedback').textContent = error.message;}
     finally {setPending(false);}

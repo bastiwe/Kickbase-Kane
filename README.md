@@ -72,6 +72,27 @@
 
 ## Interaktiver KI-Ratgeber auf dem PC
 
+Unter **KI-Einstellungen → Kickbase-Livezugriff** Kickbase-E-Mail und Passwort
+eingeben, oder lokal `KICK_USER` und `KICK_PASS` in `.env` hinterlegen.
+Bei aktivem Livezugriff liest jede Chatfrage den aktuellen Transfermarkt,
+eigenen Kader und Cash-Budget aus der Kickbase-API. Konto und Liga müssen zum
+importierten Report passen. Fehlgeschlagene Abrufe werden angezeigt; es wird
+nicht stillschweigend mit einem alten Markt weitergerechnet. Zugangsdaten aus
+der Oberfläche bleiben im Serverspeicher und werden weder exportiert noch an
+OpenAI gesendet. **Trennen** deaktiviert die Verbindung für diese Sitzung.
+
+Die Beratung berechnet den gesendeten Plan mit aktuellem Besitz und Cash neu.
+Erledigte Käufe werden nicht doppelt bezahlt; entfernte Spieler verschwinden
+aus der Beratungsaufstellung. Das Spielfeld selbst bleibt der lokale Plan.
+Historische Punkte und MW-Prognosen behalten den Reportstand; neue Spieler
+haben eventuell noch keine historischen Werte. Es wird kein Modell trainiert.
+Der Antwortfuß zeigt Abrufzeit und Anzahl der aktuellen Marktangebote.
+
+Websuche steht für Regeln und aktuelle Spielerinformationen zur Verfügung.
+Regelfragen sollen offizielle Kickbase-Quellen verwenden; Quellenlinks erscheinen
+unter der Antwort. Community-Limits sind von allgemeinen Regeln zu unterscheiden.
+Die Websuche kann zusätzliche OpenAI-API-Kosten verursachen.
+
 `Start-KI-Ratgeber.cmd` per Doppelklick starten. Beim ersten Start werden die
 Python-Abhängigkeiten in `.venv-advisor` installiert. Ein lokaler Server öffnet
 den Optimierer im Browser, normalerweise unter `http://127.0.0.1:8765`.

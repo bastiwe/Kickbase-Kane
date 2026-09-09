@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 import requests
 
 from features.ai_advisor import ask_advisor, prepare_context, validate_report
+from features.advisor_live import LiveKickbase
 
 
 ROOT = Path(__file__).resolve().parent
@@ -61,6 +62,7 @@ class AdvisorServer(ThreadingHTTPServer):
         self.persist_path = persist_path
         self.lock = threading.Lock()
         self.request_lock = threading.Lock()
+        self.kickbase = None
 
     @property
     def origin(self):
@@ -107,6 +109,7 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             self.reply(200, (ROOT / 'features' / name).read_text(encoding='utf-8'), content_type)
         elif self.path == '/api/status':
             self.reply(200, {'configured': bool(self.server.api_key), 'model': self.server.model,
+                             'liveConfigured': self.server.kickbase is not None,
                              'revision': self.server.revision, 'marketCount': len(self.server.report.get('marketPlayers', []))})
         else:
             self.reply(404, {'error': 'Nicht gefunden.'})
@@ -132,6 +135,15 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                 with self.server.lock:
                     self.server.api_key = key.strip()
                 self.reply(200, {'configured': bool(key)})
+            elif self.path == '/api/kickbase':
+                username, password = body.get('username', ''), body.get('password', '')
+                if not all(isinstance(v, str) and len(v) <= 512 for v in (username, password)):
+                    raise ValueError('Ungültige Zugangsdaten.')
+                if bool(username) != bool(password):
+                    raise ValueError('Benutzername und Passwort werden benötigt.')
+                with self.server.lock:
+                    self.server.kickbase = LiveKickbase(username, password) if username else None
+                self.reply(200, {'configured': bool(username)})
             elif self.path == '/api/report':
                 html = body.get('html')
                 if not isinstance(html, str):
@@ -164,6 +176,7 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                 self.reply(409, {'error': 'Ein neuer Report wurde geladen. Bitte die Seite neu laden.'})
                 return
             report, key, model = self.server.report, self.server.api_key, self.server.model
+            kickbase = self.server.kickbase
         if not key:
             self.reply(409, {'error': 'Bitte zuerst den OpenAI-API-Schlüssel unter KI-Einstellungen hinterlegen.'})
             return
@@ -180,8 +193,13 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             self.reply(429, {'error': 'Es läuft bereits eine KI-Anfrage. Bitte kurz warten.'})
             return
         try:
+            if kickbase:
+                live_report, live_state, live_info = kickbase.refresh(report, body.get('state'))
+                context = prepare_context(live_report, live_state)
+                context['liveData'] = live_info
             result = ask_advisor(key, model, context, message.strip(), history)
             result['checkedPlan'] = context['checkedCurrentPlan']
+            result['liveData'] = context.get('liveData')
             self.reply(200, result)
         finally:
             self.server.request_lock.release()
@@ -210,6 +228,8 @@ def main():
     else:
         report = read_report(report_path.read_text(encoding='utf-8')) if report_path.is_file() else None
     server = create_server(args.port, report, os.getenv('OPENAI_API_KEY'), os.getenv('OPENAI_MODEL', 'gpt-5-mini'), saved_report)
+    if os.getenv('KICK_USER') and os.getenv('KICK_PASS'):
+        server.kickbase = LiveKickbase(os.environ['KICK_USER'], os.environ['KICK_PASS'])
     print('Kickbase KI-Ratgeber: ' + server.origin, flush=True)
     print('Report und API-Schlüssel können in der lokalen Oberfläche geladen werden.', flush=True)
     if not args.no_browser:
