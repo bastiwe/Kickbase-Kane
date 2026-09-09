@@ -154,10 +154,17 @@ Prognosestand und Quelle stehen unter der Bankliste; fehlende Werte werden
 ausgewiesen, Summen gegebenenfalls als Teilsumme gekennzeichnet.
 Die Summen gelten für alle nicht aufgestellten eigenen Spieler und eingeplanten
 Gebote, unabhängig vom Suchfilter und vor simulierten Bankverkäufen.
-Die Summe bis zum nächsten im Daten-Cache enthaltenen Spieltermin ist eine
-lineare Hochrechnung: 1T-Summe mal Anzahl verbleibender 22-Uhr-Updates vor dem
-Spieltagsdatum. Das Update am Spieltag selbst wird mangels Anstoßzeit nicht
-mitgezählt. Dies ist keine neu berechnete Mehrtagesprognose.
+Die Summe bis zum nächsten im Daten-Cache enthaltenen Spieltermin verwendet
+gespeicherte kumulierte 1T- und 7T-Modellprognosen (optional auch 3T).
+Zwischen diesen Stützpunkten wird interpoliert. Beispiel: +100.000 Euro morgen,
+aber nur +250.000 Euro nach sieben Tagen ergeben +150.000 Euro nach drei Updates
+statt der bisherigen +300.000 Euro. Das ist eine modellgestützte Schätzung,
+kein eigenes Modell für jeden Zwischenhorizont und kein belegter Genauigkeitsgewinn.
+Hierfür einmal die Spät-Action ausführen. Fast 1T bewahrt den separat datierten
+7T-Cache, trainiert aber weiterhin kein Wochenmodell. Nur Prognosen aus demselben
+22-Uhr-Marktwertzyklus werden kombiniert. Fehlende/veraltete Werte bleiben offen;
+Teilsummen werden markiert. Oberhalb des längsten Modellhorizonts wird nicht extrapoliert.
+Das Update am Spieltag selbst wird mangels Anstoßzeit weiterhin nicht mitgezählt.
 
 Der Workflow **Run Daily Predictions Spaet** erstellt zusätzlich
 `startelf_optimizer.html`. Die Datei wird als Mail-Anhang und als GitHub-Artefakt

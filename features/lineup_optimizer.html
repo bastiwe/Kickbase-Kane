@@ -67,7 +67,9 @@ function renderBankForecast(){
  const sum=known.reduce((total,p)=>total+Number(p.change),0);
  const dayValue=known.length||bank.length===0?sum:null;
  const horizon=data.forecastHorizon;
- const projected=horizon&&dayValue!==null?dayValue*horizon.updates:null;
+ const multiKnown=bank.filter(p=>finite(p.matchdayChange));
+ const multiMissing=bank.length-multiKnown.length;
+ const projected=horizon?(horizon.updates===0?0:multiKnown.length||!bank.length?multiKnown.reduce((s,p)=>s+Number(p.matchdayChange),0):null):null;
  const date=horizon?horizon.date.split('-').reverse().join('.'):'unbekannt';
  const stamp=data.forecast?.generatedAt;
  const stampDate=stamp?new Date(stamp):null;
@@ -75,9 +77,10 @@ function renderBankForecast(){
  const stale=stampDate&&Date.now()-stampDate.getTime()>24*3600*1000;
  const partial=missing?' (Teilsumme)':'';
  $('bank-forecast').innerHTML=`<small>BANK · MW-PROGNOSE 1T${partial}</small><strong class="${dayValue===null?'muted':dayValue>=0?'positive':'negative'}">${changeMoney(dayValue)}</strong>
- <small>BIS SPIELTAG ${date}${partial} · LINEAR</small><strong class="${projected===null?'muted':projected>=0?'positive':'negative'}">${projected===null?'Nicht verfügbar':changeMoney(projected)}</strong>
+ <small>BIS SPIELTAG ${date}${multiMissing&&horizon?.updates?' (Teilsumme)':''} · MODELLGESTÜTZTE SCHÄTZUNG</small><strong class="${projected===null?'muted':projected>=0?'positive':'negative'}">${projected===null?'Nicht verfügbar':changeMoney(projected)}</strong>
  <small>${known.length}/${bank.length} Bankspieler mit Prognose${missing?' · '+missing+' fehlen':''}. Eigene Spieler + eingeplante Gebote, vor simulierten Verkäufen. Suchfilter ändern diese Summe nicht.</small>
- <small>${horizon?horizon.updates+' MW-Updates um 22 Uhr vor dem Spieltagsdatum × unveränderte 1T-Prognose. Keine neue Mehrtagesprognose.':'Kein kommender Spieltermin im Daten-Cache.'}</small>
+ <small>${horizon?horizon.updates+' MW-Updates bis zum Spieltag. '+multiKnown.length+'/'+bank.length+' Spieler mit passender Prognose. Zwischenwerte aus gespeicherten 1T-/3T-/7T-Modellwerten interpoliert; keine konstante tägliche Steigerung.':'Kein kommender Spieltermin im Daten-Cache.'}</small>
+ <small>Fehlende oder seit dem letzten 22-Uhr-Update veraltete Mehrtagesdaten werden nicht hochgerechnet. Oberhalb von sieben Updates keine Schätzung.</small>
  <small class="${stale?'warning':''}">Prognosestand: ${esc(stampLabel)} · ${esc(data.forecast?.source||'Kein Prognose-Cache')}${stale?' · älter als 24 Stunden':''}</small>`;
 }
 function choose(index){target=index;const pos=slots()[index];$('choices').innerHTML='<button class="choice" data-pick="">Auf Bank setzen / Platz leeren</button>'+active().filter(p=>p.position===pos).sort((a,b)=>(score(b).value??-Infinity)-(score(a).value??-Infinity)).map(p=>`<button class="choice" data-pick="${esc(p.id)}">${photo(p)}<span>${esc(p.name)}<br><small>${esc(p.team)} · ${score(p).label}${state.selection.includes(p.id)?' · aufgestellt':''}</small></span><span>${num(score(p).value)} Pkt.<br>${money(p.mv)}</span></button>`).join('');const current=byId.get(state.selection[index]);

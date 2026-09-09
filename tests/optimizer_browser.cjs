@@ -6,7 +6,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 
 (async()=>{
  const players=Array.from({length:20},(_,i)=>({id:String(i),name:'Testspieler '+i,owned:i<16,position:i<2?1:i<8?2:i<15?3:4,team:'Verein '+i%8,teamId:String(i%8),mv:1000000,bid:1200000,image:'',status:'Fit',l3:100+i,season:200+i,previous:1000,average:80,recent:[30,40,50],li:null}));
- players.forEach((p,i)=>{p.change=i===0?null:i%2?-50000:100000;});
+ players.forEach((p,i)=>{p.change=i===0?null:i%2?-50000:100000;p.matchdayChange=i===0?null:i%2?-60000:125000;});
  const payload={players,budget:5000000,league:'test',user:'test',generated:'TESTDATEN',forecast:{generatedAt:'2026-09-09T12:00:00+02:00',source:'Fast 1T'},forecastHorizon:{date:'2026-09-11',updates:2}};
  const html=fs.readFileSync('features/lineup_optimizer.html','utf8').replace('__PAYLOAD__',JSON.stringify(payload));
  fs.mkdirSync('test-output',{recursive:true});fs.writeFileSync('test-output/optimizer-test.html',html);
@@ -18,7 +18,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
   const expected=await page.evaluate(()=>{
    const bank=players.filter(p=>!state.selection.includes(p.id)&&(p.owned||state.plans[p.id].action==='buy'));
    const sum=bank.reduce((s,p)=>s+(p.change??0),0);
-   return [changeMoney(sum),changeMoney(sum*2)];
+   return [changeMoney(sum),changeMoney(bank.reduce((s,p)=>s+(p.matchdayChange??0),0))];
   });
   assert.deepEqual(await page.locator('#bank-forecast strong').allTextContents(),expected);
  }
