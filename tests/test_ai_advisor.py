@@ -85,6 +85,18 @@ class AdviserTests(unittest.TestCase):
         self.assertNotIn('sk-test', json.dumps(request['json']))
         self.assertEqual(post.call_args.args[0], 'https://api.openai.com/v1/responses')
 
+    @patch('features.ai_advisor.requests.post')
+    def test_model_context_hides_internal_player_ids(self, post):
+        report, state = fixture()
+        post.return_value = Mock(status_code=200)
+        post.return_value.json.return_value = {'output': [{'type': 'message', 'content': [
+            {'type': 'output_text', 'text': 'Verstanden.'}]}]}
+        ask_advisor('sk-test', 'gpt-5-mini', prepare_context(report, state), 'Wer ist sinnvoll?', [])
+        payload = json.dumps(post.call_args.kwargs['json']['input'], ensure_ascii=False)
+        self.assertIn('Player 0', payload)  # names remain readable for the adviser
+        self.assertNotIn('"id"', payload)
+        self.assertNotIn('retainedIds', payload)
+
     def test_import_extracts_only_data_and_does_not_execute_scripts(self):
         report, _ = fixture()
         self.assertEqual(read_report('<script>alert(1)</script><script id="data">'+json.dumps(report)+'</script>'), report)

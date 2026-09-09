@@ -215,13 +215,55 @@ Falls liveData vorhanden ist, wurden Markt, Besitz und Cash frisch aus Kickbase 
 nenne den Abrufstand und relevante Änderungen gegenüber dem Plan. Punkte und Prognosen
 behalten ihren Reportzeitpunkt. Das Spielfeld zeigt weiter den lokalen Plan.
 Antworte knapp, konkret und verständlich. Priorisiere höchstens drei nächste Schritte.
+Deine Antwort muss immer diese Struktur haben:
+1. „Empfehlung“: maximal drei konkrete Kauf-/Verkaufsaktionen mit Spielername, Verein,
+   Rolle (Sofortverstärkung, Trading oder Kaderupdate), Gebotsspanne und Budgetstatus.
+2. „Nächster Spieltag“: stärkste realistische Elf und welche Aktion dafür nötig ist.
+3. „Mittelfristiger Plan“: maximal drei Prioritäten für die nächsten Wochen.
+4. „Risiken“: fehlende Daten, Einsatzrisiko, Ablaufzeit oder Budgetrisiko.
+Wenn kein Kauf sinnvoll ist, sage das ausdrücklich. Ersetze nie einen Spieler nur wegen
+eines höheren Marktwerts. Ziel ist ein möglichst starker Kader bei positivem Budget zum
+Spieltag; kurzfristiges Minus darf nur als Übergang erwähnt werden, wenn es innerhalb des
+Minuslimits liegt und bis zum Spieltag realistisch ausgeglichen werden kann.
 ''' 
+
+
+def model_context(context):
+    """Create a readable model view without internal ids or browser state."""
+    players = context.get('players', [])
+    names = {p.get('id'): p.get('name', 'Unbekannt') for p in players}
+
+    def player_view(player):
+        return {key: value for key, value in player.items()
+                if key not in ('id', 'teamId')}
+
+    plan = context.get('currentPlan', {})
+    selected = [names.get(player_id, 'Unbekannt') for player_id in plan.get('selection', []) if player_id]
+    plan_view = {key: value for key, value in plan.items() if key not in ('selection', 'plans')}
+    plan_view['Startelf'] = selected
+    plan_view['Gesperrte Spieler'] = [names.get(player_id, 'Unbekannt') for player_id, value in plan.get('plans', {}).items()
+                                      if value.get('locked')]
+    checked = dict(context.get('checkedCurrentPlan', {}))
+    for key in ('retainedIds', 'soldIds', 'clubViolations'):
+        checked.pop(key, None)
+    scenarios = []
+    for scenario in context.get('checkedSinglePlayerSwaps', []):
+        scenarios.append({key: value for key, value in scenario.items()
+                          if key not in ('buyId', 'replaceId')})
+    result = {key: value for key, value in context.items()
+              if key not in ('players', 'marketPlayers', 'currentPlan', 'checkedCurrentPlan', 'checkedSinglePlayerSwaps')}
+    result.update({'Kader': [player_view(p) for p in players],
+                   'Transfermarkt': [player_view(p) for p in context.get('marketPlayers', [])],
+                   'Aktueller Plan': plan_view,
+                   'Geprüfte Planrechnung': checked,
+                   'Geprüfte Einzeltausch-Szenarien': scenarios})
+    return result
 
 
 def ask_advisor(api_key, model, context, message, history):
     messages = [{'role': item['role'], 'content': item['content']} for item in history]
     messages.append({'role': 'user', 'content': 'Aktueller Datenstand und überprüfte Berechnungen:\n'
-                     + json.dumps(context, ensure_ascii=False, allow_nan=False) + '\n\nMeine Frage:\n' + message})
+                     + json.dumps(model_context(context), ensure_ascii=False, allow_nan=False) + '\n\nMeine Frage:\n' + message})
     response = requests.post(
         'https://api.openai.com/v1/responses',
         headers={'Authorization': 'Bearer ' + api_key, 'Content-Type': 'application/json'},
