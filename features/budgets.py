@@ -15,7 +15,7 @@ import unicodedata
 import re
 from datetime import timedelta
 
-def calc_manager_budgets(token, league_id, league_start_date, start_budget):
+def calc_manager_budgets(token, league_id, league_start_date, start_budget, include_overpay=True):
     """Calculate manager budgets based on activities, bonuses, and team performance."""
 
     try:
@@ -52,7 +52,8 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget):
             manager_name, manager_id = manager
             info = get_manager_info(token, league_id, manager_id)
             team_value = info.get("tv", 0)
-            roster_profiles[manager_name] = extract_roster_profile(info)
+            if include_overpay:
+                roster_profiles[manager_name] = extract_roster_profile(info)
 
             perf = get_manager_performance(token, league_id, manager_id, manager_name)
             perf["Team Value"] = team_value
@@ -71,11 +72,10 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget):
     # Initial cash budgets. Use all managers, not only users that already have transfer activities.
     budgets = {manager_name: start_budget for manager_name, _ in managers}
     manager_lookup = build_manager_lookup(managers)
-    average_overpay, overpay_profiles, overpay_rows = calc_overpay_analysis_by_manager(
-        activities_df,
-        league_start_date,
-        managers,
-    )
+    average_overpay, overpay_profiles, overpay_rows = {}, {}, pd.DataFrame()
+    if include_overpay:
+        average_overpay, overpay_profiles, overpay_rows = calc_overpay_analysis_by_manager(
+            activities_df, league_start_date, managers)
 
     for _, row in activities_df.iterrows():
         byr = normalize_activity_name(row.get("byr"), manager_lookup)
@@ -101,7 +101,8 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget):
         list(average_overpay.items()),
         columns=["User", "Avg Overpay"]
     )
-    budget_df = budget_df.merge(overpay_df, on="User", how="left")
+    if include_overpay:
+        budget_df = budget_df.merge(overpay_df, on="User", how="left")
 
     # Merge performance bonuses
     budget_df = budget_df.merge(

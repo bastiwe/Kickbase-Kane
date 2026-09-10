@@ -66,12 +66,13 @@ live_predictions_df = live_data_predictions(
     {"predicted_mv_target": model},
     features,
     None,
+    report_only=True,
 )
 
 write_prediction_snapshot(live_predictions_df, 'Fast 1T', competition_ids[0])
 
-market_df = join_current_market(token, league_id, live_predictions_df, current_user_id)
-squad_df = join_current_squad(token, league_id, live_predictions_df, current_user_id, league_start_date, competition_ids[0])
+market_df = join_current_market(token, league_id, live_predictions_df, current_user_id, report_only=True)
+squad_df = join_current_squad(token, league_id, live_predictions_df, current_user_id, league_start_date, competition_ids[0], report_only=True)
 
 market_count_before_filter = len(market_df)
 market_df = market_df[market_df["predicted_mv_target"].fillna(0) > min_market_prediction].copy()

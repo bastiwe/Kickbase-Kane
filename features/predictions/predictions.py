@@ -7,6 +7,24 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import numpy as np
 
+REMOVED_REPORT_COLUMNS = [
+    "buy_type", "buy_priority", "buy_priority_score", "prediction_confidence",
+    "opponent_pressure", "max_bid", "mv_trend", "last_season_points",
+    "expected_change_pct", "expected_change_pct_3d", "expected_change_pct_7d",
+    "opponent_overpay_forecast", "opponent_overpay_details", "opponent_overpay_breakdown",
+    "winning_bid", "bid_gap",
+]
+
+
+def prepare_market_report(market_df, squad_df):
+    """Keep market context without priority scores or opponent simulations."""
+    result = market_df.drop(columns=REMOVED_REPORT_COLUMNS, errors="ignore").copy()
+    counts = squad_df.get("team_name", pd.Series(dtype=str)).value_counts()
+    club_counts = result["team_name"].map(counts).fillna(0)
+    result["team_limit_warning"] = np.select(
+        [club_counts >= 3, club_counts == 2], ["Vereinslimit voll", "füllt 3/3"], default="")
+    return result.sort_values("expires_at", na_position="last", kind="stable")
+
 def psychological_bid(value):
     """Round a bid up to common thresholds and add a small overbid amount."""
 
@@ -40,7 +58,7 @@ FORMATIONS = [
     ("5-2-3", {1: 1, 2: 5, 3: 2, 4: 3}),
 ]
 
-def add_recommendation_columns(df, is_market):
+def add_recommendation_columns(df, is_market, report_only=False):
     """Add trading-oriented columns to make the predictions easier to act on."""
 
     df = df.copy()
@@ -49,6 +67,35 @@ def add_recommendation_columns(df, is_market):
             df[column] = np.nan
     if "top_player_tag" not in df:
         df["top_player_tag"] = ""
+    if report_only:
+        delta = df["predicted_mv_target"]
+        value = df["mv"].where(df["mv"] > 0)
+        if is_market:
+            for column in ["expires_overnight", "expires_before_mv_update"]:
+                if column not in df:
+                    df[column] = False
+            overnight = df["expires_overnight"]
+            before_update = df["expires_before_mv_update"]
+            if isinstance(overnight, pd.DataFrame):
+                overnight = overnight.iloc[:, 0]
+            if isinstance(before_update, pd.DataFrame):
+                before_update = before_update.iloc[:, 0]
+            df["recommendation"] = np.select(
+                [(delta >= 200_000) | (delta >= value * .02),
+                 (delta >= 75_000) | (delta >= value * .0075)],
+                ["Strong buy", "Buy"], default="Watch")
+            df["risk"] = "Normal"
+            df.loc[before_update.fillna(False).astype(bool).to_numpy(), "risk"] = "Before MV update"
+            df.loc[overnight.fillna(False).astype(bool).to_numpy(), "risk"] = "Night expiry"
+        else:
+            sell = (delta <= -200_000) | (delta <= value * -.02)
+            consider = (delta <= -75_000) | (delta <= value * -.0075)
+            keep = (delta >= 100_000) | (delta >= value * .01)
+            df["recommendation"] = np.select([sell, consider, keep],
+                ["Sell", "Consider sell", "Keep"], default="Hold")
+            df["sell_advice"] = np.select([sell, consider, keep],
+                ["Vor 22 Uhr verkaufen", "Verkauf prüfen", "Kaderkern/Halten"], default="Halten")
+        return df.drop(columns=REMOVED_REPORT_COLUMNS, errors="ignore")
     df["expected_change_pct"] = np.where(
         df["mv"] > 0,
         np.round((df["predicted_mv_target"] / df["mv"]) * 100, 2),
@@ -76,14 +123,15 @@ def add_recommendation_columns(df, is_market):
         )
         raw_max_bid = df["mv"] + (df["predicted_mv_target"].clip(lower=0) * 0.65)
         df["max_bid"] = raw_max_bid.map(psychological_bid).astype(int)
-        df["risk"] = np.select(
-            [
-                df["expires_overnight"],
-                df["expires_before_mv_update"],
-            ],
-            ["Night expiry", "Before MV update"],
-            default="Normal"
-        )
+        df["risk"] = "Normal"
+        overnight = df["expires_overnight"]
+        before_update = df["expires_before_mv_update"]
+        if isinstance(overnight, pd.DataFrame):
+            overnight = overnight.iloc[:, 0]
+        if isinstance(before_update, pd.DataFrame):
+            before_update = before_update.iloc[:, 0]
+        df.loc[before_update.fillna(False).astype(bool).to_numpy(), "risk"] = "Before MV update"
+        df.loc[overnight.fillna(False).astype(bool).to_numpy(), "risk"] = "Night expiry"
     else:
         df["recommendation"] = np.select(
             [
@@ -160,7 +208,7 @@ def add_prediction_confidence(df):
     )
     return result
 
-def live_data_predictions(today_df, models, features, history_df=None, season_start_date=None):
+def live_data_predictions(today_df, models, features, history_df=None, season_start_date=None, report_only=False):
     """Make live data predictions for today_df using the trained model"""
 
     # Set features and copy df
@@ -172,9 +220,9 @@ def live_data_predictions(today_df, models, features, history_df=None, season_st
         today_df_results[column] = np.round(model.predict(today_df_features), 2)
     for optional_column in ["predicted_mv_target_3d", "predicted_mv_target_7d"]:
         if optional_column not in today_df_results:
-            today_df_results[optional_column] = 0
+            today_df_results[optional_column] = np.nan
 
-    today_df_results = add_player_quality_signals(today_df_results, history_df, season_start_date)
+    today_df_results = add_player_quality_signals(today_df_results, history_df, season_start_date, report_only=report_only)
 
     # Sort by predicted_mv_target descending
     today_df_results = today_df_results.sort_values("predicted_mv_target", ascending=False)
@@ -211,7 +259,7 @@ def live_data_predictions(today_df, models, features, history_df=None, season_st
     return today_df_results
 
 
-def add_player_quality_signals(today_df_results, history_df=None, season_start_date=None):
+def add_player_quality_signals(today_df_results, history_df=None, season_start_date=None, report_only=False):
     """Add quality and lineup scoring signals based on deduplicated matchday points."""
 
     result = today_df_results.copy()
@@ -256,7 +304,11 @@ def add_player_quality_signals(today_df_results, history_df=None, season_start_d
             )
             current_quality = current_quality.merge(recent_quality, on="player_id", how="left")
 
-    if last_season_history.empty:
+    if report_only:
+        quality = last_season_history.groupby("player_id").agg(last_season_avg_points=("p", "mean")).reset_index()
+        quality["last_season_points"] = np.nan
+        quality["top_player_tag"] = ""
+    elif last_season_history.empty:
         quality = pd.DataFrame(columns=["player_id", "last_season_points", "last_season_avg_points", "top_player_tag"])
     else:
         quality = (
@@ -347,7 +399,7 @@ def squad_position_needs(squad_df):
     return {pos for pos, amount in best_missing.items() if amount > 0}
 
 
-def enrich_market_decisions_with_context(market_df, squad_df, manager_budgets_df=None):
+def enrich_market_decisions_with_context(market_df, squad_df, manager_budgets_df=None, keep_all=False):
     """Add buy type, priority, team-limit warnings, overpay pressure and strategic max bids."""
 
     if market_df is None or market_df.empty:
@@ -501,7 +553,8 @@ def enrich_market_decisions_with_context(market_df, squad_df, manager_budgets_df
         | result["buy_priority"].isin(["Hoch", "Mittel"])
     )
     keep_rows = keep_rows & (status_ok | result["has_open_bid"].fillna(False).astype(bool) | result["top_player_tag"].fillna("").astype(str).ne(""))
-    result = result[keep_rows]
+    if not keep_all:
+        result = result[keep_rows]
 
     if "hours_to_exp" in result:
         result["expiry_rank"] = pd.to_numeric(result["hours_to_exp"], errors="coerce").fillna(float("inf"))
@@ -1038,7 +1091,7 @@ def format_short_money(value):
     return f"{value / 1_000:.0f}k"
 
 
-def join_current_squad(token, league_id, today_df_results, current_user_id=None, league_start_date=None, competition_id=1):
+def join_current_squad(token, league_id, today_df_results, current_user_id=None, league_start_date=None, competition_id=1, report_only=False):
     squad_players = get_players_in_squad(token, league_id)
     players_on_market = get_league_players_on_market(token, league_id, current_user_id)
     listed_player_ids = {
@@ -1097,14 +1150,14 @@ def join_current_squad(token, league_id, today_df_results, current_user_id=None,
     squad_df = squad_df.rename(columns={"mv_x": "mv"})
     squad_df["squad_profit_loss"] = squad_df["mv"] - squad_df["purchase_price"]
 
-    squad_df = add_recommendation_columns(squad_df, is_market=False)
+    squad_df = add_recommendation_columns(squad_df, is_market=False, report_only=report_only)
     squad_df = squad_df.sort_values(
         ["mv_change_yesterday", "predicted_mv_target"],
         ascending=[True, True],
     )
 
     # Keep only relevant columns
-    squad_df = squad_df[[
+    squad_df = squad_df[[col for col in [
         "recommendation",
         "first_name",
         "last_name",
@@ -1132,7 +1185,7 @@ def join_current_squad(token, league_id, today_df_results, current_user_id=None,
         "expected_change_pct_7d",
         "sell_advice",
         "is_listed_for_sale",
-    ]]
+    ] if col in squad_df]]
     purchase_prices_found = int(squad_df["purchase_price"].notna().sum())
     print(f"Kickbase purchase prices detected for squad: {purchase_prices_found}/{len(squad_df)}.")
     print(f"Kickbase own transfer listings detected: {int(squad_df['is_listed_for_sale'].sum())}.")
@@ -1496,7 +1549,7 @@ def numeric_value(*values):
     return None
 
 
-def join_current_market(token, league_id, today_df_results, current_user_id=None):
+def join_current_market(token, league_id, today_df_results, current_user_id=None, report_only=False, include_player_id=False):
     """Join the live predictions with the current market data to get bid recommendations"""
 
     players_on_market = get_league_players_on_market(token, league_id, current_user_id)
@@ -1513,6 +1566,8 @@ def join_current_market(token, league_id, today_df_results, current_user_id=None
 
     # players_on_market to DataFrame
     market_df = pd.DataFrame(players_on_market)
+    if market_df.empty:
+        return pd.DataFrame(columns=["player_id", "team_name", "expires_at", "predicted_mv_target", "has_open_bid"])
     own_listing_count = int(market_df.get("is_own_listing", pd.Series(False, index=market_df.index)).fillna(False).astype(bool).sum())
     own_squad_market_count = int(market_df["id"].astype(str).isin(own_squad_ids).sum()) if "id" in market_df else 0
     if own_listing_count or own_squad_market_count:
@@ -1546,20 +1601,26 @@ def join_current_market(token, league_id, today_df_results, current_user_id=None
     # Rename mv_change_1d to mv_change_yesterday for better understanding
     bid_df = bid_df.rename(columns={"mv_change_1d": "mv_change_yesterday"})
 
-    bid_df = add_recommendation_columns(bid_df, is_market=True)
-    own_open_bids_total = int(bid_df["has_open_bid"].sum())
+    bid_df = add_recommendation_columns(bid_df, is_market=True, report_only=report_only)
+    if "has_open_bid" not in bid_df:
+        bid_df["has_open_bid"] = False
+    own_open_bids_total = int(bid_df["has_open_bid"].fillna(False).astype(bool).sum())
 
     # Sort broadly here; the final strategic filtering happens after LigaInsider and squad context are available.
-    bid_df["own_bid_rank"] = np.where(bid_df["has_open_bid"], 0, 1)
-    bid_df["top_player_rank"] = np.where(bid_df["top_player_tag"].fillna("").astype(str).ne(""), 0, 1)
-    bid_df["risk_rank"] = bid_df["risk"].map({"Night expiry": 0, "Before MV update": 1}).fillna(2)
-    bid_df = bid_df.sort_values(
-        ["own_bid_rank", "top_player_rank", "risk_rank", "predicted_mv_target", "expected_change_pct"],
-        ascending=[True, True, True, False, False],
-    )
+    if report_only:
+        bid_df = bid_df.sort_values("expires_at", na_position="last", kind="stable")
+    else:
+        bid_df["own_bid_rank"] = np.where(bid_df["has_open_bid"], 0, 1)
+        bid_df["top_player_rank"] = np.where(bid_df["top_player_tag"].fillna("").astype(str).ne(""), 0, 1)
+        bid_df["risk_rank"] = bid_df["risk"].map({"Night expiry": 0, "Before MV update": 1}).fillna(2)
+        bid_df = bid_df.sort_values(
+            ["own_bid_rank", "top_player_rank", "risk_rank", "predicted_mv_target", "expected_change_pct"],
+            ascending=[True, True, True, False, False],
+        )
 
     # Keep only relevant columns
-    bid_df = bid_df[[
+    bid_df = bid_df[[col for col in [
+        *(["player_id"] if include_player_id else []),
         "recommendation",
         "first_name",
         "last_name",
@@ -1588,7 +1649,7 @@ def join_current_market(token, league_id, today_df_results, current_user_id=None
         "expires_at",
         "risk",
         "has_open_bid",
-    ]]
+    ] if col in bid_df]]
     print(
         f"Kickbase own open bids detected: {own_open_bids_total} total, "
         f"{own_listing_count} own listings and {own_squad_market_count} own squad players excluded, "

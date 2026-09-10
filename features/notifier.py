@@ -8,6 +8,7 @@ import json
 import smtplib
 import os
 import pandas as pd
+from features.predictions.predictions import REMOVED_REPORT_COLUMNS
 
 COLUMN_LABELS = {
     "recommendation": "Action",
@@ -403,7 +404,7 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
             if expires and expires != "-" else ""
         )
         return (
-            '<td style="vertical-align:top;padding:0 8px 10px 0;width:33.33%;">'
+            '<td class="report-card" style="vertical-align:top;padding:0 8px 10px 0;width:33.33%;">'
             f'<div style="border:1px solid #e5e7eb;border-left:5px solid {accent};border-radius:8px;'
             'background:#ffffff;padding:10px;min-height:118px;">'
             '<table role="presentation" style="border-collapse:collapse;width:100%;"><tr>'
@@ -422,16 +423,14 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
         if not cards:
             return '<p style="font-size:13px;color:#6b7280;margin:6px 0 0 0;">Kein akuter Handlungsbedarf im aktuellen Report.</p>'
         return (
-            '<table role="presentation" style="width:100%;border-collapse:collapse;table-layout:fixed;"><tr>'
+            '<table class="report-cards" role="presentation" style="width:100%;border-collapse:collapse;table-layout:fixed;"><tr>'
             + "".join(cards)
             + "</tr></table>"
         )
 
     def top_pick_card(row, rank):
-        buy_type = str(row.get("buy_type", "") or "")
-        is_big_boy = buy_type == "Kader-Kauf" or str(row.get("top_player_tag", "") or "") != ""
-        accent = "#854d0e" if is_big_boy else "#166534"
-        title = f"#{rank} {'Big Boy' if is_big_boy else 'Trading-Pick'}"
+        accent = "#166534"
+        title = f"#{rank} Marktwert-Pick"
         name = escape(player_name(row))
         url = player_url(row)
         image = player_image(row, size=96)
@@ -442,22 +441,10 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
         expires = expiry_value(row.get("expires_at")) if "expires_at" in row else "-"
         starter_rate = row.get("starter_rate")
         starter_text = format_percent(starter_rate) if isinstance(starter_rate, Number) and starter_rate == starter_rate else "-"
-        tag_badge = badge(row.get("top_player_tag"))
         limit_badge = badge(row.get("team_limit_warning"))
         status_badge = badge(row.get("player_status"))
-        confidence_badge = badge(row.get("prediction_confidence"))
-        pressure_badge = badge(row.get("opponent_pressure"))
-        opponent_overpay = row.get("opponent_overpay_forecast")
-        opponent_overpay_text = (
-            f'+{format_number(opponent_overpay)}'
-            if isinstance(opponent_overpay, Number) and opponent_overpay == opponent_overpay
-            else "-"
-        )
-        bid_gap = row.get("bid_gap")
-        bid_gap_text = colored_number(bid_gap, format_number(bid_gap)) if isinstance(bid_gap, Number) and bid_gap == bid_gap else "-"
-        opponent_details = escape(str(row.get("opponent_overpay_details", "") or "-"))
         return (
-            '<td style="vertical-align:top;padding:0 10px 12px 0;width:33.33%;">'
+            '<td class="report-card" style="vertical-align:top;padding:0 10px 12px 0;width:33.33%;">'
             f'<div style="border:1px solid #e5e7eb;border-top:5px solid {accent};border-radius:8px;'
             'background:#ffffff;padding:12px;min-height:196px;">'
             '<table role="presentation" style="border-collapse:collapse;width:100%;"><tr>'
@@ -466,24 +453,14 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
             f'<div style="font-size:12px;color:#6b7280;font-weight:800;text-transform:uppercase;">{escape(title)}</div>'
             f'<div style="font-size:17px;font-weight:900;color:#111827;margin-top:4px;">{name_html}</div>'
             f'<div style="font-size:12px;color:#6b7280;margin-top:3px;">{position_label(row.get("position"))} · {escape(str(row.get("team_name", "-")))}</div>'
-            f'<div style="margin-top:8px;">{badge(row.get("buy_type"))} {badge(row.get("buy_priority"))} {confidence_badge} {status_badge} {tag_badge} {limit_badge}</div>'
+            f'<div style="margin-top:8px;">{status_badge} {limit_badge}</div>'
             '</td></tr></table>'
             '<div style="border-top:1px solid #eef2f7;margin-top:10px;padding-top:9px;">'
             '<table role="presentation" style="border-collapse:collapse;width:100%;font-size:12px;color:#374151;">'
             '<tr>'
             f'<td style="padding:3px 4px 3px 0;color:#6b7280;">Erw. 1T</td><td style="padding:3px 0;text-align:right;">{colored_number(row.get("predicted_mv_target"), format_number(row.get("predicted_mv_target")))}</td>'
             '</tr><tr>'
-            f'<td style="padding:3px 4px 3px 0;color:#6b7280;">Max. Gebot</td><td style="padding:3px 0;text-align:right;font-weight:800;">{format_number(row.get("max_bid"))}</td>'
-            '</tr><tr>'
-            f'<td style="padding:3px 4px 3px 0;color:#6b7280;">Sieggebot</td><td style="padding:3px 0;text-align:right;font-weight:800;">{format_number(row.get("winning_bid"))}</td>'
-            '</tr><tr>'
-            f'<td style="padding:3px 4px 3px 0;color:#6b7280;">Gap</td><td style="padding:3px 0;text-align:right;font-weight:800;">{bid_gap_text}</td>'
-            '</tr><tr>'
-            f'<td style="padding:3px 4px 3px 0;color:#6b7280;">Gegnerdruck</td><td style="padding:3px 0;text-align:right;">{pressure_badge}</td>'
-            '</tr><tr>'
-            f'<td style="padding:3px 4px 3px 0;color:#6b7280;">Erw. Gegner</td><td style="padding:3px 0;text-align:right;font-weight:800;">{opponent_overpay_text}</td>'
-            '</tr><tr>'
-            f'<td style="padding:3px 4px 3px 0;color:#6b7280;">Top-Gegner</td><td style="padding:3px 0;text-align:right;">{opponent_details}</td>'
+            f'<td style="padding:3px 4px 3px 0;color:#6b7280;">Marktwert</td><td style="padding:3px 0;text-align:right;">{format_number(row.get("mv"))}</td>'
             '</tr><tr>'
             f'<td style="padding:3px 4px 3px 0;color:#6b7280;">LI %</td><td style="padding:3px 0;text-align:right;">{starter_text}</td>'
             '</tr><tr>'
@@ -498,48 +475,21 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
         if market_df.empty or "predicted_mv_target" not in market_df:
             return ""
 
-        candidates = market_df.copy()
-        for col, default in [
-            ("buy_priority_score", 0),
-            ("predicted_mv_target", 0),
-            ("expected_change_pct", 0),
-            ("buy_priority", "Niedrig"),
-            ("buy_type", "Trading-Kauf"),
-            ("top_player_tag", ""),
-            ("starter_rate", 0),
-            ("has_open_bid", False),
-            ("prediction_confidence", "Niedrig"),
-        ]:
-            if col not in candidates:
-                candidates[col] = default
-
-        candidates = candidates[
-            (candidates["predicted_mv_target"].fillna(0) > 0)
-            | candidates["top_player_tag"].fillna("").astype(str).ne("")
-            | candidates["buy_priority"].isin(["Hoch", "Mittel"])
-        ]
-        candidates["big_boy_rank"] = candidates["buy_type"].eq("Kader-Kauf") | candidates["top_player_tag"].fillna("").astype(str).ne("")
-        candidates["priority_rank"] = candidates["buy_priority"].map({"Hoch": 0, "Mittel": 1, "Niedrig": 2}).fillna(3)
-        candidates["confidence_rank"] = candidates["prediction_confidence"].map({"Hoch": 0, "Mittel": 1, "Niedrig": 2}).fillna(2)
-        candidates["open_bid_rank"] = candidates["has_open_bid"].fillna(False).astype(bool).map({True: 0, False: 1})
-        candidates = candidates.sort_values(
-            [
-                "priority_rank",
-                "confidence_rank",
-                "big_boy_rank",
-                "buy_priority_score",
-                "predicted_mv_target",
-                "expected_change_pct",
-                "open_bid_rank",
-            ],
-            ascending=[True, True, False, False, False, False, True],
-        ).head(3)
+        candidates = market_df[market_df["predicted_mv_target"] > 0].copy()
+        if "player_status" in candidates:
+            candidates = candidates[~candidates["player_status"].isin([
+                "Verletzt", "Reha", "Rotgesperrt", "Gelb-Rot-Sperre",
+                "Gelbsperre", "Nicht im Kader", "Nicht in Liga", "Abwesend",
+            ])]
+        if "team_limit_warning" in candidates:
+            candidates = candidates[candidates["team_limit_warning"] != "Vereinslimit voll"]
+        candidates = candidates.sort_values("predicted_mv_target", ascending=False).head(3)
         if candidates.empty:
             return ""
 
         cards = [top_pick_card(row, rank) for rank, (_, row) in enumerate(candidates.iterrows(), start=1)]
         return f"""
-            <p style="font-size:13px;color:#374151;margin:10px 0 8px 0;"><b>Top 3 Kauf-Picks: Big Boys und starke Trading-Spieler</b></p>
+            <p style="font-size:13px;color:#374151;margin:10px 0 8px 0;"><b>Top 3 Marktwert-Picks nach erwarteter 1T-Steigerung</b></p>
             {card_row(cards)}
         """
 
@@ -781,21 +731,8 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 limit_candidates = candidates[candidates["team_limit_warning"] != "Vereinslimit voll"]
                 if not limit_candidates.empty:
                     candidates = limit_candidates
-            for col, default in [
-                ("buy_priority_score", 0),
-                ("predicted_mv_target", 0),
-                ("expected_change_pct", 0),
-                ("buy_priority", "Niedrig"),
-                ("prediction_confidence", "Niedrig"),
-            ]:
-                if col not in candidates:
-                    candidates[col] = default
-            candidates["priority_rank"] = candidates["buy_priority"].map({"Hoch": 0, "Mittel": 1, "Niedrig": 2}).fillna(3)
-            candidates["confidence_rank"] = candidates["prediction_confidence"].map({"Hoch": 0, "Mittel": 1, "Niedrig": 2}).fillna(2)
-            candidate = candidates.sort_values(
-                ["priority_rank", "confidence_rank", "buy_priority_score", "predicted_mv_target", "expected_change_pct"],
-                ascending=[True, True, False, False, False],
-            ).iloc[0]
+            sort_columns = [col for col in ["lineup_score", "last_season_avg_points", "predicted_mv_target"] if col in candidates]
+            candidate = candidates.sort_values(sort_columns, ascending=False, na_position="last").iloc[0] if sort_columns else candidates.iloc[0]
             name = escape(player_name(candidate))
             url = player_url(candidate)
             name_html = (
@@ -804,7 +741,6 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
             )
             return (
                 f'{name_html} ({position_label(candidate.get("position"))}, {escape(str(candidate.get("team_name", "-")))}) '
-                f'{badge(candidate.get("buy_priority"))} {badge(candidate.get("prediction_confidence"))} '
                 f'Erw. 1T {colored_number(candidate.get("predicted_mv_target"), format_number(candidate.get("predicted_mv_target")))}'
             )
 
@@ -985,20 +921,6 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
         return f"""
             <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin:0 0 24px 0;">
                 <h3 style="color:#1f2933;margin:0 0 10px 0;font-size:16px;">Kaderanalyse</h3>
-                <p style="font-size:13px;color:#4b5563;margin:0 0 8px 0;">
-                    Kaderpositionen: <b>{counts_text}</b>. Mögliche Formationen mit aktuellem Kader: <b>{possible_text}</b>.
-                </p>
-                {primary_html}
-                {secondary_html}
-                <p style="font-size:13px;color:#4b5563;margin:0 0 8px 0;">
-                    Kadergröße:
-                    <span style="display:inline-block;{squad_size_style}font-weight:700;border-radius:999px;padding:4px 9px;white-space:nowrap;">{squad_size}/16</span>
-                    <span style="color:#6b7280;">({squad_slots_left} Plätze frei)</span>
-                    <span style="margin-left:10px;">Max. 3 Spieler pro Verein:</span>
-                    {team_limit_html}
-                </p>
-                <p style="font-size:13px;color:#374151;margin:0 0 6px 0;"><b>Nächstliegende Formationen:</b></p>
-                <ul style="margin:0 0 10px 18px;padding:0;font-size:13px;color:#374151;">{''.join(option_rows)}</ul>
                 <p style="font-size:13px;color:#374151;margin:0 0 4px 0;"><b>Verstärkungspotenzial:</b> {need_label}. {need_reason}</p>
                 {strengthen_html}
                 <p style="font-size:13px;color:#374151;margin:0 0 4px 0;"><b>Sinnvolle Markt-Ergänzungen:</b></p>
@@ -1007,10 +929,7 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
         """
 
     def prepare_df(df):
-        result = df.copy()
-        if {"predicted_mv_target", "mv_change_yesterday"}.issubset(result.columns):
-            insert_at = result.columns.get_loc("predicted_mv_target") + 1
-            result.insert(insert_at, "mv_trend", result["predicted_mv_target"] - result["mv_change_yesterday"])
+        result = df.drop(columns=REMOVED_REPORT_COLUMNS + ["top_player_tag"], errors="ignore").copy()
 
         if {"starter_rate", "recent_starts", "recent_apps"}.issubset(result.columns):
             result["starter_rate"] = result.apply(
@@ -1155,6 +1074,8 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
         if {"mv", "squad_profit_loss"}.issubset(df.columns):
             total_market_value = numeric_sum(df["mv"])
             total_profit_loss = numeric_sum(df["squad_profit_loss"])
+            total_last_mv_change = numeric_sum(df.get("mv_change_yesterday", []))
+            total_expected_change = numeric_sum(df.get("predicted_mv_target", []))
             footer_cells = []
             for index, col in enumerate(visible_cols):
                 if index == 0:
@@ -1163,6 +1084,10 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                     value = f"<strong>{format_number(total_market_value)}</strong>"
                 elif col == "G/V":
                     value = colored_number(total_profit_loss, format_number(total_profit_loss))
+                elif col == "Letzte MW":
+                    value = colored_number(total_last_mv_change, format_number(total_last_mv_change))
+                elif col == "Erw. 1T":
+                    value = colored_number(total_expected_change, format_number(total_expected_change))
                 else:
                     value = ""
                 footer_cells.append(
@@ -1172,9 +1097,10 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
             footer_html = f'<tfoot><tr>{"".join(footer_cells)}</tr></tfoot>'
 
         return (
-            '<table style="width:100%;min-width:2050px;border-collapse:collapse;font-size:12px;'
+            '<div style="max-width:100%;overflow-x:auto;">'
+            '<table style="width:100%;border-collapse:collapse;font-size:12px;'
             f'margin:16px 0 24px 0;table-layout:auto;"><thead><tr>{header_html}</tr></thead>'
-            f'<tbody>{"".join(rows)}</tbody>{footer_html}</table>'
+            f'<tbody>{"".join(rows)}</tbody>{footer_html}</table></div>'
         )
 
     action_legend = f"""
@@ -1188,49 +1114,24 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 <b>Markt:</b>
                 {badge("Strong buy")} erwartete Änderung >= 200.000 oder >= 2,00%;
                 {badge("Buy")} erwartete Änderung >= 75.000 oder >= 0,75%.
-                Zusätzlich bleiben offene Gebote, Topspieler und Spieler mit hoher oder mittlerer Kaufpriorität sichtbar.
+                Alle fremden Marktangebote bleiben sichtbar, sortiert nach Ablauf. Die Top-3-Kacheln zeigen positive 1T-Prognosen ohne bekannte Ausfälle oder volles Vereinslimit; sie sind keine langfristige sportliche Kaufbewertung.
             </p>
-            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
-                <b>Kaufart & Priorität:</b>
-                {badge("Kader-Kauf")} meint langfristige Kaderverstärkung, vor allem durch Vorsaisonklasse, hohe LI-Startelfquote oder passende Position.
-                {badge("Trading-Kauf")} ist primär ein Marktwert-Trade.
-                Die Priorität {badge("Hoch")} / {badge("Mittel")} / {badge("Niedrig")} kombiniert Vorsaisonklasse, LI %, interne Marktwertsignale und deinen Positionsbedarf.
-            </p>
-            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
-                <b>Klasse:</b>
-                {badge("Elite-Spieler")} und {badge("Top-Spieler")} basieren auf deduplizierten Kickbase-Punkten der Vorsaison.
-                Elite-Marktspieler werden gold hinterlegt, damit langfristige Kaderverstärker nicht zwischen Trading-Käufen untergehen.
-            </p>
-            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
-                <b>Max. Gebot:</b>
-                Trading-Käufe bleiben konservativ. Bei {badge("Kader-Kauf")} und besonders bei {badge("Elite-Spieler")}
-                wird mehr vom kurzfristigen Upside eingepreist, danach auf psychologisch sinnvolle Gebotsstufen aufgerundet
-                und mit kleinem Overbid versehen, um runde Konkurrenzgebote zu schlagen.
-                Kritische Spielerstatus wie {badge("Verletzt")} oder {badge("Reha")} reduzieren Priorität und Max. Gebot deutlich.
-            </p>
-            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
-                <b>Sieggebot & Gap:</b>
-                Sieggebot ist Marktwert plus erwarteter stärkster Gegner-Overpay, psychologisch aufgerundet.
-                Gap = Max. Gebot minus Sieggebot. Positiver Gap bedeutet: dein Value-Limit reicht voraussichtlich;
-                negativer Gap bedeutet: zum Gewinnen müsstest du über dein rationales Limit gehen.
-            </p>
+
+
+
+
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Status:</b>
                 Kommt aus dem Kickbase-Spielerstatus im Markt- oder Kaderpayload.
                 {badge("Fit")} ist unkritisch; {badge("Angeschlagen")} / {badge("Gelbsperre")} sind Warnsignale;
                 {badge("Verletzt")} / {badge("Reha")} / Sperren werden aus Top-Chance-Kacheln ausgeschlossen.
             </p>
-            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
-                <b>Vertrauen:</b>
-                {badge("Hoch")} bedeutet: Prognose, letzter MW-Wert, Marktwert und zusätzliche Kontextsignale sind vorhanden.
-                {badge("Mittel")} bedeutet: die 1T-Prognose ist nutzbar, aber die Datenbasis ist dünner.
-                {badge("Niedrig")} bedeutet: fehlende Prognose-/Historienwerte, frischer Kontext oder ein kritischer Status machen die Einschätzung unsicherer.
-            </p>
+
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Verkaufsampel:</b>
                 {badge("Vor 22 Uhr verkaufen")} markiert eigene Spieler mit stark negativer 1T-Prognose vor der Marktwert-Neuberechnung.
                 {badge("Verkauf prüfen")} ist ein mittleres Warnsignal.
-                {badge("Kaderkern/Halten")} schützt positive Prognosen, Topspieler und langfristig wertvolle Kaderspieler vor vorschnellem Verkauf.
+                {badge("Kaderkern/Halten")} markiert positive Prognosen; sportlichen Nutzen vor einem Verkauf gesondert prüfen.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Kaderanalyse:</b>
@@ -1238,31 +1139,10 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 letzte 3 aktuelle Spiele, aktuelle Saison, danach Vorsaison-Ø bzw. Vorsaison-Gesamtpunkte, falls es noch keine aktuellen Saisonpunkte gibt.
                 Der Verstärkungshinweis nutzt fehlende Formationsteile oder die schwächste Position deiner berechneten besten Elf.
             </p>
-            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
-                <b>Ø Overpay:</b>
-                Durchschnitt aus gezahltem Transferpreis minus Marktwert zum Transferdatum für Käufe seit Saisonstart.
-                Positive Werte bedeuten im Schnitt über Marktwert gekauft, negative Werte bedeuten unter Marktwert gekauft.
-            </p>
-            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
-                <b>Gegnerdruck:</b>
-                Schätzt den höchsten zu erwartenden Overpay deiner Gegner anhand bisheriger Käufe.
-                Berücksichtigt werden Marktwert-Segment, Top-/Eliteklasse, Kader-Kauf, verfügbare Budgets sowie erkennbare Kader- und Vereinslimits der Gegner.
-                Die Detailseite ergänzt Positionsbias, Trendbias, Klassenbias, Aggressivitäts-Score und Eskalationspotenzial.
-                Das erkennt keine echten Mitbieter, sondern modelliert den wahrscheinlichen Preisdruck.
-            </p>
-            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
-                <b>Overpay-Multiplikatoren:</b>
-                Basis ist der geglättete historische Overpay des Managers im passenden Marktwert-Segment.
-                Qualitätsfaktor erhöht Top-/Elite- und Kader-Käufe.
-                Musterfaktor bündelt Positions-, Trend- und Klassenbias des Managers.
-                Eskalationsfaktor berücksichtigt Streuung, p75 und Max-Overpay, also ob ein Manager gelegentlich stark eskaliert.
-            </p>
-            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
-                <b>MW-Tendenz:</b>
-                <span style="display:inline-block;background:#dcfce7;color:#166534;font-weight:800;border-radius:999px;padding:3px 8px;">↑</span> Erw. 1T ist höher als Letzte MW,
-                <span style="display:inline-block;background:#f3f4f6;color:#374151;font-weight:800;border-radius:999px;padding:3px 8px;">→</span> etwa gleich,
-                <span style="display:inline-block;background:#fee2e2;color:#991b1b;font-weight:800;border-radius:999px;padding:3px 8px;">↓</span> Erw. 1T ist niedriger als Letzte MW.
-            </p>
+
+
+
+
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Risiko:</b>
                 {badge("Before MV update")} bedeutet, dass das Angebot vor der nächsten Marktwert-Neuberechnung um 22:00 Uhr abläuft.
@@ -1306,8 +1186,17 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
     msg.set_content("Sorry, results only via html visible.", subtype="plain")
     msg.add_alternative(f"""\
     <html>
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <style>
+        @media (max-width: 700px) {{
+          .report-card {{ display:block !important; width:100% !important; padding:0 0 12px !important; box-sizing:border-box; }}
+          .report-cards, .report-cards > tbody, .report-cards > tbody > tr {{ display:block !important; width:100% !important; }}
+        }}
+      </style>
+    </head>
     <body style="font-family: Arial, sans-serif; background-color: #f4f6f8; margin: 0; padding: 8px;">
-        <div style="max-width: 2200px; width: 100%; margin: auto; background: #ffffff; padding: 14px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); overflow-x: auto; box-sizing: border-box;">
+        <div style="max-width: 1500px; width: 100%; margin: auto; background: #ffffff; padding: 14px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); overflow-x: auto; box-sizing: border-box;">
         
         <h2 style="color: #1f2933; text-align: center; margin-top: 0;">Kickbase Report für {today}</h2>
 
@@ -1326,7 +1215,7 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
         {style_df(budget_df)}
 
         <h3 style="color: #2c3e50; margin-top: 30px;">Aktuelle Markt-Empfehlungen</h3>
-        <p style="font-size: 14px; color: #333;">Spieler mit Trading- oder Kaderwert. Das maximale Gebot ist je nach Kaufart konservativer oder aggressiver berechnet.</p>
+        <p style="font-size: 14px; color: #333;">Fremde Marktangebote, sortiert nach Ablauf. Erw. 1T zeigt die erwartete nächste Marktwertänderung.</p>
 
         {style_df(market_df)}
 

@@ -1,6 +1,5 @@
 from features.predictions.predictions import (
-    add_prediction_confidence,
-    enrich_market_decisions_with_context,
+    prepare_market_report,
     live_data_predictions,
     join_current_market,
     join_current_squad,
@@ -10,7 +9,6 @@ from features.predictions.modeling import train_model, evaluate_model
 from kickbase_api.league import get_league_id
 from kickbase_api.user import get_user_id, login
 from features.notifier import send_mail
-from features.overpay_tool import write_overpay_tool
 from features.lineup_optimizer import write_lineup_optimizer
 from features.predictions.snapshot import write_prediction_snapshot
 from features.predictions.data_handler import (
@@ -94,7 +92,7 @@ player_df = load_player_data_from_db()
 print("\nData loaded from database.")
 
 # Calculate (estimated) budgets of all managers in the league
-manager_budgets_df = calc_manager_budgets(token, league_id, league_start_date, start_budget)
+manager_budgets_df = calc_manager_budgets(token, league_id, league_start_date, start_budget, include_overpay=False)
 print("\n=== Manager Budgets ===")
 display(manager_budgets_df)
 
@@ -116,24 +114,22 @@ for prediction_column, target in prediction_targets.items():
     )
 
 # Make live data predictions
-live_predictions_df = live_data_predictions(today_df, models, features, proc_player_df, league_start_date)
+live_predictions_df = live_data_predictions(today_df, models, features, proc_player_df, league_start_date, report_only=True)
 forecast_snapshot = write_prediction_snapshot(live_predictions_df, 'Spaet', competition_ids[0])
 
 # Join with current available players on the market
-market_recommendations_df = join_current_market(token, league_id, live_predictions_df, current_user_id)
+market_recommendations_df = join_current_market(token, league_id, live_predictions_df, current_user_id, report_only=True)
 
 # Join with current players on the team
-squad_recommendations_df = join_current_squad(token, league_id, live_predictions_df, current_user_id, league_start_date, competition_ids[0])
+squad_recommendations_df = join_current_squad(token, league_id, live_predictions_df, current_user_id, league_start_date, competition_ids[0], report_only=True)
 
 market_recommendations_df, squad_recommendations_df = enrich_reports_with_ligainsider_signals(
     market_recommendations_df,
     squad_recommendations_df,
 )
-squad_recommendations_df = add_prediction_confidence(squad_recommendations_df)
-market_recommendations_df = enrich_market_decisions_with_context(
+market_recommendations_df = prepare_market_report(
     market_recommendations_df,
     squad_recommendations_df,
-    manager_budgets_df,
 )
 
 print("\n=== Market Recommendations ===")
@@ -142,7 +138,6 @@ display(market_recommendations_df)
 print("\n=== Squad Recommendations ===")
 display(squad_recommendations_df)
 
-overpay_tool_path = write_overpay_tool(market_recommendations_df, manager_budgets_df)
 optimizer_path = None
 try:
     optimizer_path = write_lineup_optimizer(
@@ -155,4 +150,4 @@ except Exception as exc:
 
 # Send email with recommendations
 send_mail(manager_budgets_df, market_recommendations_df, squad_recommendations_df, email,
-          [overpay_tool_path, optimizer_path])
+          [optimizer_path])

@@ -1,0 +1,45 @@
+name: Run Overpay Forecast
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  overpay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements-optimizer.txt
+      - name: Restore player history
+        uses: actions/cache/restore@v5
+        with:
+          path: player_data_total.db
+          key: ${{ runner.os }}-kickbase-player-data-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-kickbase-player-data-
+      - name: Restore existing predictions
+        uses: actions/cache/restore@v5
+        with:
+          path: prediction_snapshot_1t.json
+          key: ${{ runner.os }}-kickbase-1t-forecast-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-kickbase-1t-forecast-
+      - name: Install dependencies
+        run: python -m pip install -r requirements-optimizer.txt
+      - name: Generate overpay forecast
+        env:
+          KICK_USER: ${{ secrets.KICK_USER }}
+          KICK_PASS: ${{ secrets.KICK_PASS }}
+        run: python -u overpay_forecast.py
+      - uses: actions/upload-artifact@v6
+        with:
+          name: overpay-forecast-tool
+          path: overpay_forecast.html
+          if-no-files-found: error

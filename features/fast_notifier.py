@@ -94,13 +94,11 @@ def table_html(df, is_market):
         ("Pos", lambda row: escape(position_label(row.get("position")))),
         ("Team", lambda row: escape(str(row.get("team_name", "-")))),
         ("Status", lambda row: status_badge(row.get("player_status"))),
-        ("Vertrauen", lambda row: status_badge(row.get("prediction_confidence"))),
         ("Marktwert", lambda row: format_number(row.get("mv"))),
         ("Kaufpreis", lambda row: format_number(row.get("purchase_price"))),
         ("G/V", lambda row: colored_number(row.get("squad_profit_loss"))),
         ("Letzte MW", lambda row: colored_number(row.get("mv_change_yesterday"))),
         ("Erw. 1T", lambda row: colored_number(row.get("predicted_mv_target"))),
-        ("Erw. %", lambda row: colored_pct(row.get("expected_change_pct"))),
     ]
     if is_market:
         columns = [column for column in columns if column[0] not in {"Kaufpreis", "G/V"}]
@@ -129,6 +127,8 @@ def table_html(df, is_market):
     if not is_market:
         total_market_value = numeric_sum(df.get("mv", []))
         total_profit_loss = numeric_sum(df.get("squad_profit_loss", []))
+        total_last_mv_change = numeric_sum(df.get("mv_change_yesterday", []))
+        total_expected_change = numeric_sum(df.get("predicted_mv_target", []))
         footer_cells = []
         for index, (title, _) in enumerate(columns):
             if index == 0:
@@ -137,6 +137,10 @@ def table_html(df, is_market):
                 value = f"<strong>{format_number(total_market_value)}</strong>"
             elif title == "G/V":
                 value = colored_number(total_profit_loss)
+            elif title == "Letzte MW":
+                value = colored_number(total_last_mv_change)
+            elif title == "Erw. 1T":
+                value = colored_number(total_expected_change)
             else:
                 value = ""
             footer_cells.append(

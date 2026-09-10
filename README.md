@@ -214,3 +214,41 @@ eigene Spieler bleiben immer im Kader, werden auch bei „Bank verkaufen“ nich
 als Verkauf eingeplant und beeinflussen dadurch weiterhin Aufstellung,
 Kaderlimit und Endbudget. Bei gesperrten Spielern werden widersprüchliche
 Verkaufs- oder Ausschlussaktionen automatisch verhindert.
+
+## Schlankere Reports und separate Overpay-Auswertung
+
+Spaet und Fast 1T berechnen keine Kaufprioritaet, Kaufart, Vertrauensbewertung,
+Gebotslimits oder prozentualen Prognose-Spalten mehr. Der Spaet-Report verzichtet
+auch auf Gegnerprofile, durchschnittlichen Overpay und den Overpay-HTML-Anhang.
+Die MW-Tendenz-Anzeige und die Vorsaison-Punktesumme entfallen; Punkteschnitte
+und Kaderanalyse bleiben erhalten. Ohne Vorsaison-Punktesumme entfaellt auch die
+darauf beruhende Top-/Eliteklassifizierung im regulären Report. Die Top-3-Kacheln
+zeigen jetzt die höchsten positiven 1T-Steigerungen ohne bekannte Ausfaelle oder
+volles Vereinslimit, keine strategische Kaufprioritaet. Alle fremden Marktangebote
+bleiben nach Ablauf sortiert sichtbar. Die Modell-Eingangsmerkmale (einschließlich
+historischer Trends) bleiben unveraendert: Sie werden weiterhin fuer 1T/3T/7T benoetigt.
+
+Overpay separat starten:
+
+1. GitHub: **Actions > Run Overpay Forecast > Run workflow**. Anschließend das
+   Artefakt **overpay-forecast-tool** herunterladen und `overpay_forecast.html`
+   im Browser oeffnen. Der Workflow laeuft nur manuell und versendet keine Mail.
+2. Lokal: `Start-Overpay.cmd` doppelklicken oder `python overpay_forecast.py --open`
+   ausfuehren. Zugangsdaten stehen wie beim Optimierer in `.env`: `KICK_USER`
+   und `KICK_PASS`. Es werden keine Gebote oder Transfers ausgefuehrt.
+
+Die Auswertung benoetigt `player_data_total.db` aus einer vorhandenen Berechnung.
+In GitHub wird der Cache des letzten Spaet-/Fast-Laufs genutzt. Lokal muss die
+Datenbank im Projektordner liegen, etwa aus einem lokalen Prediction-Lauf.
+`prediction_snapshot_1t.json` ist optional. Es werden **keine Modelle trainiert**,
+keine LigaInsider-Abfragen und kein vollstaendiger Datenbank-Reload ausgefuehrt.
+Budgets, Transfers und Marktangebote werden live geladen; historische Qualitaet
+und Transfer-Marktwerte stammen aus dem Cache. Dessen Datenstand wird geloggt.
+Veraltete/fehlende Prognosen werden nicht als aktuelle Prognosen angezeigt;
+davon abhaengige Value-Gebotslimits bleiben unbekannt. Overpay bleibt eine
+Schaetzung aus beobachteten Kaeufen, keine Kenntnis tatsaechlicher Mitbieter.
+
+Optionale lokale Einstellungen: `KICK_LEAGUE_NAME`, `KICK_LEAGUE_START_DATE`
+und `KICK_START_BUDGET` (Standard: Die Spätzünder, 2026-08-15, 80000000).
+Die HTML-Datei bleibt dauerhaft nutzbar, aktualisiert sich aber nicht selbst.
+Zur Aktualisierung nur die separate Aktion bzw. den lokalen Starter ausfuehren.

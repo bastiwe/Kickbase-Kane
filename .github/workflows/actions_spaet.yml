@@ -72,13 +72,6 @@ jobs:
         run: |
           python daily_predictions_spaet.py
 
-      - name: Upload overpay forecast tool
-        if: steps.berlin-time.outputs.run == 'true' && hashFiles('overpay_forecast.html') != ''
-        uses: actions/upload-artifact@v6
-        with:
-          name: overpay-forecast-tool
-          path: overpay_forecast.html
-
       - name: Upload lineup optimizer
         if: steps.berlin-time.outputs.run == 'true' && hashFiles('startelf_optimizer.html') != ''
         uses: actions/upload-artifact@v6
