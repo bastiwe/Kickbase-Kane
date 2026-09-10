@@ -51,7 +51,7 @@ def read_report(html):
 class AdvisorServer(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, address, report=None, api_key=None, model='gpt-5-mini', persist_path=None):
+    def __init__(self, address, report=None, api_key=None, model='gpt-5-mini', persist_path=None, memory_path=None):
         super().__init__(address, AdvisorHandler)
         self.report = report or {'players': [], 'budget': None, 'league': 'local', 'user': 'local',
                                  'generated': 'Noch kein Report geladen'}
@@ -60,9 +60,23 @@ class AdvisorServer(ThreadingHTTPServer):
         self.api_key = api_key or ''
         self.model = model
         self.persist_path = persist_path
+        self.memory_path = memory_path or ROOT / '.advisor-memory.json'
+        self.memory = self._load_memory()
         self.lock = threading.Lock()
         self.request_lock = threading.Lock()
         self.kickbase = None
+
+    def _load_memory(self):
+        try:
+            values = json.loads(self.memory_path.read_text(encoding='utf-8'))
+            return [item for item in values if isinstance(item, str) and item.strip()][:100]
+        except (OSError, ValueError, TypeError):
+            return []
+
+    def save_memory(self):
+        temporary = self.memory_path.with_suffix('.tmp')
+        temporary.write_text(json.dumps(self.memory, ensure_ascii=False, indent=2), encoding='utf-8')
+        temporary.replace(self.memory_path)
 
     @property
     def origin(self):
@@ -110,7 +124,8 @@ class AdvisorHandler(BaseHTTPRequestHandler):
         elif self.path == '/api/status':
             self.reply(200, {'configured': bool(self.server.api_key), 'model': self.server.model,
                              'liveConfigured': self.server.kickbase is not None,
-                             'revision': self.server.revision, 'marketCount': len(self.server.report.get('marketPlayers', []))})
+                             'revision': self.server.revision, 'marketCount': len(self.server.report.get('marketPlayers', [])),
+                             'memoryCount': len(self.server.memory)})
         else:
             self.reply(404, {'error': 'Nicht gefunden.'})
 
@@ -144,6 +159,22 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                 with self.server.lock:
                     self.server.kickbase = LiveKickbase(username, password) if username else None
                 self.reply(200, {'configured': bool(username)})
+            elif self.path == '/api/memory':
+                action, note = body.get('action'), body.get('note')
+                with self.server.lock:
+                    if action == 'add':
+                        if not isinstance(note, str) or not 3 <= len(note.strip()) <= 500:
+                            raise ValueError('Hinweis muss zwischen 3 und 500 Zeichen lang sein.')
+                        if note.strip() not in self.server.memory:
+                            self.server.memory.append(note.strip())
+                            self.server.memory = self.server.memory[-100:]
+                            self.server.save_memory()
+                    elif action == 'clear':
+                        self.server.memory = []
+                        self.server.save_memory()
+                    else:
+                        raise ValueError('Ungültige Gedächtnisaktion.')
+                    self.reply(200, {'memory': self.server.memory})
             elif self.path == '/api/report':
                 html = body.get('html')
                 if not isinstance(html, str):
@@ -176,6 +207,7 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                 self.reply(409, {'error': 'Ein neuer Report wurde geladen. Bitte die Seite neu laden.'})
                 return
             report, key, model = self.server.report, self.server.api_key, self.server.model
+            memory = list(self.server.memory)
             kickbase = self.server.kickbase
         if not key:
             self.reply(409, {'error': 'Bitte zuerst den OpenAI-API-Schlüssel unter KI-Einstellungen hinterlegen.'})
@@ -197,7 +229,7 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                 live_report, live_state, live_info = kickbase.refresh(report, body.get('state'))
                 context = prepare_context(live_report, live_state)
                 context['liveData'] = live_info
-            result = ask_advisor(key, model, context, message.strip(), history)
+            result = ask_advisor(key, model, context, message.strip(), history, memory)
             result['checkedPlan'] = context['checkedCurrentPlan']
             result['liveData'] = context.get('liveData')
             self.reply(200, result)

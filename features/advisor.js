@@ -29,6 +29,8 @@
   settings.className = 'advisor-settings';
   settings.innerHTML = `<div class="section-title"><h2>KI-Einstellungen</h2><button id="advisor-settings-close" aria-label="Einstellungen schließen">×</button></div>
     <p>Der Schlüssel bleibt im Arbeitsspeicher des lokalen Servers bis zum Beenden. Er wird nicht in die HTML-Datei oder den Chat übernommen.</p>
+    <label for="advisor-memory">Dauerhaften Hinweis speichern</label><textarea id="advisor-memory" maxlength="500" placeholder="z. B. Matsima nicht verkaufen."></textarea>
+    <div class="toolbar"><button id="advisor-memory-save" type="button">Hinweis merken</button><button id="advisor-memory-clear" type="button">Alle Hinweise löschen</button></div><p id="advisor-memory-status" role="status"></p>
     <form id="advisor-key-form"><label for="advisor-key">OpenAI-API-Schlüssel</label><input id="advisor-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…" required>
     <div class="toolbar"><button type="submit">Schlüssel übernehmen</button><button id="advisor-forget-key" type="button">Schlüssel entfernen</button></div></form><p id="advisor-key-status" role="status"></p>`;
   document.body.append(settings);
@@ -68,6 +70,7 @@
       element('advisor-meta').textContent = `${data.generated} · ${data.players.length} Kaderspieler / Gebote · ${result.marketCount} Marktangebote`;
       if (!Object.hasOwn(data, 'marketPlayers')) element('advisor-meta').textContent += ' · Älterer Report ohne vollständigen Markt';
       element('advisor-meta').textContent += result.liveConfigured ? ' · Kickbase-Liveabruf aktiv' : ' · Reportstand';
+      element('advisor-memory-status').textContent = `${result.memoryCount || 0} dauerhafte Hinweise gespeichert.`;
     } catch { element('advisor-feedback').textContent = 'Lokaler Server nicht erreichbar.'; }
   }
   function open() {
@@ -100,6 +103,15 @@
   element('advisor-forget-key').onclick = async () => {
     try {await request('/api/key', {key: ''}); element('advisor-key').value = ''; await status();}
     catch (error) {element('advisor-key-status').textContent = error.message;}
+  };
+  element('advisor-memory-save').onclick = async () => {
+    const input = element('advisor-memory');
+    try { await request('/api/memory', {action: 'add', note: input.value}); input.value = ''; await status(); }
+    catch (error) { element('advisor-memory-status').textContent = error.message; }
+  };
+  element('advisor-memory-clear').onclick = async () => {
+    try { await request('/api/memory', {action: 'clear'}); await status(); }
+    catch (error) { element('advisor-memory-status').textContent = error.message; }
   };
   element('advisor-report-open').onclick = () => element('advisor-report-file').click();
   element('advisor-report-file').onchange = async event => {

@@ -344,9 +344,11 @@ def model_context(context):
     return clean(result)
 
 
-def ask_advisor(api_key, model, context, message, history):
+def ask_advisor(api_key, model, context, message, history, memory=None):
     messages = [{'role': item['role'], 'content': item['content']} for item in history]
-    messages.append({'role': 'user', 'content': 'Aktueller Datenstand und überprüfte Berechnungen:\n'
+    memory_text = '\n'.join(f'- {item}' for item in (memory or [])) or 'Keine dauerhaft gespeicherten Hinweise.'
+    messages.append({'role': 'user', 'content': 'Dauerhafte Nutzerhinweise:\n' + memory_text +
+                     '\n\nAktueller Datenstand und überprüfte Berechnungen:\n'
                      + json.dumps(model_context(context), ensure_ascii=False, allow_nan=False) + '\n\nMeine Frage:\n' + message})
     response = requests.post(
         'https://api.openai.com/v1/responses',
