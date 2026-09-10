@@ -155,7 +155,9 @@ ausgewiesen, Summen gegebenenfalls als Teilsumme gekennzeichnet.
 Die Summen gelten für alle nicht aufgestellten eigenen Spieler und eingeplanten
 Gebote, unabhängig vom Suchfilter und vor simulierten Bankverkäufen.
 Die Summe bis zum nächsten im Daten-Cache enthaltenen Spieltermin verwendet
-gespeicherte kumulierte 1T- und 7T-Modellprognosen (optional auch 3T).
+gespeicherte kumulierte 1T-, 3T- und 7T-Modellprognosen. Der Spät-Lauf trainiert
+alle drei Modelle; die 3T-Prognose erscheint nicht in der Mail. Fast 1T und
+der Optimierer trainieren kein zusätzliches Modell.
 Zwischen diesen Stützpunkten wird interpoliert. Beispiel: +100.000 Euro morgen,
 aber nur +250.000 Euro nach sieben Tagen ergeben +150.000 Euro nach drei Updates
 statt der bisherigen +300.000 Euro. Das ist eine modellgestützte Schätzung,

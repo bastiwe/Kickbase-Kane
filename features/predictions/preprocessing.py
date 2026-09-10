@@ -34,6 +34,11 @@ def preprocess_player_data(df):
     # 3. Future market value targets
     df["mv_next_day"] = df.groupby("player_id")["mv"].shift(-1)
     df["mv_target"] = df["mv_next_day"] - df["mv"]
+    future_date_3d = df.groupby("player_id")["date"].shift(-3)
+    df["mv_next_3d"] = df.groupby("player_id")["mv"].shift(-3).where(
+        future_date_3d == df["date"] + pd.Timedelta(days=3)
+    )
+    df["mv_target_3d"] = df["mv_next_3d"] - df["mv"]
     df["mv_next_7d"] = df.groupby("player_id")["mv"].shift(-7)
     df["mv_target_7d"] = df["mv_next_7d"] - df["mv"]
     df = df[df["mv"] != 0.0]
@@ -56,7 +61,7 @@ def preprocess_player_data(df):
     df["market_divergence"] = (df["mv"] / df.groupby("md")["mv"].transform("mean")).rolling(3).mean()
 
     # 5. Clip outliers in target columns
-    for target_col in ["mv_target", "mv_target_7d"]:
+    for target_col in ["mv_target", "mv_target_3d", "mv_target_7d"]:
         Q1 = df[target_col].quantile(0.25)
         Q3 = df[target_col].quantile(0.75)
         IQR = Q3 - Q1

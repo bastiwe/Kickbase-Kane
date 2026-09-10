@@ -31,7 +31,6 @@ load_dotenv()
 # ----------------- Notes & TODOs -----------------
 
 # TODO Fix the UTC timezone problems in the github actions scheduling
-# TODO Add prediction of 3, 7 days, to give more context
 # TODO Based upon the overpay of the other users, calculate a max price to pay for a player
 # TODO Add features like starting 11 probability, injuries, ...
 # TODO Improve budget calculation, weird bug that for me the budgets is 513929 off, idk why, checked everything
@@ -53,6 +52,7 @@ features = [
 # what columns to learn and predict on
 prediction_targets = {
     "predicted_mv_target": "mv_target_clipped",
+    "predicted_mv_target_3d": "mv_target_3d_clipped",
     "predicted_mv_target_7d": "mv_target_7d_clipped",
 }
 

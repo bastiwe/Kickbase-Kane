@@ -8,9 +8,33 @@ import pandas as pd
 
 from features.predictions.snapshot import read_prediction_snapshot, write_prediction_snapshot, project_to_matchday
 from features.lineup_optimizer import forecast_horizon
+from features.predictions.preprocessing import preprocess_player_data
 
 
 class SnapshotTests(unittest.TestCase):
+    def test_three_day_targets_use_future_value_and_skip_gaps(self):
+        dates = pd.date_range('2020-01-01', periods=20).delete(9)
+        rows = pd.DataFrame({'player_id': 1, 'date': dates, 'md': dates,
+                             'mv': [1000000 + i * i * 1000 for i in range(len(dates))],
+                             'team_id': 1, 't1': 1, 't2': 2, 'p': 50})
+        processed, _ = preprocess_player_data(rows)
+        first = processed.loc[processed['date'].eq(pd.Timestamp('2020-01-02'))].iloc[0]
+        self.assertEqual(first['mv_target_3d'], 15000)
+        self.assertTrue(pd.notna(first['mv_target_3d_clipped']))
+        gap = processed.loc[processed['date'].eq(pd.Timestamp('2020-01-08'))].iloc[0]
+        self.assertTrue(pd.isna(gap['mv_target_3d']))
+
+    def test_three_day_model_is_saved_and_used_as_exact_anchor(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'forecast.json'
+            write_prediction_snapshot(pd.DataFrame([{'player_id': 1, 'predicted_mv_target': 100000,
+                'predicted_mv_target_3d': 180000, 'predicted_mv_target_7d': 250000}]), 'Spaet', path=path)
+            snapshot = read_prediction_snapshot(path)
+            now = datetime.fromisoformat(snapshot['generatedAt'])
+            self.assertEqual(project_to_matchday(snapshot, '1', 3, now), 180000)
+            self.assertEqual(project_to_matchday(snapshot, '1', 2, now), 140000)
+            self.assertEqual(project_to_matchday(snapshot, '1', 5, now), 215000)
+
     def test_model_anchors_reduce_growth_and_expire_at_update(self):
         stamp = '2026-09-09T12:00:00+02:00'
         snapshot = {'generatedAt': stamp, 'predictions': {'1': 100000}, 'multiDay': {
