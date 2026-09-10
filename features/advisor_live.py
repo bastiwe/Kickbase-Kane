@@ -36,14 +36,35 @@ class LiveKickbase:
         response = requests.post(BASE_URL + path, headers={'Authorization': 'Bearer ' + self.token}, json=payload, timeout=(5, 15))
         if response.status_code == 401:
             self.token = None
-        response.raise_for_status()
+        if response.status_code >= 400:
+            detail = response.text.strip().replace('\n', ' ')
+            if len(detail) > 240:
+                detail = detail[:237] + '...'
+            raise RuntimeError(f'Kickbase-Aufstellung abgelehnt ({response.status_code}): {detail or "keine Detailmeldung"}')
         return response.json() if response.content else {}
 
+    def lineup(self, league_id):
+        return self.get('/leagues/' + quote(str(league_id), safe='') + '/lineup')
+
     def apply_lineup(self, league_id, formation, player_ids):
-        return self.post('/leagues/' + quote(str(league_id), safe='') + '/lineup', {
+        league_path = '/leagues/' + quote(str(league_id), safe='') + '/lineup'
+        expected = [str(player_id) for player_id in player_ids]
+        response = self.post(league_path, {
             'type': formation,
-            'players': [str(player_id) for player_id in player_ids],
+            'players': expected,
         })
+        # Kickbase can return an empty 200 response. Read the resource again so
+        # the UI only reports success when the server actually stored the XI.
+        stored = self.get(league_path)
+        stored_type = str(stored.get('type') or '')
+        stored_players = stored.get('players')
+        if isinstance(stored_players, list):
+            stored_players = [str(
+                item.get('i') or item.get('id') if isinstance(item, dict) else item
+            ) for item in stored_players]
+        if stored_type != str(formation) or stored_players != expected:
+            raise RuntimeError('Kickbase hat die Aufstellung nicht wie angefordert gespeichert. Bitte Formation und Spieler prüfen.')
+        return {'response': response, 'stored': stored}
 
 
     def refresh(self, report, raw_state):
