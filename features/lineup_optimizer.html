@@ -170,4 +170,14 @@ function restore(value){
  $('reset').onclick=()=>{state=initial();state.selection=optimal(state.formation);render();$('message').textContent='Report-Daten wiederhergestellt.';};
  $('export').onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(saved(),null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='startelf-plan.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};$('import').onclick=()=>$('file').click();$('file').onchange=async e=>{try{const file=e.target.files[0];if(file){restore(JSON.parse(await file.text()));$('message').textContent='Plan importiert. Budget und Preise prüfen.';}}catch(error){$('message').textContent='Import fehlgeschlagen: '+error.message;}e.target.value='';};
 state=initial();state.selection=optimal(state.formation);$('snapshot').textContent='Kader + offene Gebote · '+data.generated;$('generated').textContent=data.generated+(data.historyNote?' · '+data.historyNote:'');render();
+if(window.KICKBASE_ADVISOR){
+ fetch('/api/current-lineup',{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject()).then(live=>{
+  const ids=Array.isArray(live.players)?live.players.filter(id=>byId.has(id)):[];
+  if(ids.length!==11)return;
+  const formation=formations.includes(live.formation)?live.formation:state.formation;
+  const expected=slots(formation);
+  if(ids.some((id,i)=>byId.get(id)?.position!==expected[i]))return;
+  state.formation=formation;state.selection=ids;render();$('message').textContent='Aktuelle Aufstellung aus Kickbase geladen.';
+ }).catch(()=>{$('message').textContent='Live-Aufstellung nicht geladen; Report-Stand verwendet.';});
+}
 </script></body></html>

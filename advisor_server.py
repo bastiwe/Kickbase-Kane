@@ -126,6 +126,16 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                              'liveConfigured': self.server.kickbase is not None,
                              'revision': self.server.revision, 'marketCount': len(self.server.report.get('marketPlayers', [])),
                              'memoryCount': len(self.server.memory)})
+        elif self.path == '/api/current-lineup':
+            with self.server.lock:
+                kickbase, league_id = self.server.kickbase, self.server.report.get('league')
+            if not kickbase:
+                self.reply(409, {'error': 'Kein Kickbase-Livezugriff konfiguriert.'})
+                return
+            lineup = kickbase.lineup(league_id)
+            players = lineup.get('players', []) if isinstance(lineup, dict) else []
+            ids = [str(item.get('i') or item.get('id')) if isinstance(item, dict) else str(item) for item in players]
+            self.reply(200, {'formation': str(lineup.get('type') or ''), 'players': ids})
         else:
             self.reply(404, {'error': 'Nicht gefunden.'})
 
