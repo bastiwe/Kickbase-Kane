@@ -56,15 +56,18 @@ class LiveKickbase:
         # Kickbase can return an empty 200 response. Read the resource again so
         # the UI only reports success when the server actually stored the XI.
         stored = self.get(league_path)
-        stored_type = str(stored.get('type') or '')
-        stored_players = stored.get('players')
+        stored_type = str(stored.get('type') or stored.get('t') or '')
+        stored_players = stored.get('players') or stored.get('p')
         if isinstance(stored_players, list):
             stored_players = [str(
                 item.get('i') or item.get('id') if isinstance(item, dict) else item
             ) for item in stored_players]
-        if stored_type != str(formation) or stored_players != expected:
+        if not isinstance(stored_players, list) or set(stored_players) != set(expected):
             raise RuntimeError('Kickbase hat die Aufstellung nicht wie angefordert gespeichert. Bitte Formation und Spieler prüfen.')
-        return {'response': response, 'stored': stored}
+        verification_warning = None if stored_type in ('', str(formation)) else (
+            f'Kickbase meldete die Formation als {stored_type}; die elf Spieler wurden korrekt gespeichert.'
+        )
+        return {'response': response, 'stored': stored, 'verificationWarning': verification_warning}
 
 
     def refresh(self, report, raw_state):

@@ -117,7 +117,7 @@
   element('advisor-apply-lineup').onclick = async () => {
     if (state.selection.filter(Boolean).length !== 11) { element('advisor-feedback').textContent = 'Bitte zuerst genau elf Spieler aufstellen.'; return; }
     if (!confirm('Die ausgewählte Startelf in Kickbase übernehmen?')) return;
-    try { const result = await request('/api/apply-lineup', {state}); element('advisor-feedback').textContent = `Startelf übernommen: ${result.formation}.`; }
+    try { const result = await request('/api/apply-lineup', {state}); const warning = result.response?.verificationWarning; element('advisor-feedback').textContent = warning ? `Startelf übernommen. Hinweis: ${warning}` : `Startelf übernommen: ${result.formation}.`; }
     catch (error) { element('advisor-feedback').textContent = error.message; }
   };
   element('advisor-list-sales').onclick = async () => {
