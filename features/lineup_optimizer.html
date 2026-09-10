@@ -29,7 +29,7 @@ const key='kickbase-lineup:'+data.league+':'+data.user;
 let state, target;
 function initial(){return {formation:'4-4-2',mode:'l3',budget:data.budget,limit:3,sellbench:false,selection:[],plans:Object.fromEntries(players.map(p=>[p.id,{action:p.owned?'keep':'skip',price:p.owned?p.mv:p.bid,locked:false}]))};}
 function score(p){for(const [field,label] of [[state.mode,state.mode==='l3'?'L3 Ø':'Saison Ø'],['average','Vorsaison Ø']]){if(finite(p[field]))return {value:Number(p[field]),label};}return {value:null,label:'Keine Punktdaten'};}
-function active(){return players.filter(p=>!['sell','skip'].includes(state.plans[p.id].action));}
+function active(){return players.filter(p=>state.plans[p.id].action!=='skip');}
 function slots(f=state.formation){const [d,m,a]=f.split('-').map(Number);return [1,...Array(d).fill(2),...Array(m).fill(3),...Array(a).fill(4)];}
 function optimal(f){const pool=active();const taken=new Set();return slots(f).map(pos=>{const p=pool.filter(p=>p.position===pos&&!taken.has(p.id)).sort((a,b)=>(score(b).value??-Infinity)-(score(a).value??-Infinity)||a.name.localeCompare(b.name))[0];if(p)taken.add(p.id);return p?.id??null;});}
 function total(ids){let missing=0;const value=ids.reduce((s,id)=>{const v=id?score(byId.get(id)).value:null;if(v===null)missing++;return s+(v??0);},0);return {value,missing};}
@@ -156,7 +156,7 @@ function restore(value){
  const seen=new Set();
  next.selection=slots(v.formation).map((pos,i)=>{
   const id=v.selection?.[i],p=byId.get(id);
-  if(!p||p.position!==pos||seen.has(id)||['sell','skip'].includes(next.plans[id].action))return null;
+ if(!p||p.position!==pos||seen.has(id)||next.plans[id].action==='skip')return null;
   seen.add(id);return id;
  });
  state=next;render();
