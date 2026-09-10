@@ -43,7 +43,7 @@
   settings.append(kickSettings);
   const toolbar = document.createElement('div');
   toolbar.className = 'toolbar';
-  toolbar.innerHTML = '<button id="advisor-report-open">HTML-Report laden</button><button id="advisor-toggle" class="advisor-toggle">KI-Ratgeber</button><input id="advisor-report-file" class="advisor-file" type="file" accept=".html,text/html">';
+  toolbar.innerHTML = '<button id="advisor-report-open">HTML-Report laden</button><button id="advisor-apply-lineup">Startelf in Kickbase übernehmen</button><button id="advisor-list-sales">Verkaufspreise berechnen</button><button id="advisor-toggle" class="advisor-toggle">KI-Ratgeber</button><input id="advisor-report-file" class="advisor-file" type="file" accept=".html,text/html">';
   document.querySelector('header').append(toolbar);
 
   async function request(path, body) {
@@ -114,6 +114,18 @@
     catch (error) { element('advisor-memory-status').textContent = error.message; }
   };
   element('advisor-report-open').onclick = () => element('advisor-report-file').click();
+  element('advisor-apply-lineup').onclick = async () => {
+    if (state.selection.filter(Boolean).length !== 11) { element('advisor-feedback').textContent = 'Bitte zuerst genau elf Spieler aufstellen.'; return; }
+    if (!confirm('Die ausgewählte Startelf in Kickbase übernehmen?')) return;
+    try { const result = await request('/api/apply-lineup', {state}); element('advisor-feedback').textContent = `Startelf übernommen: ${result.formation}.`; }
+    catch (error) { element('advisor-feedback').textContent = error.message; }
+  };
+  element('advisor-list-sales').onclick = async () => {
+    const candidates = players.filter(p => p.owned && state.plans[p.id]?.action === 'sell' && Number.isFinite(Number(p.mv)) && Number.isFinite(Number(p.change)));
+    if (!candidates.length) { element('advisor-feedback').textContent = 'Keine Spieler mit Status „Verkaufen“ und vollständigen Werten.'; return; }
+    const prices = candidates.map(p => `${p.name}: aktueller MW ${money(Number(p.mv))} + 1T ${money(Number(p.change))} → Verkaufspreis ${money(Math.round((Number(p.mv) + Number(p.change)) * 1.2))}`).join('\n');
+    element('advisor-feedback').textContent = `Berechnete Verkaufspreise (noch nicht übertragen):\n${prices}`;
+  };
   element('advisor-report-file').onchange = async event => {
     const file = event.target.files[0];
     if (!file) return;

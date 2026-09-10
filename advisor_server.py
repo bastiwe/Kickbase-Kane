@@ -175,6 +175,8 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                     else:
                         raise ValueError('Ungültige Gedächtnisaktion.')
                     self.reply(200, {'memory': self.server.memory})
+            elif self.path == '/api/apply-lineup':
+                self.apply_lineup(body)
             elif self.path == '/api/report':
                 html = body.get('html')
                 if not isinstance(html, str):
@@ -235,6 +237,27 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             self.reply(200, result)
         finally:
             self.server.request_lock.release()
+
+    def apply_lineup(self, body):
+        state = body.get('state')
+        if not isinstance(state, dict) or not isinstance(state.get('selection'), list):
+            raise ValueError('Ungültige Aufstellung.')
+        with self.server.lock:
+            kickbase, report = self.server.kickbase, self.server.report
+        if not kickbase:
+            raise RuntimeError('Kickbase-Livezugriff ist nicht aktiviert.')
+        selected = [str(player_id) for player_id in state['selection'] if player_id]
+        if len(selected) != 11 or len(set(selected)) != 11:
+            raise ValueError('Die Startelf muss genau elf unterschiedliche Spieler enthalten.')
+        owned = {str(player['id']) for player in report.get('players', []) if player.get('owned')}
+        if not set(selected).issubset(owned):
+            raise ValueError('Nur Spieler aus deinem aktuellen Kader dürfen aufgestellt werden.')
+        formation = state.get('formation')
+        if not isinstance(formation, str) or formation not in {'4-4-2', '4-3-3', '3-4-3', '3-5-2', '5-3-2', '4-5-1', '5-4-1', '4-2-4', '5-2-3', '3-6-1'}:
+            raise ValueError('Ungültige Kickbase-Formation.')
+        result = kickbase.apply_lineup(report.get('league'), formation, selected)
+        self.reply(200, {'applied': True, 'formation': formation, 'playerCount': len(selected), 'response': result})
+
 
 
 def create_server(port=8765, report=None, api_key=None, model='gpt-5-mini', persist_path=None):

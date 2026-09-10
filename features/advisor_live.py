@@ -30,6 +30,22 @@ class LiveKickbase:
         response.raise_for_status()
         return response.json()
 
+    def post(self, path, payload):
+        if not self.token:
+            self.get('/user/settings')
+        response = requests.post(BASE_URL + path, headers={'Authorization': 'Bearer ' + self.token}, json=payload, timeout=(5, 15))
+        if response.status_code == 401:
+            self.token = None
+        response.raise_for_status()
+        return response.json() if response.content else {}
+
+    def apply_lineup(self, league_id, formation, player_ids):
+        return self.post('/leagues/' + quote(str(league_id), safe='') + '/lineup', {
+            'type': formation,
+            'players': [str(player_id) for player_id in player_ids],
+        })
+
+
     def refresh(self, report, raw_state):
         try:
             return self._refresh(report, raw_state)
