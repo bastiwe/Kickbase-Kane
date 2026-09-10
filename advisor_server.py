@@ -9,6 +9,7 @@ from pathlib import Path
 import secrets
 import threading
 import webbrowser
+from datetime import datetime
 
 from dotenv import load_dotenv
 import requests
@@ -61,10 +62,18 @@ class AdvisorServer(ThreadingHTTPServer):
         self.model = model
         self.persist_path = persist_path
         self.memory_path = memory_path or ROOT / '.advisor-memory.json'
+        self.log_path = ROOT / '.advisor.log'
         self.memory = self._load_memory()
         self.lock = threading.Lock()
         self.request_lock = threading.Lock()
         self.kickbase = None
+
+    def log_event(self, message):
+        try:
+            with self.log_path.open('a', encoding='utf-8') as handle:
+                handle.write(f'{datetime.now().isoformat(timespec="seconds")} {message}\n')
+        except OSError:
+            pass
 
     def _load_memory(self):
         try:
@@ -209,6 +218,7 @@ class AdvisorHandler(BaseHTTPRequestHandler):
         except (requests.RequestException, TimeoutError):
             self.reply(502, {'error': 'OpenAI ist momentan nicht erreichbar oder die Anfrage dauerte zu lange. Erneut versuchen.'})
         except RuntimeError as exc:
+            self.server.log_event(f'ERROR {self.path}: {exc}')
             self.reply(502, {'error': str(exc)})
         except OSError:
             self.reply(500, {'error': 'Lokale Datei konnte nicht gespeichert werden. Bitte Ordnerberechtigungen prüfen.'})
@@ -266,6 +276,7 @@ class AdvisorHandler(BaseHTTPRequestHandler):
         if not isinstance(formation, str) or formation not in {'4-4-2', '4-3-3', '3-4-3', '3-5-2', '5-3-2', '4-5-1', '5-4-1', '4-2-4', '5-2-3', '3-6-1'}:
             raise ValueError('Ungültige Kickbase-Formation.')
         result = kickbase.apply_lineup(report.get('league'), formation, selected)
+        self.server.log_event(f'OK /api/apply-lineup formation={formation} players={len(selected)}')
         self.reply(200, {'applied': True, 'formation': formation, 'playerCount': len(selected), 'response': result})
 
 

@@ -13,4 +13,5 @@ prediction_snapshot_1t.json
 .advisor-*.pid
 .advisor-report.json
 .advisor-memory.json
+.advisor.log
 .advisor-report.tmp
