@@ -213,4 +213,10 @@
     open();
     element('advisor-feedback').textContent = 'Bitte zuerst einen Startelf-HTML-Report über „HTML-Report laden“ öffnen.';
   }
+  if (window.KICKBASE_ADVISOR.liveMessage) {
+    const liveStatus = document.createElement('p');
+    liveStatus.setAttribute('role', 'status');
+    liveStatus.textContent = window.KICKBASE_ADVISOR.liveMessage;
+    document.querySelector('header').append(liveStatus);
+  }
 })();

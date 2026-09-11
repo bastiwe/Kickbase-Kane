@@ -117,14 +117,34 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             self.reply(403, {'error': 'Nur lokaler Zugriff erlaubt.'})
             return
         if self.path == '/':
+            live_message = ''
+            with self.server.lock:
+                report, kickbase = self.server.report, self.server.kickbase
+            if kickbase and report.get('players'):
+                try:
+                    seed = {'selection': [], 'plans': {
+                        str(p['id']): {'action': 'keep' if p.get('owned') else 'skip'}
+                        for p in report['players']}, 'budget': report.get('budget')}
+                    refreshed, _, info = kickbase.refresh(report, seed)
+                    with self.server.lock:
+                        if self.server.report is report:
+                            self.server.report = refreshed
+                            self.server.revision += 1
+                    live_message = 'Kader, Markt und Budget live geladen: ' + info['fetchedAt']
+                except (RuntimeError, requests.RequestException, ValueError, KeyError, TypeError):
+                    live_message = 'Live-Kader konnte nicht geladen werden. Angezeigt wird der alte Reportstand.'
+                    self.server.log_event('ERROR Live-Kader beim Seitenaufruf nicht geladen')
+            elif not kickbase:
+                live_message = 'Livezugriff nicht aktiviert. Angezeigt wird der Reportstand.'
             with self.server.lock:
                 payload = json.dumps(self.server.report, ensure_ascii=True, allow_nan=False).replace('<', '\\u003c')
-                settings = json.dumps({'csrf': self.server.csrf, 'revision': self.server.revision})
+                settings = json.dumps({'csrf': self.server.csrf, 'revision': self.server.revision,
+                                       'liveMessage': live_message}, ensure_ascii=True).replace('<', '\\u003c')
             template = (ROOT / 'features/lineup_optimizer.html').read_text(encoding='utf-8')
             page = template.replace('__PAYLOAD__', payload)
-            page = page.replace('</head>', '<link rel="stylesheet" href="/advisor.css"></head>')
-            page = page.replace('</body>', '<script>window.KICKBASE_ADVISOR=' + settings
-                                + ';</script><script src="/advisor.js"></script></body>')
+            page = page.replace('</head>', '<link rel="stylesheet" href="/advisor.css"><script>window.KICKBASE_ADVISOR='
+                                + settings + ';</script></head>')
+            page = page.replace('</body>', '<script src="/advisor.js"></script></body>')
             self.reply(200, page, 'text/html; charset=utf-8')
         elif self.path in ('/advisor.js', '/advisor.css'):
             name = self.path.lstrip('/')

@@ -123,7 +123,8 @@ class LiveKickbase:
                 previous = old.get(player['id'], {})
                 if not raw[player['id']].get('ln') and previous.get('name') and not re.fullmatch(r'Spieler\s+\d+', previous['name']):
                     player['name'] = previous['name']
-                for field in ('l3', 'season', 'average', 'li', 'change', 'opponent'):
+                for field in ('l3', 'season', 'average', 'li', 'change', 'opponent',
+                              'matchdayChange', 'recent', 'previous'):
                     player[field] = previous.get(field)
                 if player['team'] == 'Unbekannt' and player['teamId'] == previous.get('teamId'):
                     player['team'] = previous.get('team', 'Unbekannt')

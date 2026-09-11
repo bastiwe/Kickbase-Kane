@@ -146,6 +146,20 @@ class LocalServerTests(unittest.TestCase):
         foreign = {**self.headers, 'Origin': 'https://example.com'}
         self.assertEqual(requests.post(self.server.origin+'/api/key', headers=foreign, json={'key': 'sk-other'}).status_code, 403)
 
+    def test_page_load_refreshes_roster_and_enables_startup_lineup(self):
+        fresh = {**self.report, 'players': self.report['players'][1:], 'budget': 123}
+        self.server.kickbase = Mock()
+        self.server.kickbase.refresh.return_value = (fresh, {}, {'fetchedAt': 'TEST-LIVE'})
+        response = requests.get(self.server.origin + '/')
+        self.assertEqual(read_report(response.text)['budget'], 123)
+        self.assertEqual(read_report(response.text)['players'], fresh['players'])
+        self.assertLess(response.text.index('window.KICKBASE_ADVISOR='), response.text.index('if(window.KICKBASE_ADVISOR)'))
+        self.server.kickbase.refresh.side_effect = RuntimeError('unavailable')
+        response = requests.get(self.server.origin + '/')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('alte Reportstand', response.text)
+        self.assertEqual(read_report(response.text)['players'], fresh['players'])
+
     @patch('advisor_server.ask_advisor', return_value={'answer': 'Test advice'})
     def test_followup_uses_changed_plan_and_old_report_tabs_are_rejected(self, ask):
         body = {'revision': 1, 'message': 'Nächster Schritt?', 'history': [], 'state': self.state}
