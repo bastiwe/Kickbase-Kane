@@ -156,7 +156,9 @@ def get_player_performance(token, competition_id, player_id, last_pfm_values, pl
             "t1g": t1g,
             "t2g": t2g,
             "won": won,
-            "k": m.get("k")
+            "k": m.get("k"),
+            "goals": m.get("goals", m.get("g")),
+            "assists": m.get("assists", m.get("a")),
         })
 
     return result

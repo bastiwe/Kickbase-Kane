@@ -192,11 +192,31 @@ def history_context(history, player_id):
     current = completed[completed['_day'] >= season_start]
     previous = completed[(completed['_day'] < season_start) & (completed['_day'] >= season_start - pd.DateOffset(years=1))]
     recent = current.tail(3)
+    def latest_value(columns):
+        for column in columns:
+            if column in rows.columns:
+                values = pd.to_numeric(rows[column], errors='coerce').dropna()
+                if not values.empty:
+                    return number(values.iloc[-1])
+        return None
+
+    history_rows = []
+    for _, row in completed.tail(8).iloc[::-1].iterrows():
+        history_rows.append({
+            'date': text(row.get('_day').date() if hasattr(row.get('_day'), 'date') else row.get('_day')),
+            'points': number(row.get('p')), 'minutes': number(row.get('mp')),
+            'goals': number(row.get('goals') if 'goals' in row else row.get('g')),
+            'assists': number(row.get('assists') if 'assists' in row else row.get('a')),
+            'cards': number(row.get('k') if 'k' in row else row.get('cards')),
+        })
     result = {'recent': [number(v) for v in recent['p']],
               'l3': number(recent['p'].mean()) if not recent.empty else None,
               'season': number(current['p'].mean()) if not current.empty else None,
               'average': number(previous['p'].mean()) if not previous.empty else None,
-              'opponent': None}
+              'opponent': None, 'history': history_rows,
+              'minutes': latest_value(('mp', 'minutes')), 'cards': latest_value(('k', 'cards')),
+              'goals': latest_value(('goals', 'g')), 'assists': latest_value(('assists', 'a')),
+              'fixtures': []}
     upcoming = rows[(rows['_day'] >= today) & rows['p'].isna()].sort_values('_day')
     if not upcoming.empty:
         match = upcoming.iloc[0]
@@ -206,7 +226,12 @@ def history_context(history, player_id):
             opponent_id = away if home == team_id else home
             teams = history[pd.to_numeric(history['team_id'], errors='coerce') == opponent_id]
             if not teams.empty:
-                result['opponent'] = text(teams.iloc[-1]['team_name']) + (' (H)' if home == team_id else ' (A)')
+                is_home = home == team_id
+                opponent_name = text(teams.iloc[-1]['team_name'])
+                result['opponent'] = opponent_name + (' (H)' if is_home else ' (A)')
+                result['fixtures'] = [{'date': text(match.get('_day').date() if hasattr(match.get('_day'), 'date') else match.get('_day')),
+                                       'opponent': opponent_name, 'venue': 'Heim' if is_home else 'Auswärts',
+                                       'rank': number(teams.iloc[-1].get('rank'))}]
     return result
 
 
