@@ -16,6 +16,7 @@ import requests
 
 from features.ai_advisor import ask_advisor, prepare_context, validate_report
 from features.advisor_live import LiveKickbase
+from features.sale_bonus import load_sale_bonus
 
 
 ROOT = Path(__file__).resolve().parent
@@ -126,6 +127,11 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                         str(p['id']): {'action': 'keep' if p.get('owned') else 'skip'}
                         for p in report['players']}, 'budget': report.get('budget')}
                     refreshed, _, info = kickbase.refresh(report, seed)
+                    try:
+                        refreshed['saleBonus'] = load_sale_bonus(kickbase, refreshed)
+                    except (RuntimeError, requests.RequestException, ValueError, KeyError, TypeError):
+                        refreshed['saleBonus'] = {'rules': [], 'purchases': {}, 'error': 'Bonusdaten nicht verfügbar'}
+                        self.server.log_event('ERROR Verkaufsbonusdaten nicht geladen')
                     with self.server.lock:
                         if self.server.report is report:
                             self.server.report = refreshed
@@ -269,6 +275,12 @@ class AdvisorHandler(BaseHTTPRequestHandler):
         try:
             if kickbase:
                 live_report, live_state, live_info = kickbase.refresh(report, body.get('state'))
+                if live_state.get('bonusEnabled') is True:
+                    try:
+                        live_report['saleBonus'] = load_sale_bonus(kickbase, live_report)
+                    except (RuntimeError, requests.RequestException, ValueError, KeyError, TypeError):
+                        live_report['saleBonus'] = {}
+                        live_info['bonusWarning'] = 'Bonusdaten nicht abrufbar; keine Erfolgsprämien eingerechnet.'
                 context = prepare_context(live_report, live_state)
                 context['liveData'] = live_info
             result = ask_advisor(key, model, context, message.strip(), history, memory)

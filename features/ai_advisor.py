@@ -93,6 +93,7 @@ def validate_state(data, state):
 
 
 def calculate_plan(players, state):
+    from features.sale_bonus import calculate_sale_bonus
     selected = set(state['selection']) - {None}
     purchases, sales, unknown = 0, 0, state['budget'] is None
     retained, sold, teams, warnings = [], [], {}, []
@@ -112,7 +113,10 @@ def calculate_plan(players, state):
                 teams[player['teamId']] = teams.get(player['teamId'], 0) + 1
             else:
                 warnings.append('Verein unbekannt: ' + player['name'])
-    end = None if unknown else state['budget'] - purchases + sales
+    bonus = calculate_sale_bonus(state.get('saleBonus', {}),
+                                 {p: state['plans'][p]['price'] for p in sold},
+                                 state.get('bonusEnabled') is True)['total']
+    end = None if unknown else state['budget'] - purchases + sales + bonus
     # Kickbase permits a negative cash balance up to roughly one third of the
     # retained squad value. Prefer an API/report value when available.
     retained_value = sum((players[player_id].get('mv') or 0) for player_id in retained)
@@ -129,7 +133,7 @@ def calculate_plan(players, state):
     if blocked:
         warnings.append('Vereinslimit überschritten.')
     scores = [points(players[p], state['mode'])[0] for p in selected]
-    return {'endBudget': end, 'purchases': purchases, 'sales': sales,
+    return {'endBudget': end, 'purchases': purchases, 'sales': sales, 'saleBonusEstimate': bonus,
             'rosterSize': len(retained), 'retainedIds': retained, 'soldIds': sold,
             'clubViolations': blocked, 'warnings': warnings,
             'lineupPoints': sum(v or 0 for v in scores), 'missingScores': sum(v is None for v in scores),
@@ -140,6 +144,8 @@ def calculate_plan(players, state):
 
 def prepare_context(report, raw_state):
     players, state = validate_state(report, raw_state)
+    state['saleBonus'] = report.get('saleBonus', {})
+    state['bonusEnabled'] = raw_state.get('bonusEnabled') is True
     own_ids = {p['id'] for p in players.values() if p['owned']}
     market = [p for p in map(clean_player, report.get('marketPlayers', [])) if p['id'] not in own_ids]
     scenarios = []
@@ -305,7 +311,7 @@ def model_context(context):
 
     plan = context.get('currentPlan', {})
     selected = [names.get(player_id, 'Unbekannt') for player_id in plan.get('selection', []) if player_id]
-    plan_view = {key: value for key, value in plan.items() if key not in ('selection', 'plans')}
+    plan_view = {key: value for key, value in plan.items() if key not in ('selection', 'plans', 'saleBonus')}
     plan_view['Startelf'] = selected
     plan_view['Bank'] = [names[p['id']] for p in players if p['id'] not in plan.get('selection', [])
                          and (p['owned'] or plan.get('plans', {}).get(p['id'], {}).get('action') == 'buy')]
