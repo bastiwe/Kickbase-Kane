@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 
 REMOVED_REPORT_COLUMNS = [
+    "recommendation", "sell_advice", "team_limit_warning",
     "buy_type", "buy_priority", "buy_priority_score", "prediction_confidence",
     "opponent_pressure", "max_bid", "mv_trend", "last_season_points",
     "expected_change_pct", "expected_change_pct_3d", "expected_change_pct_7d",
@@ -24,10 +25,6 @@ def prepare_market_report(market_df, squad_df):
         errors="coerce",
     )
     result = result.loc[forecast.gt(0) & np.isfinite(forecast)].copy()
-    counts = squad_df.get("team_name", pd.Series(dtype=str)).value_counts()
-    club_counts = result["team_name"].map(counts).fillna(0)
-    result["team_limit_warning"] = np.select(
-        [club_counts >= 3, club_counts == 2], ["Vereinslimit voll", "füllt 3/3"], default="")
     return result.sort_values("expires_at", na_position="last", kind="stable")
 
 def psychological_bid(value):
@@ -73,8 +70,6 @@ def add_recommendation_columns(df, is_market, report_only=False):
     if "top_player_tag" not in df:
         df["top_player_tag"] = ""
     if report_only:
-        delta = df["predicted_mv_target"]
-        value = df["mv"].where(df["mv"] > 0)
         if is_market:
             for column in ["expires_overnight", "expires_before_mv_update"]:
                 if column not in df:
@@ -85,21 +80,9 @@ def add_recommendation_columns(df, is_market, report_only=False):
                 overnight = overnight.iloc[:, 0]
             if isinstance(before_update, pd.DataFrame):
                 before_update = before_update.iloc[:, 0]
-            df["recommendation"] = np.select(
-                [(delta >= 200_000) | (delta >= value * .02),
-                 (delta >= 75_000) | (delta >= value * .0075)],
-                ["Strong buy", "Buy"], default="Watch")
             df["risk"] = "Normal"
             df.loc[before_update.fillna(False).astype(bool).to_numpy(), "risk"] = "Before MV update"
             df.loc[overnight.fillna(False).astype(bool).to_numpy(), "risk"] = "Night expiry"
-        else:
-            sell = (delta <= -200_000) | (delta <= value * -.02)
-            consider = (delta <= -75_000) | (delta <= value * -.0075)
-            keep = (delta >= 100_000) | (delta >= value * .01)
-            df["recommendation"] = np.select([sell, consider, keep],
-                ["Sell", "Consider sell", "Keep"], default="Hold")
-            df["sell_advice"] = np.select([sell, consider, keep],
-                ["Vor 22 Uhr verkaufen", "Verkauf prüfen", "Kaderkern/Halten"], default="Halten")
         return df.drop(columns=REMOVED_REPORT_COLUMNS, errors="ignore")
     df["expected_change_pct"] = np.where(
         df["mv"] > 0,

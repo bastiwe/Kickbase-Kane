@@ -55,7 +55,8 @@ class LeanReportTests(unittest.TestCase):
             for is_market in [True, False]:
                 result = add_recommendation_columns(rows, is_market, report_only=True)
                 self.assertFalse(set(REMOVED_REPORT_COLUMNS) & set(result.columns))
-            self.assertEqual(result.iloc[0]['recommendation'], 'Sell')
+            self.assertNotIn('recommendation', result)
+            self.assertNotIn('sell_advice', result)
 
     def test_average_points_retained_without_prior_season_totals(self):
         history = pd.DataFrame({'player_id': [1, 1, 1], 'md': ['2025-11-01', '2025-11-08', '2026-08-30'], 'p': [100, 200, 80]})
@@ -69,8 +70,7 @@ class LeanReportTests(unittest.TestCase):
         squad = pd.DataFrame({'team_name': ['Team0'] * 3 + ['Team1'] * 2})
         result = prepare_market_report(market, squad)
         self.assertTrue(result['expires_at'].is_monotonic_increasing)
-        self.assertEqual(result.iloc[0]['team_limit_warning'], 'Vereinslimit voll')
-        self.assertEqual(result.iloc[1]['team_limit_warning'], 'füllt 3/3')
+        self.assertNotIn('team_limit_warning', result)
         self.assertTrue(result.iloc[0]['has_open_bid'])
 
     def test_budget_skips_overpay_history_and_profiles(self):
@@ -99,6 +99,8 @@ class LeanReportTests(unittest.TestCase):
         for label in ['Kaufart', 'Vertrauen', 'Gegnerdruck', 'Max. Gebot', 'MW-Tendenz', 'Pkt. Vors.', 'Erw. %', 'Sieggebot', 'Overpay', 'Kaufpriorität']:
             self.assertFalse(label in html, f'Removed label still visible: {label}')
         self.assertIn('LI %', html)
+        for label in ['>Action<', 'Verkaufsampel', '>Limit<', 'Action-Legende', 'Verkaufschecks']:
+            self.assertNotIn(label, html)
         self.assertIn('Summe', html)
         self.assertIn('600.000', html)
         self.assertNotIn('min-width:2050px', html)

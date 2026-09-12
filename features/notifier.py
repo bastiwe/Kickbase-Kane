@@ -218,8 +218,6 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
     msg["From"] = EMAIL_ADDRESS
     msg["To"] = email
 
-    market_buy_count = int((market_df.get("recommendation") == "Strong buy").sum()) if "recommendation" in market_df else 0
-    squad_sell_count = int(squad_df.get("recommendation", []).isin(["Sell", "Consider sell"]).sum()) if "recommendation" in squad_df else 0
     top_budget = budget_df.iloc[0]["User"] if not budget_df.empty and "User" in budget_df else "-"
 
     backtest_summary = load_backtest_summary()
@@ -882,14 +880,13 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 position_match = candidates["position"].map(canonical_position).isin(needed_positions)
                 top_player_match = candidates["top_player_tag"].astype(str).ne("")
                 candidates = candidates[position_match | top_player_match]
-            candidates["recommendation_rank"] = candidates["recommendation"].map({"Strong buy": 0, "Buy": 1}).fillna(2)
             candidates["top_player_rank"] = candidates["top_player_tag"].astype(str).eq("").map({True: 1, False: 0})
-            candidates = candidates.sort_values(["top_player_rank", "recommendation_rank", "predicted_mv_target"], ascending=[True, True, False]).head(4)
+            candidates = candidates.sort_values(["top_player_rank", "predicted_mv_target"], ascending=[True, False]).head(4)
             for _, row in candidates.iterrows():
                 top_label = f' {badge(row.get("top_player_tag"))}' if row.get("top_player_tag") else ""
                 market_rows.append(
                     f'<li><b>{escape(player_name(row))}</b> ({position_label(row.get("position"))}, {escape(str(row.get("team_name", "-")))}) '
-                    f'- {badge(row.get("recommendation", "Buy"))}{top_label} '
+                    f'- {top_label} '
                     f'erwartet {colored_number(row.get("predicted_mv_target"), format_number(row.get("predicted_mv_target")))}'
                     '</li>'
                 )
@@ -1105,16 +1102,14 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
 
     action_legend = f"""
         <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin:0 0 24px 0;">
-            <h3 style="color:#1f2933;margin:0 0 10px 0;font-size:16px;">Action-Legende</h3>
+            <h3 style="color:#1f2933;margin:0 0 10px 0;font-size:16px;">Legende</h3>
             <p style="font-size:13px;color:#4b5563;margin:0 0 8px 0;">
-                Die Action ergibt sich aus der vom Modell erwarteten Marktwertänderung für den nächsten Tag, absolut und relativ zum aktuellen Marktwert.
                 Erw. 1T zeigt die geschätzte Änderung für den nächsten Marktwertsprung.
             </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Markt:</b>
-                {badge("Strong buy")} erwartete Änderung >= 200.000 oder >= 2,00%;
-                {badge("Buy")} erwartete Änderung >= 75.000 oder >= 0,75%.
-                Alle fremden Marktangebote bleiben sichtbar, sortiert nach Ablauf. Die Top-3-Kacheln zeigen positive 1T-Prognosen ohne bekannte Ausfälle oder volles Vereinslimit; sie sind keine langfristige sportliche Kaufbewertung.
+                Markt-Empfehlungen zeigen ausschließlich positive 1T-Prognosen, sortiert nach Ablauf.
+                Die Top-3-Kacheln schließen bekannte Ausfälle aus; sie sind keine langfristige sportliche Kaufbewertung.
             </p>
 
 
@@ -1127,12 +1122,6 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 {badge("Verletzt")} / {badge("Reha")} / Sperren werden aus Top-Chance-Kacheln ausgeschlossen.
             </p>
 
-            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
-                <b>Verkaufsampel:</b>
-                {badge("Vor 22 Uhr verkaufen")} markiert eigene Spieler mit stark negativer 1T-Prognose vor der Marktwert-Neuberechnung.
-                {badge("Verkauf prüfen")} ist ein mittleres Warnsignal.
-                {badge("Kaderkern/Halten")} markiert positive Prognosen; sportlichen Nutzen vor einem Verkauf gesondert prüfen.
-            </p>
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Kaderanalyse:</b>
                 Wählt je Formation die punktstärksten passenden Spieler. Priorität der Punktebasis:
@@ -1203,8 +1192,6 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
         {action_overview}
         
         <div style="display:block;margin:16px 0 24px 0;">
-            <span style="display:inline-block;background:#edf7ed;color:#1f6f3d;padding:8px 10px;border-radius:6px;margin:4px;font-size:13px;"><b>{market_buy_count}</b> Top-Käufe</span>
-            <span style="display:inline-block;background:#fff4e5;color:#8a4b00;padding:8px 10px;border-radius:6px;margin:4px;font-size:13px;"><b>{squad_sell_count}</b> Verkaufschecks</span>
             <span style="display:inline-block;background:#eef2ff;color:#263a8b;padding:8px 10px;border-radius:6px;margin:4px;font-size:13px;">Höchste Kaufkraft: <b>{top_budget}</b></span>
         </div>
 
