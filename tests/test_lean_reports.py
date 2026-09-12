@@ -35,6 +35,19 @@ def players():
 
 
 class LeanReportTests(unittest.TestCase):
+    def test_market_recommendations_require_positive_finite_forecast(self):
+        market = players().iloc[:8].copy()
+        market['predicted_mv_target'] = [-217000, 0, None, 'invalid', np.inf, -np.inf, '500', 1]
+        market['has_open_bid'] = True
+        original = market.copy(deep=True)
+        result = prepare_market_report(market.iloc[::-1], pd.DataFrame())
+        self.assertEqual(result['player_id'].tolist(), [6, 7])
+        pd.testing.assert_frame_equal(market, original)
+
+    def test_market_without_forecast_has_no_recommendations(self):
+        market = players().drop(columns=['predicted_mv_target'])
+        self.assertTrue(prepare_market_report(market, pd.DataFrame()).empty)
+
     def test_recommendations_do_not_call_removed_calculations(self):
         rows = players()
         rows.loc[0, 'predicted_mv_target'] = -250_000

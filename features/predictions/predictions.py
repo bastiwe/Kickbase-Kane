@@ -17,8 +17,13 @@ REMOVED_REPORT_COLUMNS = [
 
 
 def prepare_market_report(market_df, squad_df):
-    """Keep market context without priority scores or opponent simulations."""
+    """Recommend only market players with a finite, positive one-day forecast."""
     result = market_df.drop(columns=REMOVED_REPORT_COLUMNS, errors="ignore").copy()
+    forecast = pd.to_numeric(
+        result.get("predicted_mv_target", pd.Series(index=result.index, dtype=float)),
+        errors="coerce",
+    )
+    result = result.loc[forecast.gt(0) & np.isfinite(forecast)].copy()
     counts = squad_df.get("team_name", pd.Series(dtype=str)).value_counts()
     club_counts = result["team_name"].map(counts).fillna(0)
     result["team_limit_warning"] = np.select(
