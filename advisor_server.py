@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 import requests
 
 from features.ai_advisor import ask_advisor, prepare_context, validate_report
-from features.advisor_live import LiveKickbase
+from features.advisor_live import LiveKickbase, normalize_lineup
 from features.sale_bonus import load_sale_bonus
 from features.report_jobs import ReportJobs
 
@@ -173,10 +173,11 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             if not kickbase:
                 self.reply(409, {'error': 'Kein Kickbase-Livezugriff konfiguriert.'})
                 return
-            lineup = kickbase.lineup(league_id)
-            players = lineup.get('players', []) if isinstance(lineup, dict) else []
-            ids = [str(item.get('i') or item.get('id')) if isinstance(item, dict) else str(item) for item in players]
-            self.reply(200, {'formation': str(lineup.get('type') or ''), 'players': ids})
+            try:
+                self.reply(200, normalize_lineup(kickbase.lineup(league_id)))
+            except (requests.RequestException, RuntimeError, ValueError, KeyError, TypeError) as exc:
+                self.server.log_event('ERROR Live-Aufstellung: ' + type(exc).__name__)
+                self.reply(502, {'error': 'Kickbase-Aufstellung konnte nicht gelesen werden. Details im Serverlog.'})
         else:
             self.reply(404, {'error': 'Nicht gefunden.'})
 

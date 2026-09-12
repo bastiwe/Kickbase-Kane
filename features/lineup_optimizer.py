@@ -147,6 +147,7 @@ def market_context(market, own_ids, user_id, predictions, history, forecasts):
             'position': int(position) if position in (1, 2, 3, 4) else 0,
             'mv': number(item.get('mv')) if number(item.get('mv')) is not None else number(row.get('mv')),
             'askingPrice': number(item.get('prc')), 'bid': own_bid_amount(item, user_id),
+            'image': get_cdn_url(item.get('pim')) or text(row.get('image_url')),
             'expiresAt': (now + timedelta(seconds=expiry)).isoformat()
             if expiry is not None and 0 <= expiry <= 365 * 86400 else None,
             'status': normalize_player_status(player_status_value(item))

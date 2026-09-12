@@ -11,6 +11,33 @@ from kickbase_api.config import BASE_URL
 from features.lineup_optimizer import market_context
 
 
+def normalize_lineup(payload):
+    """Normalize the v4 slot-based lineup, including empty starting slots."""
+    if not isinstance(payload, dict):
+        raise ValueError('Ungültige Aufstellungsdaten.')
+    if 'it' in payload:
+        entries = payload['it']
+        if not isinstance(entries, list):
+            raise ValueError('Ungültige Spielerliste.')
+        starters = [p for p in entries if isinstance(p, dict)
+                    and isinstance(p.get('lo'), int) and 0 <= p['lo'] < 11]
+        from features.predictions.predictions import FORMATIONS
+        candidates = []
+        for name, counts in FORMATIONS:
+            positions = [pos for pos in (1, 2, 3, 4) for _ in range(counts[pos])]
+            if all(positions[p['lo']] == p.get('pos') for p in starters):
+                candidates.append(name)
+        return {'formation': candidates[0] if candidates else '',
+                'players': [str(p['i']) for p in sorted(starters, key=lambda p: p['lo'])],
+                'slots': {str(p['lo']): str(p['i']) for p in starters}}
+    entries = payload.get('players', payload.get('p'))
+    if not isinstance(entries, list):
+        raise ValueError('Aufstellung enthält keine Spielerliste.')
+    return {'formation': str(payload.get('type') or payload.get('t') or ''),
+            'players': [str(p.get('i') or p.get('id')) if isinstance(p, dict) else str(p)
+                        for p in entries if p is not None]}
+
+
 class LiveKickbase:
     def __init__(self, username, password):
         self.username, self.password = username, password
@@ -121,10 +148,13 @@ class LiveKickbase:
             result = []
             for player in parsed:
                 previous = old.get(player['id'], {})
+                if not player.get('image'):
+                    player['image'] = previous.get('image', '')
                 if not raw[player['id']].get('ln') and previous.get('name') and not re.fullmatch(r'Spieler\s+\d+', previous['name']):
                     player['name'] = previous['name']
                 for field in ('l3', 'season', 'average', 'li', 'change', 'opponent',
-                              'matchdayChange', 'recent', 'previous'):
+                              'matchdayChange', 'recent', 'previous', 'history', 'fixtures',
+                              'minutes', 'cards', 'goals', 'assists'):
                     player[field] = previous.get(field)
                 if player['team'] == 'Unbekannt' and player['teamId'] == previous.get('teamId'):
                     player['team'] = previous.get('team', 'Unbekannt')

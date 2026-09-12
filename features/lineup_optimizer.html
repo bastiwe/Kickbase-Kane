@@ -198,17 +198,19 @@ function restore(value){
 $('bonus-enabled').onchange=e=>{state.bonusEnabled=e.target.checked;render();};
 state=initial();state.selection=optimal(state.formation);$('snapshot').textContent='Kader + offene Gebote · '+data.generated;$('generated').textContent=data.generated+(data.historyNote?' · '+data.historyNote:'');render();
 if(window.KICKBASE_ADVISOR){
- fetch('/api/current-lineup',{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject()).then(live=>{
-  const ids=Array.isArray(live.players)?live.players.filter(id=>byId.has(id)):[];
-  if(ids.length!==11)throw Error('unvollständig');
+ fetch('/api/current-lineup',{cache:'no-store'}).then(async r=>{const body=await r.json();if(!r.ok)throw Error(body.error||'Abruf fehlgeschlagen');return body;}).then(live=>{
+  if(!Array.isArray(live.players))throw Error('Ungültige Spielerliste');
+  const ids=live.players.map(String);
+  if(ids.some(id=>!byId.has(id)))throw Error('Kaderstand enthält nicht alle aufgestellten Spieler');
   const formationCodes={'442':'4-4-2','433':'4-3-3','343':'3-4-3','352':'3-5-2','532':'5-3-2','451':'4-5-1','541':'5-4-1','424':'4-2-4','523':'5-2-3','361':'3-6-1'};
   const formation=formations.includes(live.formation)?live.formation:(formationCodes[String(live.formation).replace(/[^0-9]/g,'')]||state.formation);
   const expected=slots(formation), byPosition={1:[],2:[],3:[],4:[]};
   ids.forEach(id=>{const player=byId.get(id);if(player&&byPosition[player.position])byPosition[player.position].push(id);});
-  const selection=expected.map(pos=>byPosition[pos].shift()||null);
-  if(selection.filter(Boolean).length!==11)throw Error('Positionen nicht vollständig');
-  state.formation=formation;state.selection=selection;state.sellbench=true;render();$('message').textContent='Aktuelle Aufstellung aus Kickbase geladen. „Bank verkaufen“ ist aktiviert.';
- }).catch(()=>{$('message').textContent='Live-Aufstellung nicht geladen; Report-Stand verwendet.';});
+  const selection=expected.map((pos,i)=>live.slots?(live.slots[String(i)]||null):(byPosition[pos].shift()||null));
+  if(selection.some((id,i)=>id&&byId.get(id)?.position!==expected[i]))throw Error('Kickbase-Position passt nicht zum Platz');
+  if(selection.filter(Boolean).length!==ids.length)throw Error('Positionen passen nicht zur Formation');
+  state.formation=formation;state.selection=selection;state.sellbench=true;render();$('message').textContent='Aktuelle Aufstellung aus Kickbase geladen · '+ids.length+'/11 Plätze besetzt.';
+ }).catch(error=>{$('message').textContent='Live-Aufstellung nicht geladen: '+error.message;});
 }
  (function(){
  const sortState={value:'score'};
