@@ -171,8 +171,12 @@ def forecast_horizon(history, now=None):
         return None
     now = now or datetime.now(ZoneInfo('Europe/Berlin'))
     now = now.astimezone(ZoneInfo('Europe/Berlin'))
-    dates = pd.to_datetime(history['md'], errors='coerce', utc=True).dt.tz_localize(None)
-    future = dates[(dates >= pd.Timestamp(now.date())) & pd.to_numeric(history['p'], errors='coerce').isna()]
+    dates = pd.to_datetime(history['md'], errors='coerce', utc=True)
+    pending = dates.notna() & pd.to_numeric(history['p'], errors='coerce').isna()
+    today = pd.Timestamp(now.date(), tz='Europe/Berlin').tz_convert('UTC')
+    today_rows = dates.dt.date.eq(now.date()) & pending
+    matchday_started = bool((dates[today_rows] <= pd.Timestamp(now).tz_convert('UTC')).any())
+    future = dates[(dates > today if matchday_started else dates >= today) & pending]
     if future.empty:
         return None
     next_date = future.min().date()

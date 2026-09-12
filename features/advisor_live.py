@@ -191,7 +191,8 @@ class LiveKickbase:
                 for field in ('l3', 'season', 'average', 'li', 'change', 'opponent',
                               'matchdayChange', 'recent', 'previous', 'history', 'fixtures',
                               'minutes', 'cards', 'goals', 'assists'):
-                    player[field] = previous.get(field)
+                    if player.get(field) is None and previous.get(field) is not None:
+                        player[field] = previous[field]
                 if player['team'] == 'Unbekannt' and player['teamId'] == previous.get('teamId'):
                     player['team'] = previous.get('team', 'Unbekannt')
                 player['owned'] = owned

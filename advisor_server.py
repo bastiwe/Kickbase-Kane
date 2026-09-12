@@ -18,6 +18,7 @@ import requests
 from features.ai_advisor import ask_advisor, prepare_context, validate_report
 from features.advisor_live import LiveKickbase, normalize_lineup
 from features.sale_bonus import load_sale_bonus
+from features.predictions.snapshot import read_prediction_snapshot, project_to_matchday
 from features.report_jobs import ReportJobs
 
 
@@ -130,6 +131,15 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                         str(p['id']): {'action': 'keep' if p.get('owned') else 'skip'}
                         for p in report['players']}, 'budget': report.get('budget')}
                     refreshed, _, info = kickbase.refresh(report, seed)
+                    snapshot = read_prediction_snapshot()
+                    if snapshot:
+                        horizon = refreshed.get('forecastHorizon') or report.get('forecastHorizon')
+                        updates = (horizon or {}).get('updates')
+                        for player in refreshed.get('players', []) + refreshed.get('marketPlayers', []):
+                            player['change'] = snapshot['predictions'].get(str(player['id']), player.get('change'))
+                            player['matchdayChange'] = project_to_matchday(snapshot, player['id'], updates)
+                        refreshed['forecast'] = {key: snapshot.get(key) for key in ('generatedAt', 'source')}
+                        refreshed['forecastHorizon'] = horizon
                     try:
                         refreshed['saleBonus'] = load_sale_bonus(kickbase, refreshed)
                     except (RuntimeError, requests.RequestException, ValueError, KeyError, TypeError):
