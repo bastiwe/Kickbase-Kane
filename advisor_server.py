@@ -10,6 +10,7 @@ import secrets
 import threading
 import webbrowser
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 import requests
@@ -138,7 +139,8 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                         if self.server.report is report:
                             self.server.report = refreshed
                             self.server.revision += 1
-                    live_message = 'Kader, Markt und Budget live geladen: ' + info['fetchedAt']
+                    fetched_at = datetime.fromisoformat(info['fetchedAt']).astimezone(ZoneInfo('Europe/Berlin'))
+                    live_message = 'Kader, Markt und Budget live geladen: ' + fetched_at.strftime('%d.%m.%Y, %H:%M:%S Uhr') + ' (Berlin)'
                 except (RuntimeError, requests.RequestException, ValueError, KeyError, TypeError):
                     live_message = 'Live-Kader konnte nicht geladen werden. Angezeigt wird der alte Reportstand.'
                     self.server.log_event('ERROR Live-Kader beim Seitenaufruf nicht geladen')
