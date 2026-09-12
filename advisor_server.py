@@ -160,6 +160,21 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             name = self.path.lstrip('/')
             content_type = 'text/javascript; charset=utf-8' if name.endswith('.js') else 'text/css; charset=utf-8'
             self.reply(200, (ROOT / 'features' / name).read_text(encoding='utf-8'), content_type)
+        elif self.path.startswith('/api/player-details/'):
+            player_id = self.path.rsplit('/', 1)[-1]
+            with self.server.lock:
+                client = self.server.kickbase
+                known = {str(p['id']) for p in self.server.report['players'] + self.server.report.get('marketPlayers', [])}
+            if not client:
+                self.reply(409, {'error': 'Kickbase-Livezugriff ist nicht aktiviert.'})
+            elif player_id not in known:
+                self.reply(404, {'error': 'Spieler nicht im aktuellen Kader oder Markt.'})
+            else:
+                try:
+                    self.reply(200, client.player_details(player_id))
+                except (requests.RequestException, RuntimeError, ValueError, KeyError, TypeError) as exc:
+                    self.server.log_event('ERROR Spielerdetails: ' + type(exc).__name__)
+                    self.reply(502, {'error': 'Kickbase-Spielerdetails derzeit nicht abrufbar. Bitte erneut öffnen.'})
         elif self.path == '/api/report-job':
             self.reply(200, self.server.report_jobs.read())
         elif self.path == '/api/status':

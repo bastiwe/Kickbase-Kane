@@ -6,6 +6,9 @@ from urllib.parse import quote
 
 import requests
 import re
+import time
+import threading
+from features.player_details import build_details
 
 from kickbase_api.config import BASE_URL
 from features.lineup_optimizer import market_context
@@ -42,6 +45,20 @@ class LiveKickbase:
     def __init__(self, username, password):
         self.username, self.password = username, password
         self.token = None
+        self.detail_cache = {}
+        self.detail_lock = threading.Lock()
+
+    def player_details(self, player_id):
+        with self.detail_lock:
+            def cached(path):
+                entry = self.detail_cache.get(path)
+                if entry and time.monotonic() - entry[0] < 300:
+                    return entry[1]
+                value = self.get(path)
+                self.detail_cache[path] = (time.monotonic(), value)
+                return value
+            base = '/competitions/1/players/' + quote(str(player_id), safe='')
+            return build_details(cached(base), cached(base + '/performance'), cached('/competitions/1/table'))
 
     def get(self, path):
         if not self.token:
