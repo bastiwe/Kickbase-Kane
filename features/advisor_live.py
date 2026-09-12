@@ -165,6 +165,25 @@ class LiveKickbase:
             result = []
             for player in parsed:
                 previous = old.get(player['id'], {})
+                live_item = raw[player['id']]
+                live_profile = live_item
+                if not live_item.get('ap') or not live_item.get('ph'):
+                    try:
+                        live_profile = self.get('/competitions/1/players/' + quote(player['id'], safe=''))
+                    except (requests.RequestException, KeyError, TypeError, RuntimeError):
+                        live_profile = live_item
+                live_ph = [entry.get('p') for entry in live_profile.get('ph', [])
+                           if isinstance(entry, dict) and entry.get('p') is not None]
+                if live_ph:
+                    player['recent'] = [float(value) for value in live_ph[-3:]]
+                    player['l3'] = sum(player['recent']) / len(player['recent'])
+                if live_profile.get('ap') is not None:
+                    player['season'] = float(live_profile['ap'])
+                if live_profile.get('mv') is not None:
+                    player['mv'] = float(live_profile['mv'])
+                if live_profile.get('pim'):
+                    from kickbase_api.config import get_cdn_url
+                    player['image'] = get_cdn_url(live_profile['pim'])
                 if not player.get('image'):
                     player['image'] = previous.get('image', '')
                 if not raw[player['id']].get('ln') and previous.get('name') and not re.fullmatch(r'Spieler\s+\d+', previous['name']):
