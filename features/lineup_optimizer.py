@@ -184,6 +184,52 @@ def forecast_horizon(history, now=None):
     return {'date': next_date.isoformat(), 'updates': updates}
 
 
+def forecast_horizon_from_matchdays(matchdays, now=None):
+    """Return the next complete Bundesliga matchday from Kickbase's schedule.
+
+    ``mdsum`` contains one start date per Bundesliga matchday, while the
+    fixture history contains individual matches.  Grouping by the matchday
+    number prevents a Friday fixture from making the forecast stop before the
+    Saturday/Sunday fixtures of the same matchday.
+    """
+    if not isinstance(matchdays, list):
+        return None
+    now = (now or datetime.now(ZoneInfo('Europe/Berlin'))).astimezone(ZoneInfo('Europe/Berlin'))
+    rows = []
+    for item in matchdays:
+        if not isinstance(item, dict):
+            continue
+        try:
+            day = int(item.get('day') or item.get('mdn'))
+        except (TypeError, ValueError):
+            continue
+        raw_date = item.get('md') or item.get('date') or item.get('start')
+        stamp = pd.to_datetime(raw_date, errors='coerce', utc=True)
+        if pd.isna(stamp):
+            continue
+        rows.append((day, stamp.to_pydatetime().astimezone(ZoneInfo('Europe/Berlin'))))
+    if not rows:
+        return None
+    by_day = {}
+    for day, start in rows:
+        by_day[day] = min(start, by_day.get(day, start))
+    ordered = sorted(by_day.items())
+    started = [day for day, start in ordered if start <= now]
+    target = next(((day, start) for day, start in ordered
+                   if day > (max(started) if started else -1)), None)
+    if target is None:
+        return None
+    target_day, target_start = target
+    next_update = now.replace(hour=22, minute=0, second=0, microsecond=0)
+    if next_update <= now:
+        next_update += timedelta(days=1)
+    updates = 0
+    while next_update < target_start:
+        updates += 1
+        next_update += timedelta(days=1)
+    return {'date': target_start.date().isoformat(), 'updates': updates, 'matchday': target_day}
+
+
 def history_context(history, player_id):
     """Use completed, unique matchdays, never forward-filled daily price rows."""
     rows = history[history['player_id'].astype(str) == player_id].copy()

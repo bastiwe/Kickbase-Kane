@@ -11,7 +11,7 @@ import threading
 from features.player_details import build_details
 
 from kickbase_api.config import BASE_URL
-from features.lineup_optimizer import market_context
+from features.lineup_optimizer import forecast_horizon_from_matchdays, market_context
 
 
 def normalize_lineup(payload):
@@ -136,6 +136,13 @@ class LiveKickbase:
         budget = self.get(base + '/me/budget')['b']
         if not isinstance(squad, list) or not isinstance(market, list):
             raise RuntimeError('Kickbase lieferte unvollständige Kader-/Marktdaten.')
+        forecast_horizon = None
+        if squad:
+            try:
+                first_profile = self.get('/competitions/1/players/' + quote(str(squad[0].get('i')), safe=''))
+                forecast_horizon = forecast_horizon_from_matchdays(first_profile.get('mdsum', []))
+            except (requests.RequestException, KeyError, TypeError, RuntimeError, ValueError):
+                forecast_horizon = None
         old = {str(p['id']): p for p in report['players'] + report.get('marketPlayers', [])}
         own_ids = {str(p['i']) for p in squad}
         name_lookups = 0
@@ -226,7 +233,8 @@ class LiveKickbase:
         state['plans'] = plans
         state['budget'] = budget
         current = {**report, 'players': current_players, 'marketPlayers': available, 'budget': budget,
-                   'maxNegative': -sum((p.get('mv') or 0) for p in owned) * 0.33}
+                   'maxNegative': -sum((p.get('mv') or 0) for p in owned) * 0.33,
+                   'forecastHorizon': forecast_horizon or report.get('forecastHorizon')}
         changes = {'addedOwnedIds': sorted(own_ids - {p['id'] for p in report['players'] if p['owned']}),
                    'removedPlanIds': sorted(set(previous_plans) - ids),
                    'cashBefore': raw_state.get('budget'), 'cashNow': budget}
