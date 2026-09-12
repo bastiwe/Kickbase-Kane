@@ -43,6 +43,9 @@ token = login(os.getenv("KICK_USER"), os.getenv("KICK_PASS"))
 print("\nLogged in to Kickbase.")
 current_user_id = get_user_id(token)
 league_id = get_league_id(token, league_name)
+if os.getenv('REPORT_USER_ID') and str(current_user_id) != os.environ['REPORT_USER_ID']:
+    raise RuntimeError('Report-Konto passt nicht zum Optimierer.')
+league_id = os.getenv('REPORT_LEAGUE_ID') or league_id
 
 create_player_data_table()
 reload_data = check_if_data_reload_needed()

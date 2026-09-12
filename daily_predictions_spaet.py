@@ -83,6 +83,9 @@ current_user_id = get_user_id(token)
 
 # Get league ID
 league_id = get_league_id(token, league_name)
+if os.getenv('REPORT_USER_ID') and str(current_user_id) != os.environ['REPORT_USER_ID']:
+    raise RuntimeError('Report-Konto passt nicht zum Optimierer.')
+league_id = os.getenv('REPORT_LEAGUE_ID') or league_id
 
 # Data handling
 create_player_data_table()

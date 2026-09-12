@@ -45,6 +45,49 @@
   toolbar.className = 'toolbar';
   toolbar.innerHTML = '<button id="advisor-report-open">HTML-Report laden</button><button id="advisor-apply-lineup">Startelf in Kickbase übernehmen</button><button id="advisor-list-sales">Verkaufspreise berechnen</button><button id="advisor-toggle" class="advisor-toggle">KI-Ratgeber</button><input id="advisor-report-file" class="advisor-file" type="file" accept=".html,text/html">';
   document.querySelector('header').append(toolbar);
+  const reportTools = document.createElement('div');
+  reportTools.className = 'toolbar';
+  reportTools.innerHTML = '<button data-run-report="full">Report starten</button><button data-run-report="fast">Fast-Report starten</button><span id="report-job-status" role="status" aria-live="polite"></span>';
+  document.querySelector('header').append(reportTools);
+  let reportPolling = false, appliedJob = null;
+  async function pollReports() {
+    if (reportPolling) return;
+    reportPolling = true;
+    try {
+      const response = await fetch('/api/report-job', {cache: 'no-store'});
+      if (!response.ok) throw Error('Reportstatus nicht erreichbar.');
+      const job = await response.json();
+      reportTools.querySelectorAll('button').forEach(b => {b.disabled = job.status === 'running';});
+      if (job.status === 'running') element('report-job-status').textContent = (job.kind === 'fast' ? 'Fast-Report' : 'Report') + ' läuft …';
+      if (job.status === 'failed') element('report-job-status').textContent = job.error;
+      if (job.status === 'done' && appliedJob !== job.id) {
+        for (const p of [...players, ...(data.marketPlayers || [])]) {
+          const patch = job.patches[p.id];
+          if (patch) for (const field of ['change', 'matchdayChange', 'li']) {
+            if (Object.hasOwn(patch, field)) p[field] = patch[field];
+          }
+        }
+        data.forecast = job.forecast;
+        data.forecastHorizon = job.forecastHorizon;
+        render();
+        appliedJob = job.id;
+        element('report-job-status').textContent = 'Report fertig · Prognosedaten übernommen';
+      }
+    } catch (error) {element('report-job-status').textContent = error.message;}
+    finally {reportPolling = false;}
+  }
+  reportTools.querySelectorAll('[data-run-report]').forEach(button => {
+    button.onclick = async () => {
+      reportTools.querySelectorAll('button').forEach(b => {b.disabled = true;});
+      try {await request('/api/report-job', {kind: button.dataset.runReport}); await pollReports();}
+      catch (error) {
+        element('report-job-status').textContent = error.message;
+        reportTools.querySelectorAll('button').forEach(b => {b.disabled = false;});
+      }
+    };
+  });
+  setInterval(pollReports, 5000);
+  pollReports();
 
   async function request(path, body) {
     const controller = new AbortController();

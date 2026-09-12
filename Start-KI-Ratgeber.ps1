@@ -14,9 +14,9 @@ if (-not (Test-Path -LiteralPath $advisorPython)) {
     }
     if ($LASTEXITCODE -ne 0) { throw 'Die Python-Umgebung konnte nicht erstellt werden.' }
 }
-& $advisorPython -c "import importlib.util, sys; sys.exit(any(importlib.util.find_spec(x) is None for x in ['pandas', 'requests', 'dotenv']))"
+& $advisorPython -c "import importlib.util, sys; sys.exit(any(importlib.util.find_spec(x) is None for x in ['pandas', 'requests', 'dotenv', 'sklearn', 'matplotlib', 'numpy', 'IPython']))"
 if ($LASTEXITCODE -ne 0) {
-    & $advisorPython -m pip install -r requirements-optimizer.txt
+    & $advisorPython -m pip install -r requirements.txt
     if ($LASTEXITCODE -ne 0) { throw 'Die benoetigten Pakete konnten nicht installiert werden.' }
 }
 & $advisorPython advisor_server.py

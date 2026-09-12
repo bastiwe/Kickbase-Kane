@@ -17,6 +17,7 @@ import requests
 from features.ai_advisor import ask_advisor, prepare_context, validate_report
 from features.advisor_live import LiveKickbase
 from features.sale_bonus import load_sale_bonus
+from features.report_jobs import ReportJobs
 
 
 ROOT = Path(__file__).resolve().parent
@@ -68,6 +69,7 @@ class AdvisorServer(ThreadingHTTPServer):
         self.lock = threading.Lock()
         self.request_lock = threading.Lock()
         self.kickbase = None
+        self.report_jobs = ReportJobs(self, ROOT)
 
     def log_event(self, message):
         try:
@@ -156,6 +158,8 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             name = self.path.lstrip('/')
             content_type = 'text/javascript; charset=utf-8' if name.endswith('.js') else 'text/css; charset=utf-8'
             self.reply(200, (ROOT / 'features' / name).read_text(encoding='utf-8'), content_type)
+        elif self.path == '/api/report-job':
+            self.reply(200, self.server.report_jobs.read())
         elif self.path == '/api/status':
             self.reply(200, {'configured': bool(self.server.api_key), 'model': self.server.model,
                              'liveConfigured': self.server.kickbase is not None,
@@ -188,7 +192,9 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(length))
             if not isinstance(body, dict):
                 raise ValueError('Ungültige Anfrage.')
-            if self.path == '/api/key':
+            if self.path == '/api/report-job':
+                self.reply(202, self.server.report_jobs.start(body.get('kind')))
+            elif self.path == '/api/key':
                 key = body.get('key')
                 if not isinstance(key, str) or len(key) > 512 or (key and not key.startswith('sk-')):
                     raise ValueError('Bitte einen gültigen OpenAI-API-Schlüssel eingeben.')
