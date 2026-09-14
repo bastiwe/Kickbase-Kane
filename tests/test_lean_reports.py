@@ -9,7 +9,11 @@ import tempfile
 import numpy as np
 import pandas as pd
 
-from features.budgets import calc_manager_budgets, daily_login_bonus_total
+from features.budgets import (
+    calc_manager_budgets,
+    daily_login_bonus_total,
+    reconstructable_achievement_bonuses,
+)
 from features.fast_notifier import table_html
 from features.notifier import send_mail
 from features.predictions.predictions import (
@@ -40,6 +44,30 @@ class LeanReportTests(unittest.TestCase):
         self.assertEqual(daily_login_bonus_total('2026-08-15', '2026-08-24'), 550_000)
         self.assertEqual(daily_login_bonus_total('2026-08-15', '2026-09-11'), 2_350_000)
         self.assertEqual(daily_login_bonus_total('2026-08-15', '2026-09-14'), 2_650_000)
+
+    def test_reconstructs_only_attributable_achievement_money(self):
+        performances = [
+            {'name': 'Anna', 'matchdays': [
+                {'mdp': 1_600, 'tw': True, 'cur': False},
+                {'mdp': 2_100, 'tw': False, 'cur': True},
+            ]},
+            {'name': 'Ben', 'matchdays': [{'mdp': 900, 'tw': False, 'cur': False}]},
+        ]
+        activities = pd.DataFrame([
+            {'dt': '2026-08-16', 'transfer_type': 1, 'byr': 'Anna', 'slr': None,
+             'pi': '10', 'trp': 5_000_000},
+            {'dt': '2026-09-01', 'transfer_type': 2, 'byr': None, 'slr': 'Anna',
+             'pi': '10', 'trp': 15_500_000},
+            {'dt': '2026-09-02', 'transfer_type': 1, 'byr': 'Ben', 'slr': None,
+             'pi': '11', 'trp': 1_000_000},
+            {'dt': '2026-09-03', 'transfer_type': 2, 'byr': 'Anna', 'slr': 'Ben',
+             'pi': '11', 'trp': 30_000_000},
+        ])
+        totals, details = reconstructable_achievement_bonuses(
+            performances, activities, [('Anna', '1'), ('Ben', '2')])
+        # 1m winner + (250k + 500k) point tiers + (250k + 500k + 1m) transfer tiers.
+        self.assertEqual(totals, {'Anna': 3_500_000, 'Ben': 0})
+        self.assertEqual(details['Anna']['transfer_profit'], 1_750_000)
 
     def test_market_recommendations_require_positive_finite_forecast(self):
         market = players().iloc[:8].copy()

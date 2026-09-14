@@ -15,6 +15,18 @@ from zoneinfo import ZoneInfo
 
 LOGIN_BONUS_STEP = 10_000
 LOGIN_BONUS_MAX_DAY = 10
+MATCHDAY_WINNER_BONUS = 1_000_000
+MATCHDAY_POINT_BONUSES = (
+    (1_000, 250_000),
+    (1_500, 500_000),
+    (2_000, 1_000_000),
+)
+TRANSFER_PROFIT_BONUSES = (
+    (3_000_000, 250_000),
+    (5_000_000, 500_000),
+    (10_000_000, 1_000_000),
+    (25_000_000, 2_000_000),
+)
 
 
 def daily_login_bonus_total(league_start_date, as_of=None):
@@ -34,6 +46,67 @@ def daily_login_bonus_total(league_start_date, as_of=None):
     ramp_days = min(days, LOGIN_BONUS_MAX_DAY)
     ramp_total = LOGIN_BONUS_STEP * ramp_days * (ramp_days + 1) // 2
     return ramp_total + max(0, days - LOGIN_BONUS_MAX_DAY) * LOGIN_BONUS_STEP * LOGIN_BONUS_MAX_DAY
+
+
+def reconstructable_achievement_bonuses(performances, activities_df, managers):
+    """Return only achievement money provable for every manager from the API.
+
+    The manager-performance endpoint gives finalized matchday scores and an
+    explicit matchday-winner flag. The activity feed identifies market buys and
+    sales, which makes transfer-profit tiers reproducible. It does *not* expose
+    an achievement recipient for MVP, Tormaschine, team-value and one-off
+    achievements, so those categories deliberately remain excluded.
+    """
+    manager_lookup = build_manager_lookup(managers)
+    totals = {name: 0 for name, _ in managers}
+    breakdown = {name: {"matchday_winner": 0, "matchday_points": 0, "transfer_profit": 0}
+                 for name, _ in managers}
+
+    for performance in performances:
+        name = normalize_activity_name(performance.get("name"), manager_lookup)
+        if name not in totals:
+            continue
+        for matchday in performance.get("matchdays") or []:
+            # ``cur`` is still live and points may change until the final score.
+            if matchday.get("cur") is True:
+                continue
+            points = first_number(matchday.get("mdp"))
+            if points is None:
+                continue
+            if matchday.get("tw") is True:
+                breakdown[name]["matchday_winner"] += MATCHDAY_WINNER_BONUS
+            # Kickbase lists these as separate repeatable achievements. A score
+            # above multiple thresholds earns each applicable tier.
+            breakdown[name]["matchday_points"] += sum(
+                bonus for threshold, bonus in MATCHDAY_POINT_BONUSES if points >= threshold)
+
+    if not activities_df.empty:
+        purchases = {}
+        rows = activities_df.sort_values("dt", kind="stable") if "dt" in activities_df else activities_df
+        for _, row in rows.iterrows():
+            transfer_type = first_number(row.get("transfer_type"))
+            player_id = row.get("pi")
+            price = first_number(row.get("trp"), row.get("prc"))
+            buyer = normalize_activity_name(row.get("byr"), manager_lookup)
+            seller = normalize_activity_name(row.get("slr"), manager_lookup)
+            if player_id is None or price is None:
+                continue
+            player_id = str(player_id)
+            if transfer_type == 1 and buyer in totals and pd.isna(seller):
+                purchases[(buyer, player_id)] = price
+                continue
+            if seller not in totals:
+                continue
+            purchase_price = purchases.pop((seller, player_id), None)
+            if transfer_type != 2 or not pd.isna(buyer) or purchase_price is None:
+                continue
+            gain = price - purchase_price
+            breakdown[seller]["transfer_profit"] += sum(
+                bonus for threshold, bonus in TRANSFER_PROFIT_BONUSES if gain >= threshold)
+
+    for name, values in breakdown.items():
+        totals[name] = sum(values.values())
+    return totals, breakdown
 
 def calc_manager_budgets(token, league_id, league_start_date, start_budget, include_overpay=True):
     """Calculate manager budgets based on activities, bonuses, and team performance."""
@@ -59,10 +132,10 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget, incl
             )
 
     # Achievement events lack a recipient manager in the public activity feed.
-    # Never distribute one user's achievements to the full league by points;
-    # the owner's budget below is synced with Kickbase and therefore stays exact.
+    # We nevertheless reconstruct the subset that can be attributed from other
+    # API fields below; never distribute this account's feed events by points.
     if achievement_bonus:
-        print("Opponent achievement bonuses are not attributable in the public feed and are excluded from cash estimates.")
+        print("Achievement feed has no recipient; using only reconstructable matchday and transfer bonuses.")
 
     # Manager performances
     try:
@@ -93,6 +166,12 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget, incl
         perf_df["name"] = []
         perf_df["point_bonus"] = []
         perf_df["Team Value"] = []
+
+    achievement_bonuses, achievement_breakdown = reconstructable_achievement_bonuses(
+        performances, activities_df, managers)
+    reconstructed_total = sum(achievement_bonuses.values())
+    if reconstructed_total:
+        print(f"Reconstructed achievement bonuses: {reconstructed_total:,.0f} EUR across managers.")
 
     # Initial cash budgets. Use all managers, not only users that already have transfer activities.
     budgets = {manager_name: start_budget for manager_name, _ in managers}
@@ -140,6 +219,8 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget, incl
     budget_df["Budget"] = budget_df["Budget"] + budget_df["point_bonus"].fillna(0)
     budget_df.drop(columns=["point_bonus"], inplace=True, errors="ignore")
 
+    budget_df["Budget"] += budget_df["User"].map(achievement_bonuses).fillna(0)
+
     # add total login bonus equally to everyone (100% estimation, if the user logged in every day)
     budget_df["Budget"] += total_login_bonus
 
@@ -170,9 +251,10 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget, incl
     budget_df.attrs["own_user"] = own_username if "own_username" in locals() else None
     budget_df.attrs["cash_assumptions"] = {
         "login_bonus_per_manager": total_login_bonus,
-        "achievement_bonus_for_opponents": 0,
+        "achievement_bonus_for_opponents": "reconstructable subset",
         "points_reward_per_point": 1000,
     }
+    budget_df.attrs["achievement_breakdown"] = achievement_breakdown
 
     return budget_df
 

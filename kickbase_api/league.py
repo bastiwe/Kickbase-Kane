@@ -72,6 +72,10 @@ def get_league_activities(token, league_id, league_start_date):
             "mv": first_existing(data, "mv", "marketValue", "market_value", prefer_value=True),
             "mvo": first_existing(data, "mvo", "marketValueOld", "market_value_old", prefer_value=True),
             "prc": first_existing(data, "prc", "price", "amount", "bid", "value", prefer_value=True),
+            # Kickbase distinguishes transfers from the market (1 = purchase,
+            # 2 = sale) from manager-to-manager transfers. Keep this raw flag
+            # so cash and achievement calculations do not mix the two.
+            "transfer_type": data.get("t"),
         }
         item["dt"] = entry.get("dt")
         if not missing_trade_fields_logged and not any(item.get(key) is not None for key in ["byr", "pi", "trp", "prc"]):

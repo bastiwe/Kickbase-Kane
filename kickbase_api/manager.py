@@ -43,5 +43,10 @@ def get_manager_performance(token, league_id, manager_id, manager_name):
 
     return {
         "name": manager_name,
-        "tp": tp_value
+        "tp": tp_value,
+        # The current-season object contains one entry per Bundesliga matchday.
+        # ``mdp`` is the manager's score and ``tw`` marks the matchday winner.
+        # Preserve it for cash bonuses instead of trying to infer winners from
+        # the cumulative league ranking.
+        "matchdays": current_season.get("it", []),
     }
