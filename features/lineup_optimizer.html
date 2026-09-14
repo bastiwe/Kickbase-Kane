@@ -20,26 +20,26 @@
 <style>
 header label:has(#budget), #bonus-players, .details:has(> summary) { display: none; }
 /* Broadcast-style pitch cards: portraits lead, data remains in stable rows. */
-.pitch { min-height: 740px; padding-top: 30px; padding-bottom: 104px; }
-.pitch .line { gap: 16px; }
-.pitch .player { width: 142px; min-height: 190px; padding: 9px 7px 8px; }
-.pitch .player-photo { width: 82px; height: 82px; margin: 2px auto 5px; }
-.pitch .player-photo .portrait, .pitch .player img { width: 82px; height: 82px; }
-.pitch .s11-badge { right: -3px; top: -3px; width: 22px; height: 22px; font-size: 13px; }
-.pitch .player .name { min-height: 34px; font-size: 12px; line-height: 16px; }
-.pitch .player .recent { margin: 4px 0; }
-.pitch .player .stats { margin: 5px 0; font-size: 14px; }
-.pitch .player .status { display: block; min-height: 14px; }
+.pitch { min-height: 620px; padding-top: 20px; padding-bottom: 78px; }
+.pitch .line { gap: 10px; }
+.pitch .player { width: 116px; min-height: 160px; padding: 7px 5px 6px; }
+.pitch .player-photo { width: 64px; height: 64px; margin: 1px auto 3px; }
+.pitch .player-photo .portrait, .pitch .player img { width: 64px; height: 64px; }
+.pitch .s11-badge { right: -3px; top: -3px; width: 20px; height: 20px; font-size: 12px; }
+.pitch .player .name { min-height: 30px; font-size: 11px; line-height: 14px; }
+.pitch .player .recent { margin: 2px 0; }
+.pitch .player .stats { margin: 3px 0; font-size: 12px; }
+.pitch .player .status { display: block; min-height: 12px; }
 .line:has(> :nth-child(6)) { gap: 6px; }
-.line:has(> :nth-child(6)) .player { width: calc((100% - 30px) / 6); min-width: 0; min-height: 166px; padding: 7px 3px; }
-.line:has(> :nth-child(6)) .player-photo { width: 60px; height: 60px; margin-bottom: 3px; }
-.line:has(> :nth-child(6)) .player-photo .portrait, .line:has(> :nth-child(6)) .player img { width: 60px; height: 60px; }
+.line:has(> :nth-child(6)) .player { width: calc((100% - 30px) / 6); min-width: 0; min-height: 146px; padding: 6px 3px; }
+.line:has(> :nth-child(6)) .player-photo { width: 52px; height: 52px; margin-bottom: 2px; }
+.line:has(> :nth-child(6)) .player-photo .portrait, .line:has(> :nth-child(6)) .player img { width: 52px; height: 52px; }
 .line:has(> :nth-child(6)) .player .name { font-size: 11px; }
 @media (max-width: 1100px) {
-  .pitch { min-height: 670px; }
+  .pitch { min-height: 560px; }
   .pitch .line { gap: 7px; }
-  .pitch .player { width: 104px; min-height: 174px; padding: 7px 4px; }
-  .pitch .player-photo, .pitch .player-photo .portrait, .pitch .player img { width: 64px; height: 64px; }
+  .pitch .player { width: 88px; min-height: 148px; padding: 6px 3px; }
+  .pitch .player-photo, .pitch .player-photo .portrait, .pitch .player img { width: 52px; height: 52px; }
   .pitch .player .name { font-size: 11px; }
 }
 </style>
