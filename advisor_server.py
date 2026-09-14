@@ -111,7 +111,10 @@ class AdvisorHandler(BaseHTTPRequestHandler):
         self.send_header('Cache-Control', 'no-store')
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Referrer-Policy', 'no-referrer')
-        self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'")
+        # In Home Assistant the app is served through Ingress in a same-origin
+        # iframe. ``'none'`` blocks that trusted frame entirely; ``'self'``
+        # still rejects embedding by any other website.
+        self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'none'")
         self.end_headers()
         self.wfile.write(body)
 
