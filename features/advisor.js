@@ -47,9 +47,27 @@
   document.querySelector('header').append(toolbar);
   const reportTools = document.createElement('div');
   reportTools.className = 'toolbar';
-  reportTools.innerHTML = '<button data-run-report="full">Report starten</button><button data-run-report="fast">Fast-Report starten</button><span id="report-job-status" role="status" aria-live="polite"></span>';
+  reportTools.innerHTML = '<button data-run-report="full">Report starten</button><button data-run-report="fast">Fast-Report starten</button><span id="report-job-status" role="status" aria-live="polite"></span><span id="report-forecast-stamp" class="muted" role="status"></span>';
   document.querySelector('header').append(reportTools);
   let reportPolling = false, appliedJob = null;
+  function berlinStamp(value) {
+    const stamp = value ? new Date(value) : null;
+    return stamp && !Number.isNaN(stamp.getTime())
+      ? stamp.toLocaleString('de-DE', {timeZone: 'Europe/Berlin', dateStyle: 'short', timeStyle: 'short'}) + ' Uhr'
+      : null;
+  }
+  function showForecastStamp() {
+    const forecast = data.forecast || {};
+    const full = forecast.multiDay?.['3'] || forecast.multiDay?.['7'];
+    const fullStamp = berlinStamp(full?.generatedAt);
+    const oneDayStamp = berlinStamp(forecast.generatedAt);
+    const text = fullStamp
+      ? `Lokaler Vollreport: ${fullStamp}`
+      : oneDayStamp ? `Lokale 1T-Prognose: ${oneDayStamp}` : 'Noch kein lokaler Prognose-Report';
+    element('report-forecast-stamp').textContent = text;
+    element('report-forecast-stamp').title = fullStamp && oneDayStamp && fullStamp !== oneDayStamp
+      ? `1T-Prognose zuletzt aktualisiert: ${oneDayStamp}` : '';
+  }
   async function pollReports() {
     if (reportPolling) return;
     reportPolling = true;
@@ -63,12 +81,13 @@
       if (job.status === 'done' && appliedJob !== job.id) {
         for (const p of [...players, ...(data.marketPlayers || [])]) {
           const patch = job.patches[p.id];
-          if (patch) for (const field of ['change', 'matchdayChange', 'li']) {
+          if (patch) for (const field of ['change', 'change7', 'matchdayChange', 'li']) {
             if (Object.hasOwn(patch, field)) p[field] = patch[field];
           }
         }
         data.forecast = job.forecast;
         data.forecastHorizon = job.forecastHorizon;
+        showForecastStamp();
         render();
         appliedJob = job.id;
         element('report-job-status').textContent = 'Report fertig · Prognosedaten übernommen';
@@ -87,6 +106,7 @@
     };
   });
   setInterval(pollReports, 5000);
+  showForecastStamp();
   pollReports();
 
   async function request(path, body) {

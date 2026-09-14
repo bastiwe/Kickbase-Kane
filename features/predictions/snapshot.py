@@ -10,6 +10,21 @@ from zoneinfo import ZoneInfo
 SNAPSHOT_PATH = 'prediction_snapshot_1t.json'
 
 
+def forecast_metadata(snapshot):
+    """Expose cache timestamps without leaking the complete prediction map."""
+    if not isinstance(snapshot, dict):
+        return None
+    result = {key: snapshot.get(key) for key in ('generatedAt', 'source')}
+    multi = {}
+    for days in ('3', '7'):
+        entry = snapshot.get('multiDay', {}).get(days, {})
+        if isinstance(entry, dict) and entry.get('generatedAt'):
+            multi[days] = {key: entry.get(key) for key in ('generatedAt', 'source')}
+    if multi:
+        result['multiDay'] = multi
+    return result
+
+
 def write_prediction_snapshot(predictions, source, competition_id=1, path=SNAPSHOT_PATH):
     values = {}
     longer = {}
@@ -95,7 +110,15 @@ def project_to_matchday(snapshot, player_id, updates, now=None):
         anchors = [(1, float(day))]
         for days in (3, 7):
             entry = snapshot.get('multiDay', {}).get(str(days), {})
-            if not entry or market_cycle(entry['generatedAt']) != cycle:
+            if not entry:
+                continue
+            anchor_time = datetime.fromisoformat(entry['generatedAt'])
+            if anchor_time.tzinfo is None:
+                continue
+            # A Fast report refreshes only 1T. Keep the most recent full-report
+            # 3T/7T curve for up to seven days, otherwise the planner loses its
+            # matchday estimate every time Fast 1T is run locally.
+            if now.astimezone(ZoneInfo('Europe/Berlin')) - anchor_time.astimezone(ZoneInfo('Europe/Berlin')) > timedelta(days=7):
                 continue
             value = multi_day_prediction(snapshot, player_id, days)
             if value is not None:

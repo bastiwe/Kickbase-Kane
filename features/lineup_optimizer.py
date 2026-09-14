@@ -12,7 +12,7 @@ from kickbase_api.league import has_user_market_offer, is_user_market_listing, p
 from kickbase_api.user import get_budget, get_players_in_squad
 from kickbase_api.player import get_player_info, get_player_performance
 from features.predictions.predictions import normalize_player_status
-from features.predictions.snapshot import multi_day_prediction, project_to_matchday
+from features.predictions.snapshot import forecast_metadata, multi_day_prediction, project_to_matchday
 
 
 def number(value):
@@ -128,8 +128,7 @@ def write_lineup_optimizer(token, league_id, user_id, squad_df, predictions_df,
     payload = {'players': players, 'budget': number(get_budget(token, league_id)),
                'marketPlayers': market_context(market, own_ids, user_id, predictions, history_df, forecast_snapshot),
                'league': str(league_id), 'user': str(user_id), 'historyNote': history_note,
-               'forecast': {key: forecast_snapshot.get(key) for key in ('generatedAt', 'source')}
-               if forecast_snapshot else None,
+               'forecast': forecast_metadata(forecast_snapshot),
                'forecastHorizon': horizon,
                'generated': datetime.now(ZoneInfo('Europe/Berlin')).strftime('%d.%m.%Y %H:%M')}
     return render_optimizer(payload, output_path)

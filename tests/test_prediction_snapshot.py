@@ -6,7 +6,12 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from features.predictions.snapshot import read_prediction_snapshot, write_prediction_snapshot, project_to_matchday
+from features.predictions.snapshot import (
+    forecast_metadata,
+    read_prediction_snapshot,
+    write_prediction_snapshot,
+    project_to_matchday,
+)
 from features.lineup_optimizer import forecast_horizon, forecast_horizon_from_matchdays
 from features.predictions.preprocessing import preprocess_player_data
 
@@ -57,6 +62,24 @@ class SnapshotTests(unittest.TestCase):
             result = read_prediction_snapshot(path)
             self.assertEqual(result['multiDay']['7']['predictions']['1'], -50)
             self.assertEqual(result['multiDay']['7']['source'], 'Spaet')
+
+    def test_fast_1t_keeps_recent_full_report_curve_for_matchday_projection(self):
+        snapshot = {
+            'generatedAt': '2026-09-14T12:00:00+02:00',
+            'source': 'Fast 1T',
+            'predictions': {'1': 100_000},
+            'multiDay': {
+                '3': {'generatedAt': '2026-09-12T12:00:00+02:00', 'source': 'Spaet',
+                      'predictions': {'1': 180_000}},
+                '7': {'generatedAt': '2026-09-12T12:00:00+02:00', 'source': 'Spaet',
+                      'predictions': {'1': 250_000}},
+            },
+        }
+        now = datetime(2026, 9, 14, 12, tzinfo=ZoneInfo('Europe/Berlin'))
+        self.assertEqual(project_to_matchday(snapshot, '1', 4, now), 197_500)
+        metadata = forecast_metadata(snapshot)
+        self.assertEqual(metadata['generatedAt'], snapshot['generatedAt'])
+        self.assertEqual(metadata['multiDay']['3']['source'], 'Spaet')
 
     def test_roundtrip_keeps_negative_and_zero_and_skips_missing_values(self):
         with tempfile.TemporaryDirectory() as folder:

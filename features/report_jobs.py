@@ -6,7 +6,12 @@ import sys
 import threading
 import uuid
 from copy import deepcopy
-from features.predictions.snapshot import multi_day_prediction, read_prediction_snapshot, project_to_matchday
+from features.predictions.snapshot import (
+    forecast_metadata,
+    multi_day_prediction,
+    read_prediction_snapshot,
+    project_to_matchday,
+)
 
 
 class ReportJobs:
@@ -81,7 +86,7 @@ class ReportJobs:
                         patch['li'] = li[p['id']]
                     p.update(patch)
                     patches[p['id']] = patch
-                forecast = {k: snapshot[k] for k in ('generatedAt', 'source')}
+                forecast = forecast_metadata(snapshot)
                 report.update(forecast=forecast, forecastHorizon=horizon)
             with self.lock:
                 self.status.update(status='done', patches=patches, forecast=forecast, forecastHorizon=horizon)

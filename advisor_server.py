@@ -18,7 +18,7 @@ import requests
 from features.ai_advisor import ask_advisor, prepare_context, validate_report
 from features.advisor_live import LiveKickbase, normalize_lineup
 from features.sale_bonus import load_sale_bonus
-from features.predictions.snapshot import multi_day_prediction, read_prediction_snapshot, project_to_matchday
+from features.predictions.snapshot import forecast_metadata, multi_day_prediction, read_prediction_snapshot, project_to_matchday
 from features.report_jobs import ReportJobs
 
 
@@ -139,7 +139,7 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                             player['change'] = snapshot['predictions'].get(str(player['id']), player.get('change'))
                             player['change7'] = multi_day_prediction(snapshot, player['id'], 7)
                             player['matchdayChange'] = project_to_matchday(snapshot, player['id'], updates)
-                        refreshed['forecast'] = {key: snapshot.get(key) for key in ('generatedAt', 'source')}
+                        refreshed['forecast'] = forecast_metadata(snapshot)
                         refreshed['forecastHorizon'] = horizon
                     try:
                         refreshed['saleBonus'] = load_sale_bonus(kickbase, refreshed)
