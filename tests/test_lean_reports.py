@@ -9,7 +9,7 @@ import tempfile
 import numpy as np
 import pandas as pd
 
-from features.budgets import calc_manager_budgets
+from features.budgets import calc_manager_budgets, daily_login_bonus_total
 from features.fast_notifier import table_html
 from features.notifier import send_mail
 from features.predictions.predictions import (
@@ -35,6 +35,12 @@ def players():
 
 
 class LeanReportTests(unittest.TestCase):
+    def test_official_daily_login_bonus_schedule(self):
+        self.assertEqual(daily_login_bonus_total('2026-08-15', '2026-08-15'), 10_000)
+        self.assertEqual(daily_login_bonus_total('2026-08-15', '2026-08-24'), 550_000)
+        self.assertEqual(daily_login_bonus_total('2026-08-15', '2026-09-11'), 2_350_000)
+        self.assertEqual(daily_login_bonus_total('2026-08-15', '2026-09-14'), 2_650_000)
+
     def test_market_recommendations_require_positive_finite_forecast(self):
         market = players().iloc[:8].copy()
         market['predicted_mv_target'] = [-217000, 0, None, 'invalid', np.inf, -np.inf, '500', 1]

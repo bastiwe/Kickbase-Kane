@@ -1,19 +1,39 @@
 from kickbase_api.user import get_budget, get_username
-from kickbase_api.league import (
-    get_league_activities,
-    get_league_ranking
-)
+from kickbase_api.league import get_league_activities
 from kickbase_api.manager import (
     get_managers,
     get_manager_performance,
     get_manager_info,
 )
-from kickbase_api.others import get_achievement_reward
 import pandas as pd
 import sqlite3
 import unicodedata
 import re
-from datetime import timedelta
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+
+LOGIN_BONUS_STEP = 10_000
+LOGIN_BONUS_MAX_DAY = 10
+
+
+def daily_login_bonus_total(league_start_date, as_of=None):
+    """Exact daily-login amount under the official Bundesliga bonus schedule.
+
+    Day 1 through 10 pay EUR 10k to EUR 100k; each later day pays EUR 100k.
+    The private league reset is the start of the bonus sequence.
+    """
+    start = pd.Timestamp(league_start_date).date()
+    if as_of is None:
+        as_of = datetime.now(ZoneInfo("Europe/Berlin")).date()
+    elif isinstance(as_of, datetime):
+        as_of = as_of.astimezone(ZoneInfo("Europe/Berlin")).date() if as_of.tzinfo else as_of.date()
+    else:
+        as_of = pd.Timestamp(as_of).date()
+    days = max(0, (as_of - start).days + 1)
+    ramp_days = min(days, LOGIN_BONUS_MAX_DAY)
+    ramp_total = LOGIN_BONUS_STEP * ramp_days * (ramp_days + 1) // 2
+    return ramp_total + max(0, days - LOGIN_BONUS_MAX_DAY) * LOGIN_BONUS_STEP * LOGIN_BONUS_MAX_DAY
 
 def calc_manager_budgets(token, league_id, league_start_date, start_budget, include_overpay=True):
     """Calculate manager budgets based on activities, bonuses, and team performance."""
@@ -25,19 +45,24 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget, incl
 
     activities_df = pd.DataFrame(activities)
 
-    # Bonuses
-    total_login_bonus = sum(entry.get("data", {}).get("bn", 0) for entry in login_bonus)
+    # Every manager in this league is assumed to collect the daily bonus.
+    # Login activities do not identify the receiving manager, so derive the
+    # official schedule from the league reset date instead of the account feed.
+    total_login_bonus = daily_login_bonus_total(league_start_date)
+    if login_bonus:
+        observed_login_total = sum(entry.get("data", {}).get("bn", 0) or 0 for entry in login_bonus)
+        if observed_login_total != total_login_bonus:
+            print(
+                "Login bonus assumption uses the official daily schedule: "
+                f"{total_login_bonus:,.0f} EUR per manager "
+                f"(account feed observed {observed_login_total:,.0f} EUR)."
+            )
 
-    total_achievement_bonus = 0
-    for item in achievement_bonus:
-        try:
-            a_id = item.get("data", {}).get("t")
-            if a_id is None:
-                continue
-            amount, reward = get_achievement_reward(token, league_id, a_id)
-            total_achievement_bonus += amount * reward
-        except Exception as e:
-            print(f"Warning: Failed to process achievement bonus {item}: {e}")
+    # Achievement events lack a recipient manager in the public activity feed.
+    # Never distribute one user's achievements to the full league by points;
+    # the owner's budget below is synced with Kickbase and therefore stays exact.
+    if achievement_bonus:
+        print("Opponent achievement bonuses are not attributable in the public feed and are excluded from cash estimates.")
 
     # Manager performances
     try:
@@ -121,11 +146,6 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget, incl
     # Ensure consistent float format
     budget_df["Budget"] = budget_df["Budget"].astype(float)
 
-    # add total achievement bonus based on anchor value and current ranking (estimation approach)
-    for user in budget_df["User"]:
-        achievement_bonus = calc_achievement_bonus_by_points(token, league_id, user, total_achievement_bonus)
-        budget_df.loc[budget_df["User"] == user, "Budget"] += achievement_bonus
-
     # Sync with own actual budget
     try:
         own_budget = get_budget(token, league_id)
@@ -148,6 +168,11 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget, incl
     budget_df.attrs["overpay_rows"] = overpay_rows
     budget_df.attrs["roster_profiles"] = roster_profiles
     budget_df.attrs["own_user"] = own_username if "own_username" in locals() else None
+    budget_df.attrs["cash_assumptions"] = {
+        "login_bonus_per_manager": total_login_bonus,
+        "achievement_bonus_for_opponents": 0,
+        "points_reward_per_point": 1000,
+    }
 
     return budget_df
 
