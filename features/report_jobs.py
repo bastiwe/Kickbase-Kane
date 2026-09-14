@@ -15,8 +15,10 @@ from features.predictions.snapshot import (
 
 
 class ReportJobs:
-    def __init__(self, server, root):
-        self.server, self.root = server, Path(root)
+    def __init__(self, server, app_root, data_root=None):
+        self.server = server
+        self.app_root = Path(app_root)
+        self.data_root = Path(data_root or app_root)
         self.lock = threading.Lock()
         self.status = {'status': 'idle'}
 
@@ -46,13 +48,14 @@ class ReportJobs:
 
     def run(self, script, env, initial, kind):
         try:
-            snapshot_path = self.root / 'prediction_snapshot_1t.json'
+            snapshot_path = self.data_root / 'prediction_snapshot_1t.json'
             before = snapshot_path.read_bytes() if snapshot_path.exists() else None
-            optimizer_path = self.root / 'startelf_optimizer.html'
+            optimizer_path = self.data_root / 'startelf_optimizer.html'
             previous_optimizer = optimizer_path.stat().st_mtime_ns if optimizer_path.exists() else None
-            with (self.root / '.advisor-report-run.log').open('w', encoding='utf-8') as log:
-                result = subprocess.run([sys.executable, '-u', str(self.root / script)],
-                                        cwd=self.root, env=env, stdout=log, stderr=subprocess.STDOUT,
+            with (self.data_root / '.advisor-report-run.log').open('w', encoding='utf-8') as log:
+                report_env = dict(env, PYTHONPATH=str(self.app_root) + os.pathsep + env.get('PYTHONPATH', ''))
+                result = subprocess.run([sys.executable, '-u', str(self.app_root / script)],
+                                        cwd=self.data_root, env=report_env, stdout=log, stderr=subprocess.STDOUT,
                                         timeout=3600, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
             if result.returncode:
                 raise RuntimeError('Report fehlgeschlagen. Details in .advisor-report-run.log.')

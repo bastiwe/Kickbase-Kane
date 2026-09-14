@@ -20,7 +20,7 @@ import pandas as pd
 load_dotenv()
 
 competition_ids = [1]
-league_name = "Die Spätzünder"
+league_name = os.getenv("KICK_LEAGUE_NAME", "Die Spätzünder")
 league_start_date = "2026-08-15"
 last_mv_values = 365
 last_pfm_values = 50

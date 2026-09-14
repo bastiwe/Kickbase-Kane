@@ -66,7 +66,7 @@ pd.set_option("display.width", 1000)
 # Adjust these settings to your preferences
 
 competition_ids = [1]                   # 1 = Bundesliga, 2 = 2. Bundesliga, 3 = La Liga
-league_name = "Die Spätzünder"          # Name of your league, must be exact match, can be done via env or hardcoded
+league_name = os.getenv("KICK_LEAGUE_NAME", "Die Spätzünder")
 start_budget = 80_000_000               # Starting budget of your league, used to calculate current budgets of other managers
 league_start_date = "2026-08-15"        # Start date of your league, used to filter activities, format: YYYY-MM-DD
 email = os.getenv("EMAIL_USER")         # Email to send recommendations to, can be the same as EMAIL_USER 

@@ -3,6 +3,8 @@
 (() => {
   const local = window.KICKBASE_ADVISOR;
   if (!local) return;
+  const basePath = local.basePath || '';
+  const appPath = path => basePath + path;
   const element = id => document.getElementById(id);
   let history = [], pending = false, lastPlan = null;
   const shell = document.createElement('section');
@@ -72,7 +74,7 @@
     if (reportPolling) return;
     reportPolling = true;
     try {
-      const response = await fetch('/api/report-job', {cache: 'no-store'});
+      const response = await fetch(appPath('/api/report-job'), {cache: 'no-store'});
       if (!response.ok) throw Error('Reportstatus nicht erreichbar.');
       const job = await response.json();
       reportTools.querySelectorAll('button').forEach(b => {b.disabled = job.status === 'running';});
@@ -113,7 +115,7 @@
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 240000);
     try {
-      const response = await fetch(path, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Advisor-Token': local.csrf}, body: JSON.stringify(body), signal: controller.signal});
+      const response = await fetch(appPath(path), {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Advisor-Token': local.csrf}, body: JSON.stringify(body), signal: controller.signal});
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Anfrage fehlgeschlagen.');
       return result;
@@ -124,7 +126,7 @@
   }
   async function status() {
     try {
-      const response = await fetch('/api/status');
+      const response = await fetch(appPath('/api/status'));
       if (!response.ok) throw new Error();
       const result = await response.json();
       element('advisor-state').textContent = result.configured ? result.model : 'API-Schlüssel fehlt';

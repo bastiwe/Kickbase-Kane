@@ -22,7 +22,8 @@ from features.predictions.snapshot import forecast_metadata, multi_day_predictio
 from features.report_jobs import ReportJobs
 
 
-ROOT = Path(__file__).resolve().parent
+APP_ROOT = Path(__file__).resolve().parent
+DATA_ROOT = Path(os.getenv('KICKBASE_DATA_DIR', APP_ROOT)).resolve()
 MAX_BODY = 2_000_000
 
 
@@ -65,13 +66,13 @@ class AdvisorServer(ThreadingHTTPServer):
         self.api_key = api_key or ''
         self.model = model
         self.persist_path = persist_path
-        self.memory_path = memory_path or ROOT / '.advisor-memory.json'
-        self.log_path = ROOT / '.advisor.log'
+        self.memory_path = memory_path or DATA_ROOT / '.advisor-memory.json'
+        self.log_path = DATA_ROOT / '.advisor.log'
         self.memory = self._load_memory()
         self.lock = threading.Lock()
         self.request_lock = threading.Lock()
         self.kickbase = None
-        self.report_jobs = ReportJobs(self, ROOT)
+        self.report_jobs = ReportJobs(self, APP_ROOT, DATA_ROOT)
 
     def log_event(self, message):
         try:
@@ -115,6 +116,11 @@ class AdvisorHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def valid_host(self):
+        if os.getenv('KICKBASE_HOME_ASSISTANT') == '1':
+            # Home Assistant Ingress authenticates the user and injects this
+            # header. The add-on exposes no host port, so direct access is not
+            # available outside the Supervisor proxy.
+            return bool(self.headers.get('X-Remote-User-Id'))
         return self.headers.get('Host') == f'127.0.0.1:{self.server.server_port}'
 
     def do_GET(self):
@@ -131,7 +137,7 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                         str(p['id']): {'action': 'keep' if p.get('owned') else 'skip'}
                         for p in report['players']}, 'budget': report.get('budget')}
                     refreshed, _, info = kickbase.refresh(report, seed)
-                    snapshot = read_prediction_snapshot()
+                    snapshot = read_prediction_snapshot(DATA_ROOT / 'prediction_snapshot_1t.json')
                     if snapshot:
                         horizon = refreshed.get('forecastHorizon') or report.get('forecastHorizon')
                         updates = (horizon or {}).get('updates')
@@ -161,16 +167,18 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                 payload = json.dumps(self.server.report, ensure_ascii=True, allow_nan=False).replace('<', '\\u003c')
                 settings = json.dumps({'csrf': self.server.csrf, 'revision': self.server.revision,
                                        'liveMessage': live_message}, ensure_ascii=True).replace('<', '\\u003c')
-            template = (ROOT / 'features/lineup_optimizer.html').read_text(encoding='utf-8')
+            ingress_path = self.headers.get('X-Ingress-Path', '').rstrip('/')
+            template = (APP_ROOT / 'features/lineup_optimizer.html').read_text(encoding='utf-8')
             page = template.replace('__PAYLOAD__', payload)
             page = page.replace('</head>', '<link rel="stylesheet" href="/advisor.css"><script>window.KICKBASE_ADVISOR='
-                                + settings + ';</script></head>')
-            page = page.replace('</body>', '<script src="/advisor.js"></script></body>')
+                                + settings[:-1] + ',"basePath":' + json.dumps(ingress_path) + '};</script></head>')
+            page = page.replace('href="/advisor.css"', 'href="' + ingress_path + '/advisor.css"')
+            page = page.replace('</body>', '<script src="' + ingress_path + '/advisor.js"></script></body>')
             self.reply(200, page, 'text/html; charset=utf-8')
         elif self.path in ('/advisor.js', '/advisor.css'):
             name = self.path.lstrip('/')
             content_type = 'text/javascript; charset=utf-8' if name.endswith('.js') else 'text/css; charset=utf-8'
-            self.reply(200, (ROOT / 'features' / name).read_text(encoding='utf-8'), content_type)
+            self.reply(200, (APP_ROOT / 'features' / name).read_text(encoding='utf-8'), content_type)
         elif self.path.startswith('/api/player-details/'):
             player_id = self.path.rsplit('/', 1)[-1]
             with self.server.lock:
@@ -349,23 +357,26 @@ class AdvisorHandler(BaseHTTPRequestHandler):
 
 
 def create_server(port=8765, report=None, api_key=None, model='gpt-5-mini', persist_path=None):
+    host = os.getenv('KICKBASE_BIND_HOST', '127.0.0.1')
     for candidate in range(port, port + 20) if port else (0,):
         try:
-            return AdvisorServer(('127.0.0.1', candidate), report, api_key, model, persist_path)
+            return AdvisorServer((host, candidate), report, api_key, model, persist_path)
         except OSError:
             continue
     raise RuntimeError('Kein freier lokaler Port gefunden.')
 
 
 def main():
-    load_dotenv(ROOT / '.env')
+    DATA_ROOT.mkdir(parents=True, exist_ok=True)
+    load_dotenv(DATA_ROOT / '.env')
+    load_dotenv(APP_ROOT / '.env')
     parser = argparse.ArgumentParser(description='Lokaler Kickbase KI-Ratgeber')
     parser.add_argument('--port', type=int, default=8765)
     parser.add_argument('--report', type=Path)
     parser.add_argument('--no-browser', action='store_true')
     args = parser.parse_args()
-    report_path = args.report or ROOT / 'startelf_optimizer.html'
-    saved_report = ROOT / '.advisor-report.json'
+    report_path = args.report or DATA_ROOT / 'startelf_optimizer.html'
+    saved_report = DATA_ROOT / '.advisor-report.json'
     if not args.report and saved_report.is_file():
         report = validate_report(json.loads(saved_report.read_text(encoding='utf-8')))
     else:
