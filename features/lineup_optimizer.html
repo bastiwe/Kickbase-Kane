@@ -14,9 +14,12 @@
 .player-photo{display:inline-block;position:relative;width:52px;height:52px}.player-photo .portrait{width:52px;height:52px}.s11-badge{position:absolute;right:-5px;top:-5px;width:19px;height:19px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:900;line-height:1;border:2px solid #101722;box-shadow:0 1px 3px #0009}.s11-badge.high{background:#d9a928;color:#fff;border-color:#ffe58a;border-radius:5px 50% 50% 50%}.s11-badge.safe{background:#35d477;color:#07130b}.s11-badge.chance{background:#f39a3d;color:#241506}.s11-badge.low{background:#e54d59;color:#fff}
 .bank-forecast{border-top:1px solid #425167;margin-top:16px;padding:14px 2px;line-height:1.5}.bank-forecast strong{display:block;font-size:18px;margin:4px 0 12px}.bank-forecast small{display:block;overflow-wrap:anywhere}.roster-change{grid-column:1/-1;display:flex;justify-content:space-between;font-size:12px}
 </style><style>.detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}.detail-grid div{background:#202d3d;padding:8px;border-radius:5px}.detail-grid strong{display:block;color:#fff}.history-table{width:100%;border-collapse:collapse;font-size:12px}.history-table th,.history-table td{padding:6px;border-bottom:1px solid #354457;text-align:right}.history-table th:first-child,.history-table td:first-child{text-align:left}.fixture{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid #354457;padding:5px 0}.sortbar{display:flex;gap:6px;margin-bottom:8px}.sortbar select{flex:1;padding:5px}</style></head><body>
-<header><div><h1>Startelf-Optimierer</h1><small id="snapshot"></small></div><label>Budget <input id="budget" class="budget-input" type="number" step="1" aria-label="Aktuelles Cash-Budget in Euro"> €</label><div class="toolbar"><button id="save" title="Plan speichern">Speichern</button><button id="load" title="Plan laden">Laden</button><button id="reset" title="Auf Report-Daten zurücksetzen">Zurücksetzen</button><button id="export" title="Plan als Datei exportieren">↓ Plan</button><button id="import" title="Plan aus Datei laden">↑ Plan</button><input id="file" type="file" accept="application/json" hidden></div></header>
+<header><div><h1>Startelf-Optimierer</h1><small id="snapshot"></small></div><label>Budget <input id="budget" class="budget-input" type="number" step="1" aria-label="Aktuelles Cash-Budget in Euro"> €</label><div class="toolbar"><button id="save" title="Plan speichern">Speichern</button><button id="load" title="Plan laden">Laden</button><button id="reset" title="Auf Report-Daten zurücksetzen">Zurücksetzen</button></div></header>
 <style>#sellbench{display:none}label:has(#sellbench){display:none}.roster:not(.planned) .controls select{display:none}</style><noscript>Die interaktive Aufstellung benötigt JavaScript. Eine Mail- oder iPhone-Dateivorschau führt es häufig nicht aus. Öffne die HTML-Datei in einem Browser mit JavaScript.</noscript>
 <main><aside><div class="section-title"><h2>BANK <span id="count"></span></h2><select id="filter" aria-label="Spielerquelle"><option value="all">Kader + Gebote</option><option value="owned">Mein Kader</option><option value="bids">Gebote</option></select></div><input class="search" id="search" type="search" placeholder="Spieler suchen" aria-label="Spieler suchen"><div id="roster"></div><div id="bank-forecast" class="bank-forecast" aria-live="polite"></div></aside><section><div class="formations" id="formations"></div><div class="viewbar"><div class="toolbar"><button id="season">Saison</button><button id="l3" class="active">L3 Form</button><button id="best">Beste Elf einsetzen</button><button id="bench">Alle auf Bank</button></div><div class="toolbar"><label>Max./Verein <input id="limit" type="number" min="1" max="16" value="3" style="width:55px"></label><label><input id="planbids" type="checkbox"> Gebote einplanen</label><label><input id="sellbench" type="checkbox"> Bank verkaufen</label></div></div><section class="details"><h2>Verkaufsboni</h2><label><input id="bonus-enabled" type="checkbox"> Geldprämien in meiner Liga aktiv; Verkäufe an Kickbase geplant</label><p id="bonus-summary"></p><div id="bonus-players"></div><small>Schätzung: höchste verfügbare Gewinnstufe je Verkauf, einmalige Erfolge höchstens einmal. Nur belegte Transfermarktkäufe seit dem 1. Juli der laufenden Saison. Weitere Erfolgsarten und zusätzliche Stufen sind nicht eingerechnet. Die Gutschrift erfolgt erst nach dem Verkauf.</small></section><div id="clubs"></div><div id="notices" class="notices" aria-live="polite"></div><div class="pitch"><div class="circle"></div><div id="attack" class="line"></div><div id="midfield" class="line"></div><div id="defence" class="line"></div><div id="keeper" class="line"></div><div class="pitch-total"><small>WERT DER AUFSTELLUNG</small><strong id="lineupvalue"></strong><small>ENDBUDGET</small><strong id="endbudget"></strong></div></div><div class="summary"><div><small>S11 PUNKTE · HISTORISCH</small><strong id="points"></strong></div><div><small>GEPLANTE KÄUFE</small><strong id="purchases"></strong></div><div><small>GEPLANTE VERKÄUFE</small><strong id="sales"></strong></div><div><small>RESTKADER</small><strong id="remaining"></strong></div></div><details class="details"><summary>Berechnung & Datenbasis</summary><p>Endbudget = aktuelles Cash-Budget − geplante Käufe + geplante Verkaufserlöse. Nur eingeplante Gebote werden als erfolgreiche Käufe simuliert. Bankspieler bleiben im Kader, außer „Bank verkaufen“ ist aktiviert. Verkäufe werden zunächst zum aktuellen Marktwert angesetzt und sind editierbar. Fehlende Preise verhindern eine belastbare Budgetaussage.</p><p>L3 zeigt den Punkteschnitt der letzten bis zu drei dokumentierten abgeschlossenen Spieltage, Saison den Punkteschnitt der aktuellen Saison. Fehlen diese Werte, wird der Vorsaison-Schnitt genutzt. Dokumentierte Spieltage mit null Punkten zählen mit; fehlende Daten werden nicht als null gewertet. Die jeweilige Basis steht am Spieler. Unterschiedliche Datenbasen sind nur eingeschränkt vergleichbar; dies ist keine garantierte Spieltagsprognose. Formationswerte sind die Summe der Spielerschnitte der angezeigten bzw. vorgeschlagenen Elf. Grün bedeutet vollständig und Endbudget mindestens null, Gelb vollständig mit negativem oder unbekanntem Endbudget, Rot zu wenige verfügbare Spieler für die Positionen. Bei aktiviertem Bankverkauf werden die Verkäufe für jede Formation separat berechnet. Vereins- und Kaderlimits werden für den gesamten Restkader geprüft.</p><p>Gegner, einzelne Spieltagsergebnisse und LI-Werte werden nicht erfunden. Soweit der Report sie nicht liefert, bleiben Werte unbekannt. Ein Plan verändert weder Gebote noch Aufstellungen in Kickbase.</p></details><div id="message" role="status"></div></section></main><span id="generated" hidden></span><dialog id="picker"><div class="section-title"><h2>Spieler einsetzen</h2><button id="close" aria-label="Schließen">×</button></div><div id="choices"></div></dialog>
+<style>
+header label:has(#budget), #bonus-players, .details:has(> summary) { display: none; }
+</style>
 <script type="application/json" id="data">__PAYLOAD__</script>
 <script>
 'use strict';
@@ -29,6 +32,20 @@ const num=n=>n===null?'–':new Intl.NumberFormat('de-DE',{maximumFractionDigits
 const finite=v=>v!==null&&v!==''&&Number.isFinite(Number(v));
 const players=data.players, byId=new Map(players.map(p=>[p.id,p]));
 const key='kickbase-lineup:'+data.league+':'+data.user;
+const allPlayersOption=document.querySelector('#filter option[value="all"]');
+if(allPlayersOption)allPlayersOption.textContent='Alle Spieler';
+document.addEventListener('kickbase-plan-change',()=>{
+ const notices=$('notices');
+ if(notices)notices.textContent=notices.textContent
+  .replace(/(?:^| · )Endbudget negativ: weitere Verkäufe oder niedrigere Gebote nötig\.?/,'');
+ document.querySelectorAll('#roster [data-player]').forEach(row=>{
+  if(row.querySelector('.roster-change-7'))return;
+  const player=byId.get(row.dataset.player);
+  if(!player)return;
+  const value=finite(player.change7)?Number(player.change7):null;
+  row.insertAdjacentHTML('beforeend',`<div class="roster-change roster-change-7"><small>MW-Prognose 7T</small><span class="${value===null?'muted':value>=0?'positive':'negative'}">${changeMoney(value)}</span></div>`);
+ });
+});
 let state, target;
 function initial(){return {formation:'4-4-2',mode:'l3',budget:data.budget,limit:3,sellbench:true,bonusEnabled:false,selection:[],plans:Object.fromEntries(players.map(p=>[p.id,{action:p.owned?'keep':'skip',price:p.owned?p.mv:p.bid,locked:false,starterLocked:false}]))};}
 function score(p){for(const [field,label] of [[state.mode,state.mode==='l3'?'L3 Ø':'Saison Ø'],['average','Vorsaison Ø']]){if(finite(p[field]))return {value:Number(p[field]),label};}return {value:null,label:'Keine Punktdaten'};}
@@ -53,7 +70,7 @@ function saleBonus(selection=state.selection){
 function renderSaleBonus(){
  const b=saleBonus();$('bonus-enabled').checked=state.bonusEnabled===true;
  $('bonus-summary').textContent=!data.saleBonus?.rules?.length?'Bonusdaten nicht verfügbar; kein Bonus im Restbudget.':state.bonusEnabled?'Erwartete Verkaufsboni: '+money(b.total)+' · im Restbudget enthalten':'Keine Boni eingerechnet. Liga-Einstellung und Verkauf an Kickbase oben bestätigen.';
- $('bonus-players').innerHTML=b.rows.map(r=>'<div>'+esc(r.name)+' · Gewinn '+(r.gain===null?'unbekannt':money(r.gain))+' · Bonus '+money(r.bonus)+(r.achievement?' · '+esc(r.achievement):!r.eligible?' · Berechtigung nicht belegt':'')+'</div>').join('');
+ $('bonus-players').innerHTML=b.rows.map(r=>'<div>'+esc(r.name)+' · <span class="'+(r.gain===null?'muted':r.gain<0?'negative':'positive')+'">'+(r.gain!==null&&r.gain<0?'Verlust ':'Gewinn ')+(r.gain===null?'unbekannt':money(r.gain))+'</span> · <span class="positive">Bonus '+money(r.bonus)+'</span>'+(r.achievement?' · '+esc(r.achievement):!r.eligible?' · Berechtigung nicht belegt':'')+'</div>').join('');
 }
 function accounting(selection=state.selection){const selected=new Set(selection.filter(Boolean));let buys=0,sales=0,unknown=state.budget===null;const retained=[];for(const p of players){const plan=state.plans[p.id];const sell=p.owned&&!plan.locked&&!selected.has(p.id);if(sell){if(plan.price===null)unknown=true;else sales+=plan.price;}else if(p.owned||plan.action==='buy'){retained.push(p);if(!p.owned){if(plan.price===null)unknown=true;else buys+=plan.price;}}}const bonus=saleBonus(selection);return {buys,sales,retained,unknown,bonus:bonus.total,end:unknown?null:state.budget-buys+sales+bonus.total};}
 function start11Badge(value){const rate=Number(value);if(!Number.isFinite(rate))return '';if(rate>=99)return '<span class="s11-badge safe" title="Sicherer Startelfkandidat">✓</span>';if(rate>=85)return '<span class="s11-badge high" title="Hohe Startelfwahrscheinlichkeit">✓</span>';if(rate>=45)return '<span class="s11-badge chance" title="Chance auf Startelf">?</span>';return '<span class="s11-badge low" title="Startelf unwahrscheinlich">×</span>';}
@@ -84,7 +101,7 @@ function render(){
  const selected=state.selection.filter(Boolean).map(id=>byId.get(id));$('lineupvalue').textContent=selected.some(p=>p.mv===null)?'Unbekannt':money(selected.reduce((s,p)=>s+p.mv,0));
  $('points').textContent=num(t.value)+(t.missing?' *':'');$('purchases').textContent=money(a.buys)+(a.unknown?' *':'');$('sales').textContent=money(a.sales)+(a.unknown?' *':'');$('remaining').textContent=a.retained.length+' / 16';$('count').textContent=a.retained.length+'/16';renderRoster();document.dispatchEvent(new Event('kickbase-plan-change'));
 }
-function renderRoster(){const query=$('search').value.toLocaleLowerCase('de'),filter=$('filter').value;let html='';for(const [pos,label] of [[1,'TOR'],[2,'ABWEHR'],[3,'MITTELFELD'],[4,'STURM'],[0,'POSITION UNBEKANNT']]){const list=players.filter(p=>!state.selection.includes(p.id)&&p.position===pos&&p.name.toLocaleLowerCase('de').includes(query)&&(filter==='all'||(filter==='owned'&&p.owned)||(filter==='bids'&&!p.owned)));if(!list.length)continue;html+=`<div class="group">${label} (${list.length})</div>`;for(const p of list){const plan=state.plans[p.id],s=score(p),on=state.selection.includes(p.id),locked=!!plan.locked;html+=`<div draggable="${!['sell','skip'].includes(plan.action)}" data-player="${esc(p.id)}" class="roster ${!p.owned?'planned':''} ${locked?'locked':''} ${['sell','skip'].includes(plan.action)?'sold':''}">${positionBadge(p)}${photo(p)}<div><div class="name">${esc(p.name)} <button type="button" class="lock-toggle ${locked?'locked':''}" data-lock="${esc(p.id)}" aria-label="${locked?'Spieler entsperren':'Spieler sperren'}" title="${locked?'Gesperrt: bleibt im Kader':'Spieler im Kader halten'}">${locked?'🔒':'🔓'}</button></div><small>${esc(p.team)} · ${!p.owned?(plan.action==='buy'?'GEPLANT · GEBOT':'GEBOT · NICHT EINGEPLANT'):'BANK'}</small></div><div>${num(s.value)}<br><small>${p.mv===null?'–':num(p.mv/1e6)+' Mio.'}</small></div><div class="roster-change"><small>MW-Prognose 1T</small><span class="${finite(p.change)?(p.change>=0?'positive':'negative'):'muted'}">${changeMoney(finite(p.change)?Number(p.change):null)}</span></div><div class="controls"><select data-action="${esc(p.id)}" aria-label="Plan für ${esc(p.name)}">${(p.owned?[['keep','Behalten'],['sell','Verkaufen']]:[['buy','Kauf einplanen'],['skip','Nicht einplanen']]).map(([v,l])=>`<option value="${v}" ${plan.action===v?'selected':''}>${l}</option>`).join('')}</select><input type="number" min="0" step="1" data-price="${p.owned?'Verkaufspreis':'Gebotsbetrag'} ${esc(p.name)}" value="${plan.price??''}" placeholder="Preis fehlt" aria-label="${p.owned?'Verkaufspreis':'Gebotsbetrag'} ${esc(p.name)}" title="${p.owned?'Geplanter Verkaufspreis':'Dein Gebotsbetrag'} in Euro"></div></div>`;}}$('roster').innerHTML=html;document.querySelectorAll('#roster [data-price]').forEach(input=>{const row=input.closest('[data-player]');if(row)input.dataset.price=row.dataset.player;});renderBankForecast();}
+function renderRoster(){const query=$('search').value.toLocaleLowerCase('de'),filter=$('filter').value;let html='';for(const [pos,label] of [[1,'TOR'],[2,'ABWEHR'],[3,'MITTELFELD'],[4,'STURM'],[0,'POSITION UNBEKANNT']]){const list=players.filter(p=>!state.selection.includes(p.id)&&p.position===pos&&p.name.toLocaleLowerCase('de').includes(query)&&(filter==='all'||(filter==='owned'&&p.owned)||(filter==='bids'&&!p.owned)));if(!list.length)continue;html+=`<div class="group">${label} (${list.length})</div>`;for(const p of list){const plan=state.plans[p.id],s=score(p),on=state.selection.includes(p.id),locked=!!plan.locked;html+=`<div draggable="${p.owned||plan.action==='buy'}" data-player="${esc(p.id)}" class="roster ${!p.owned?'planned':''} ${locked?'locked':''} ${['sell','skip'].includes(plan.action)?'sold':''}">${positionBadge(p)}${photo(p)}<div><div class="name">${esc(p.name)} <button type="button" class="lock-toggle ${locked?'locked':''}" data-lock="${esc(p.id)}" aria-label="${locked?'Spieler entsperren':'Spieler sperren'}" title="${locked?'Gesperrt: bleibt im Kader':'Spieler im Kader halten'}">${locked?'🔒':'🔓'}</button></div><small>${esc(p.team)} · ${!p.owned?(plan.action==='buy'?'GEPLANT · GEBOT':'GEBOT · NICHT EINGEPLANT'):'BANK'}</small></div><div>${num(s.value)}<br><small>${p.mv===null?'–':num(p.mv/1e6)+' Mio.'}</small></div><div class="roster-change"><small>MW-Prognose 1T</small><span class="${finite(p.change)?(p.change>=0?'positive':'negative'):'muted'}">${changeMoney(finite(p.change)?Number(p.change):null)}</span></div><div class="controls"><select data-action="${esc(p.id)}" aria-label="Plan für ${esc(p.name)}">${(p.owned?[['keep','Behalten'],['sell','Verkaufen']]:[['buy','Kauf einplanen'],['skip','Nicht einplanen']]).map(([v,l])=>`<option value="${v}" ${plan.action===v?'selected':''}>${l}</option>`).join('')}</select><input type="number" min="0" step="1" data-price="${p.owned?'Verkaufspreis':'Gebotsbetrag'} ${esc(p.name)}" value="${plan.price??''}" placeholder="Preis fehlt" aria-label="${p.owned?'Verkaufspreis':'Gebotsbetrag'} ${esc(p.name)}" title="${p.owned?'Geplanter Verkaufspreis':'Dein Gebotsbetrag'} in Euro"></div></div>`;}}$('roster').innerHTML=html;document.querySelectorAll('#roster [data-price]').forEach(input=>{const row=input.closest('[data-player]');if(row)input.dataset.price=row.dataset.player;});renderBankForecast();}
 function renderBankForecast(){
  // Totals cover the full bank, independently of the sidebar search/filter.
  const bank=players.filter(p=>!state.selection.includes(p.id)&&(p.owned||state.plans[p.id].action==='buy'));
@@ -194,12 +211,61 @@ function restore(value){
  });
  state=next;render();
 }
- $('save').onclick=()=>{try{localStorage.setItem(key,JSON.stringify(saved()));$('message').textContent='Plan gespeichert.';}catch{$('message').textContent='Speichern im Browser nicht verfügbar. Nutze ↓ Plan.';}};
- $('load').onclick=()=>{try{const raw=localStorage.getItem(key);if(!raw)throw Error('Kein gespeicherter Plan vorhanden.');restore(JSON.parse(raw));$('message').textContent='Plan geladen; Preise und Budget des gespeicherten Plans bitte prüfen.';}catch(e){$('message').textContent=e.message;}};
- $('reset').onclick=()=>{state=initial();state.selection=optimal(state.formation);render();$('message').textContent='Report-Daten wiederhergestellt.';};
- $('export').onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(saved(),null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='startelf-plan.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};$('import').onclick=()=>$('file').click();$('file').onchange=async e=>{try{const file=e.target.files[0];if(file){restore(JSON.parse(await file.text()));$('message').textContent='Plan importiert. Budget und Preise prüfen.';}}catch(error){$('message').textContent='Import fehlgeschlagen: '+error.message;}e.target.value='';};
+const plansKey=key+':named';
+function storedPlans(){
+ const raw=localStorage.getItem(plansKey);
+ if(raw){const value=JSON.parse(raw);if(!Array.isArray(value))throw Error('Gespeicherte Aufstellungen sind beschädigt.');return value;}
+ const legacy=localStorage.getItem(key);
+ return legacy?[{name:'Bisherige Aufstellung',plan:JSON.parse(legacy)}]:[];
+}
+const plansDialog=document.createElement('dialog');
+plansDialog.innerHTML='<form id="plans-form"><div class="section-title"><h2 id="plans-title"></h2><button type="button" id="plans-close" aria-label="Schließen">×</button></div><label id="plans-name-label" for="plans-name">Aufstellungsname</label><input id="plans-name" maxlength="80" style="width:100%"><label id="plans-choice-label" for="plans-choice">Aufstellung</label><select id="plans-choice" style="width:100%"></select><p id="plans-error" role="status"></p><button id="plans-submit" type="submit">Speichern</button></form>';
+document.body.append(plansDialog);
+let plansMode='save';
+$('plans-close').onclick=()=>plansDialog.close();
+function openPlans(mode){
+ try{
+  const entries=storedPlans();plansMode=mode;
+  if(mode==='load'&&!entries.length)throw Error('Noch keine Aufstellung gespeichert.');
+  $('plans-title').textContent=mode==='save'?'Aufstellung speichern':'Aufstellung laden';
+  $('plans-submit').textContent=mode==='save'?'Speichern':'Laden';
+  for(const id of ['plans-name','plans-name-label'])$(id).hidden=mode!=='save';
+  for(const id of ['plans-choice','plans-choice-label'])$(id).hidden=mode!=='load';
+  $('plans-name').required=mode==='save';$('plans-name').value='';
+  $('plans-choice').innerHTML=entries.map((entry,i)=>'<option value="'+i+'">'+esc(entry.name)+'</option>').join('');
+  $('plans-error').textContent='';plansDialog.showModal();$(mode==='save'?'plans-name':'plans-choice').focus();
+ }catch(error){$('message').textContent=error.message;}
+}
+$('save').onclick=()=>openPlans('save');
+$('load').onclick=()=>openPlans('load');
+$('plans-form').onsubmit=e=>{
+ e.preventDefault();
+ try{
+  const entries=storedPlans();
+  if(plansMode==='save'){
+   const name=$('plans-name').value.trim();if(!name)throw Error('Bitte einen Aufstellungsnamen eingeben.');
+   const index=entries.findIndex(entry=>entry.name===name);
+   if(index>=0&&!confirm('Aufstellung „'+name+'“ wirklich überschreiben?'))return;
+   const entry={name,plan:saved()};if(index>=0)entries[index]=entry;else entries.push(entry);
+   localStorage.setItem(plansKey,JSON.stringify(entries));localStorage.removeItem(key);
+   $('message').textContent='Aufstellung „'+name+'“ gespeichert.';
+  }else{
+   const entry=entries[Number($('plans-choice').value)];if(!entry)throw Error('Bitte eine Aufstellung auswählen.');
+   const missing=(entry.plan.state.selection||[]).filter(id=>id&&!byId.has(id)).length;
+   restore(entry.plan);
+   $('message').textContent='Aufstellung „'+entry.name+'“ geladen.'+(missing?' '+missing+' Spieler sind nicht mehr verfügbar; Plätze bleiben frei.':'')+' Gespeicherte Preise und Budget bitte prüfen.';
+  }
+  plansDialog.close();
+ }catch(error){$('plans-error').textContent=error.message;}
+};
+$('reset').title='Alle gespeicherten Aufstellungen dieser Liga löschen';
+$('reset').onclick=()=>{
+ if(!confirm('Willst du wirklich alle gespeicherten Aufstellungen dieser Liga löschen und die aktuelle Planung zurücksetzen?'))return;
+ try{localStorage.removeItem(plansKey);localStorage.removeItem(key);state=initial();state.selection=optimal(state.formation);render();$('message').textContent='Gespeicherte Aufstellungen gelöscht und Planung zurückgesetzt.';}
+ catch(error){$('message').textContent='Aufstellungen konnten nicht gelöscht werden: '+error.message;}
+};
 $('bonus-enabled').onchange=e=>{state.bonusEnabled=e.target.checked;render();};
-state=initial();state.selection=optimal(state.formation);$('snapshot').textContent='Kader + offene Gebote · '+data.generated;$('generated').textContent=data.generated+(data.historyNote?' · '+data.historyNote:'');render();
+state=initial();state.selection=optimal(state.formation);$('snapshot').textContent=data.generated;$('generated').textContent=data.generated+(data.historyNote?' · '+data.historyNote:'');render();
 if(window.KICKBASE_ADVISOR){
  fetch('/api/current-lineup',{cache:'no-store'}).then(async r=>{const body=await r.json();if(!r.ok)throw Error(body.error||'Abruf fehlgeschlagen');return body;}).then(live=>{
   if(!Array.isArray(live.players))throw Error('Ungültige Spielerliste');

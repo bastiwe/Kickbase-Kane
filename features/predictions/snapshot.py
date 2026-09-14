@@ -69,6 +69,15 @@ def market_cycle(stamp):
     return (time.astimezone(ZoneInfo('Europe/Berlin')) - timedelta(hours=22)).date()
 
 
+def multi_day_prediction(snapshot, player_id, days):
+    """Return a stored cumulative forecast without extrapolating it."""
+    try:
+        value = float(snapshot.get('multiDay', {}).get(str(days), {}).get('predictions', {}).get(str(player_id)))
+        return value if math.isfinite(value) else None
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
 def project_to_matchday(snapshot, player_id, updates, now=None):
     """Interpolate cumulative model targets; never extrapolate beyond them."""
     if updates == 0:
@@ -88,9 +97,9 @@ def project_to_matchday(snapshot, player_id, updates, now=None):
             entry = snapshot.get('multiDay', {}).get(str(days), {})
             if not entry or market_cycle(entry['generatedAt']) != cycle:
                 continue
-            value = entry['predictions'].get(str(player_id))
-            if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value):
-                anchors.append((days, float(value)))
+            value = multi_day_prediction(snapshot, player_id, days)
+            if value is not None:
+                anchors.append((days, value))
         if updates == 1:
             return day
         for (left, a), (right, b) in zip(anchors, anchors[1:]):

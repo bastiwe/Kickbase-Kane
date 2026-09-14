@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from features.predictions.snapshot import read_prediction_snapshot, write_prediction_snapshot, project_to_matchday
-from features.lineup_optimizer import forecast_horizon
+from features.lineup_optimizer import forecast_horizon, forecast_horizon_from_matchdays
 from features.predictions.preprocessing import preprocess_player_data
 
 
@@ -79,3 +79,12 @@ class SnapshotTests(unittest.TestCase):
             self.assertEqual(result, {'date': '2026-09-11', 'updates': count})
         self.assertEqual(forecast_horizon(history, datetime(2026, 9, 11, 12, tzinfo=ZoneInfo('Europe/Berlin')))['updates'], 0)
         self.assertIsNone(forecast_horizon(pd.DataFrame()))
+
+    def test_next_matchday_groups_weekend_fixtures_from_kickbase_schedule(self):
+        schedule = [
+            {'day': 3, 'md': '2026-09-12T13:30:00Z'},
+            {'day': 4, 'md': '2026-09-18T18:30:00Z'},
+        ]
+        result = forecast_horizon_from_matchdays(
+            schedule, datetime(2026, 9, 14, 10, tzinfo=ZoneInfo('Europe/Berlin')))
+        self.assertEqual(result, {'date': '2026-09-18', 'updates': 4, 'matchday': 4})

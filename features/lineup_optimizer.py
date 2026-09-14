@@ -12,7 +12,7 @@ from kickbase_api.league import has_user_market_offer, is_user_market_listing, p
 from kickbase_api.user import get_budget, get_players_in_squad
 from kickbase_api.player import get_player_info, get_player_performance
 from features.predictions.predictions import normalize_player_status
-from features.predictions.snapshot import project_to_matchday
+from features.predictions.snapshot import multi_day_prediction, project_to_matchday
 
 
 def number(value):
@@ -108,10 +108,20 @@ def write_lineup_optimizer(token, league_id, user_id, squad_df, predictions_df,
             'average': number(row.get('last_season_avg_points')),
             'li': number(row.get('starter_rate')),
             'change': number((forecast_snapshot or {}).get('predictions', {}).get(player_id)),
+            'change7': multi_day_prediction(forecast_snapshot, player_id, 7),
         })
         if player_history is not None and not player_history.empty:
             players[-1].update(history_context(player_history, player_id))
-    horizon = forecast_horizon(history_df)
+    horizon = None
+    if squad:
+        try:
+            schedule = get_json_with_token(
+                f'{BASE_URL}/competitions/{competition_id}/players/{squad[0]["i"]}', token)
+            horizon = forecast_horizon_from_matchdays(schedule.get('mdsum', []))
+        except Exception as exc:
+            print(f'Warning: Optimizer matchday schedule unavailable: {exc}')
+            horizon = None
+    horizon = horizon or forecast_horizon(history_df)
     for player in players:
         player['matchdayChange'] = project_to_matchday(
             forecast_snapshot, player['id'], horizon['updates'] if horizon else None)

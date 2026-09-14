@@ -26,6 +26,7 @@ TEAM_ALIASES = {
     "koln": "koln",
     "cologne": "koln",
     "gladbach": "borussia monchengladbach",
+    "m gladbach": "borussia monchengladbach",
     "monchengladbach": "borussia monchengladbach",
     "moenchengladbach": "borussia monchengladbach",
     "union": "union berlin",
@@ -179,8 +180,8 @@ def fallback_team_urls(season):
         "bayer-04-leverkusen": 23,
         "fc-bayern-muenchen": 1,
         "borussia-dortmund": 14,
-        "eintracht-frankfurt": 12,
-        "sc-freiburg": 7,
+        "eintracht-frankfurt": 3,
+        "sc-freiburg": 18,
         "hamburger-sv": 34,
         "tsg-hoffenheim": 10,
         "1-fc-koeln": 15,
@@ -190,7 +191,7 @@ def fallback_team_urls(season):
         "sc-paderborn-07": 29,
         "fc-schalke-04": 6,
         "fc-st-pauli": 32,
-        "vfb-stuttgart": 16,
+        "vfb-stuttgart": 12,
         "1-fc-union-berlin": 124,
         "sv-werder-bremen": 19,
         "sv-elversberg": 466,
@@ -263,6 +264,12 @@ def player_name_aliases(name):
     if len(parts) >= 2:
         for index in range(1, len(parts)):
             aliases.add(" ".join(parts[index:]))
+    # Kickbase and LigaInsider occasionally use a short first name differently.
+    # Keep this deliberately small so a surname collision cannot select a wrong page.
+    if parts and parts[0] == "joseph":
+        aliases.add("joe " + " ".join(parts[1:]))
+    elif parts and parts[0] == "joe":
+        aliases.add("joseph " + " ".join(parts[1:]))
     return aliases
 
 
@@ -306,11 +313,15 @@ def parse_bundesliga_starter_rate(text):
 
     section = before_marker(section, ["LIGA-RANKING", "DATEN POWERED", "NEWS"])
     upper_section = section.upper()
-    match = re.search(r"STARTELF\s*:?\s*(?:\n|\r|\s)*([0-9]+(?:[,.][0-9]+)?)\s*%", upper_section)
-    if not match:
-        return None
-
-    return float(match.group(1).replace(",", "."))
+    patterns = (
+        r"STARTELF(?:QUOTE|EINSATZE)?\s*(?:\([^)]*\))?\s*[:\-]?\s*([0-9]+(?:[,.][0-9]+)?)\s*%",
+        r"([0-9]+(?:[,.][0-9]+)?)\s*%\s*(?:[^%]{0,50})STARTELF",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, upper_section)
+        if match:
+            return float(match.group(1).replace(",", "."))
+    return None
 
 
 def resolve_player_signal(player, page_signal, player_rate=None, player_url=None):

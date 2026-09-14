@@ -6,7 +6,7 @@ import sys
 import threading
 import uuid
 from copy import deepcopy
-from features.predictions.snapshot import read_prediction_snapshot, project_to_matchday
+from features.predictions.snapshot import multi_day_prediction, read_prediction_snapshot, project_to_matchday
 
 
 class ReportJobs:
@@ -75,6 +75,7 @@ class ReportJobs:
                 patches = {}
                 for p in report['players'] + report.get('marketPlayers', []):
                     patch = {'change': snapshot['predictions'].get(p['id']),
+                             'change7': multi_day_prediction(snapshot, p['id'], 7),
                              'matchdayChange': project_to_matchday(snapshot, p['id'], updates)}
                     if p['id'] in li:
                         patch['li'] = li[p['id']]
