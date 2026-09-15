@@ -124,10 +124,14 @@ class AdvisorHandler(BaseHTTPRequestHandler):
 
     def valid_host(self):
         if os.getenv('KICKBASE_HOME_ASSISTANT') == '1':
-            # Home Assistant Ingress authenticates the user and injects this
-            # header. The add-on exposes no host port, so direct access is not
-            # available outside the Supervisor proxy.
-            return bool(self.headers.get('X-Remote-User-Id'))
+            # Ingress is the authentication and access boundary for add-ons.
+            # Some Home Assistant frontend requests (notably the embedded
+            # frame's initial document request) do not consistently forward
+            # the optional user headers. Requiring one here prevented the
+            # application from opening inside the standard Ingress frame.
+            # The add-on has no mapped host port; write requests still require
+            # the per-page CSRF token below.
+            return True
         return self.headers.get('Host') == f'127.0.0.1:{self.server.server_port}'
 
     def do_GET(self):

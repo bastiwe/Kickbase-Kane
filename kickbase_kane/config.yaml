@@ -1,5 +1,5 @@
 name: Kickbase Kane
-version: "0.1.3"
+version: "0.1.4"
 slug: kickbase_kane
 description: Privates Kickbase-Dashboard mit taeglichen Marktwertprognosen und Startelf-Optimierer.
 url: https://github.com/bastiwe/Kickbase-Kane
@@ -10,6 +10,7 @@ startup: application
 boot: auto
 ingress: true
 ingress_port: 8099
+ingress_entry: /
 panel_icon: mdi:soccer
 panel_title: Kickbase
 init: false
