@@ -111,10 +111,14 @@ class AdvisorHandler(BaseHTTPRequestHandler):
         self.send_header('Cache-Control', 'no-store')
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Referrer-Policy', 'no-referrer')
-        # In Home Assistant the app is served through Ingress in a same-origin
-        # iframe. ``'none'`` blocks that trusted frame entirely; ``'self'``
-        # still rejects embedding by any other website.
-        self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'none'")
+        csp = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self'; base-uri 'none'"
+        # Home Assistant Ingress terminates authentication and embeds the app
+        # behind a supervisor-owned URL. Its frame origin is installation-
+        # specific, so do not add a frame-ancestors directive in that mode.
+        # The app has no mapped host port and validates the Ingress user header.
+        if os.getenv('KICKBASE_HOME_ASSISTANT') != '1':
+            csp += "; frame-ancestors 'none'"
+        self.send_header('Content-Security-Policy', csp)
         self.end_headers()
         self.wfile.write(body)
 
