@@ -223,7 +223,12 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             self.reply(404, {'error': 'Nicht gefunden.'})
 
     def do_POST(self):
-        if (not self.valid_host() or self.headers.get('Origin') != self.server.origin
+        home_assistant = os.getenv('KICKBASE_HOME_ASSISTANT') == '1'
+        # The browser origin is the user's Home Assistant URL in Ingress mode,
+        # never the private container address. Ingress authentication plus our
+        # per-page CSRF token replaces the localhost-origin check there.
+        origin_valid = home_assistant or self.headers.get('Origin') == self.server.origin
+        if (not self.valid_host() or not origin_valid
                 or not secrets.compare_digest(self.headers.get('X-Advisor-Token', ''), self.server.csrf)):
             self.reply(403, {'error': 'Ungültige lokale Sitzung. Seite neu laden.'})
             return
