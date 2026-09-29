@@ -114,6 +114,29 @@ class LeanReportTests(unittest.TestCase):
         self.assertNotIn('Avg Overpay', result)
         self.assertEqual(result.iloc[0]['Available Budget'], 113_000_000)
 
+    def test_budget_uses_dashboard_profit_when_activity_feed_is_incomplete(self):
+        prefix = 'features.budgets.'
+        activities = [{'dt': '2026-09-01T12:00:00Z', 'byr': 'Me', 'slr': None,
+                       'pi': '1', 'trp': 10_000_000}]
+        with patch(prefix + 'get_league_activities', return_value=(activities, [], [])), \
+             patch(prefix + 'get_managers', return_value=[('Me', '1'), ('Other', '2')]), \
+             patch(prefix + 'get_manager_info', side_effect=[
+                 {'tv': 245_000_000, 'prft': 63_000_000},
+                 {'tv': 229_000_000, 'prft': 63_000_000},
+             ]), \
+             patch(prefix + 'get_manager_performance', side_effect=[
+                 {'name': 'Me', 'tp': 0, 'matchdays': []},
+                 {'name': 'Other', 'tp': 0, 'matchdays': []},
+             ]), \
+             patch(prefix + 'get_budget', return_value=9_000_000), \
+             patch(prefix + 'get_username', return_value='Me'):
+            result = calc_manager_budgets('token', 'league', '2026-08-15', 80_000_000, include_overpay=False)
+        other = result.set_index('User').loc['Other']
+        # Same profit but 16m less team value means 16m more cash. A partial
+        # feed must not fabricate a large cash surplus from missing transfers.
+        self.assertEqual(other['Budget'], 25_000_000)
+        self.assertEqual(other['Cash Basis'], 'Profilbilanz (kalibriert)')
+
     def test_empty_market(self):
         with patch('features.predictions.predictions.get_league_players_on_market', return_value=[]), patch('features.predictions.predictions.get_players_in_squad', return_value={'it': []}):
             result = join_current_market('token', 'league', players(), report_only=True)

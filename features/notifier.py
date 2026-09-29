@@ -48,6 +48,7 @@ COLUMN_LABELS = {
     "Team Value": "Kaderwert",
     "Max Negative": "Minuslimit",
     "Available Budget": "Kaufkraft",
+    "Cash Basis": "Cash-Basis",
 }
 
 DISPLAY_LABELS = {
@@ -1198,7 +1199,7 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
         {lineup_advice}
 
         <h3 style="color: #2c3e50; margin-top: 30px;">Manager-Budgets</h3>
-        <p style="font-size: 14px; color: #333;">Geschätztes Cash und Kaufkraft nach sichtbaren Transfers, Punkten sowie geschätzten Login- und Achievement-Boni.</p>
+        <p style="font-size: 14px; color: #333;">Cash und Kaufkraft basieren auf der verfügbaren Kickbase-Historie. Bei abgeschnittener Historie wird die Profilbilanz anhand deines echten Cash-Werts kalibriert.</p>
         {style_df(budget_df)}
 
         <h3 style="color: #2c3e50; margin-top: 30px;">Aktuelle Markt-Empfehlungen</h3>
