@@ -18,7 +18,7 @@ from features.fast_notifier import table_html
 from features.notifier import send_mail
 from features.predictions.predictions import (
     REMOVED_REPORT_COLUMNS, add_recommendation_columns, add_player_quality_signals,
-    prepare_market_report, join_current_market, live_data_predictions,
+    prepare_market_report, join_current_market, join_current_squad, live_data_predictions,
 )
 from overpay_forecast import cached_predictions, refresh_market_players, main as overpay_main
 from features.overpay_tool import write_overpay_tool
@@ -39,6 +39,18 @@ def players():
 
 
 class LeanReportTests(unittest.TestCase):
+    def test_fast_report_renders_purchase_price_from_live_squad_gain_loss(self):
+        predictions = players().drop(columns=['purchase_price', 'squad_profit_loss'])
+        payload = {'it': [{'i': 0, 'mv': 11643600, 'mvgl': -3711956}]}
+        with patch('features.predictions.predictions.get_players_in_squad', return_value=payload), \
+                patch('features.predictions.predictions.get_league_players_on_market', return_value=[]):
+            squad = join_current_squad('token', 'league', predictions, 'me', '2026-08-15', report_only=True)
+        self.assertEqual(squad.iloc[0]['purchase_price'], 15355556)
+        self.assertEqual(squad.iloc[0]['squad_profit_loss'], -3711956)
+        html = table_html(squad, is_market=False)
+        self.assertIn('15.355.556', html)
+        self.assertIn('3.711.956', html)
+
     def test_official_daily_login_bonus_schedule(self):
         self.assertEqual(daily_login_bonus_total('2026-08-15', '2026-08-15'), 10_000)
         self.assertEqual(daily_login_bonus_total('2026-08-15', '2026-08-24'), 550_000)
@@ -221,7 +233,6 @@ class LeanReportTests(unittest.TestCase):
                 'overpay_forecast.calc_manager_budgets': budgets,
                 'features.predictions.predictions.get_league_players_on_market': market,
                 'features.predictions.predictions.get_players_in_squad': squad,
-                'features.predictions.predictions.load_own_purchase_prices_from_activities': {},
                 'features.predictions.predictions.get_player_info': {},
             }
             for name, value in mocks.items():

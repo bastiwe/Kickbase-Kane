@@ -252,3 +252,7 @@ Optionale lokale Einstellungen: `KICK_LEAGUE_NAME`, `KICK_LEAGUE_START_DATE`
 und `KICK_START_BUDGET` (Standard: Die Spätzünder, 2026-08-15, 80000000).
 Die HTML-Datei bleibt dauerhaft nutzbar, aktualisiert sich aber nicht selbst.
 Zur Aktualisierung nur die separate Aktion bzw. den lokalen Starter ausfuehren.
+
+Kaufpreis und G/V im Kaderreport stammen aus den aktuellen Kickbase-Kaderdaten:
+`G/V = mvgl`, `Kaufpreis = Marktwert - mvgl`. Fehlt `mvgl`, bleiben die Werte
+unbekannt. Eine separate Kaufpreis-Datenbank ist nicht erforderlich.
