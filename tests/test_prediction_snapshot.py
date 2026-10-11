@@ -17,6 +17,19 @@ from features.predictions.preprocessing import preprocess_player_data
 
 
 class SnapshotTests(unittest.TestCase):
+    def test_duplicate_performance_row_does_not_hide_daily_market_delta(self):
+        rows = pd.DataFrame([
+            {'player_id': 8872, 'date': '2026-10-08', 'md': '2026-10-10', 'mv': 1_170_469, 'team_id': 29, 't1': 29, 't2': 14, 'p': 116},
+            {'player_id': 8872, 'date': '2026-10-09', 'md': '2026-10-10', 'mv': 1_408_981, 'team_id': 29, 't1': 29, 't2': 14, 'p': 116},
+            {'player_id': 8872, 'date': '2026-10-10', 'md': '2026-10-10', 'mv': None, 'team_id': 29, 't1': 29, 't2': 9, 'p': None},
+            {'player_id': 8872, 'date': '2026-10-10', 'md': '2026-10-10', 'mv': 1_674_712, 'team_id': 29, 't1': 29, 't2': 9, 'p': -10},
+            {'player_id': 8872, 'date': '2026-10-11', 'md': '2026-10-17', 'mv': 1_700_000, 'team_id': 29, 't1': 10, 't2': 29, 'p': None},
+        ])
+        _, today = preprocess_player_data(rows)
+        current = today.loc[today['date'].eq(pd.Timestamp('2026-10-10'))].iloc[0]
+        self.assertEqual(current['mv_change_1d'], 265_731)
+        self.assertEqual(current['p'], -10)
+
     def test_three_day_targets_use_future_value_and_skip_gaps(self):
         dates = pd.date_range('2020-01-01', periods=20).delete(9)
         rows = pd.DataFrame({'player_id': 1, 'date': dates, 'md': dates,

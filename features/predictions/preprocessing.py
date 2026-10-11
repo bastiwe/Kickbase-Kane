@@ -20,9 +20,18 @@ def preprocess_player_data(df):
     if stale_team_context.any():
         print(f"Preprocessing kept {int(stale_team_context.sum())} rows with stale team match context.")
 
-    # Convert date columns to datetime
+    # Convert date columns to datetime. The Kickbase performance endpoint can
+    # add a second row for the same player and calendar day without a market
+    # value. Keep the row with a real value, otherwise that empty row becomes
+    # the predecessor of the current market value and breaks daily deltas.
     df["date"] = pd.to_datetime(df["date"])
     df["md"] = pd.to_datetime(df["md"])
+    df["_has_market_value"] = df["mv"].notna().astype(int)
+    df = (
+        df.sort_values(["player_id", "date", "_has_market_value"])
+        .drop_duplicates(["player_id", "date"], keep="last")
+        .drop(columns="_has_market_value")
+    )
 
     # 2. Date and matchday calculations 
     df["next_day"] = df.groupby("player_id")["date"].shift(-1) 
