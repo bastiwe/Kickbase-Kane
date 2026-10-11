@@ -37,6 +37,7 @@ COLUMN_LABELS = {
     "top_player_tag": "Klasse",
     "last_season_points": "Pkt. Vors.",
     "last_season_avg_points": "Ø Pkt.",
+    "kickbase_average_points": "Ø Pkt. (KB)",
     "mv_trend": "MW-Tendenz",
     "starter_rate": "LI %",
     "hours_to_exp": "Resth.",
@@ -764,6 +765,7 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 "last_3_points",
                 "current_season_points",
                 "last_season_avg_points",
+                "kickbase_average_points",
                 "last_season_points",
                 "lineup_score",
             ]
@@ -984,6 +986,9 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 "expected_change_pct_7d",
                 "last_3_points",
                 "current_season_points",
+                # Historical averages support internal ranking only. The
+                # visible report uses the live Kickbase average instead.
+                "last_season_avg_points",
                 "lineup_score",
                 "lineup_score_basis",
             ],
@@ -1007,7 +1012,7 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 result[col] = result[col].map(lambda value: colored_number(value, format_number(value), positive_good=False))
             elif col == "bid_gap":
                 result[col] = result[col].map(lambda value: colored_number(value, format_number(value)))
-            elif col in {"mv", "purchase_price", "max_bid", "winning_bid", "opponent_overpay_forecast", "Budget", "Team Value", "Max Negative", "recent_starts", "recent_apps", "last_season_points", "last_season_avg_points"}:
+            elif col in {"mv", "purchase_price", "max_bid", "winning_bid", "opponent_overpay_forecast", "Budget", "Team Value", "Max Negative", "recent_starts", "recent_apps", "last_season_points", "last_season_avg_points", "kickbase_average_points", "kickbase_total_points"}:
                 result[col] = result[col].map(format_number)
             elif col == "hours_to_exp":
                 result[col] = result[col].map(hours_value)

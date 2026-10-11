@@ -1,6 +1,8 @@
 from kickbase_api.league import get_league_players_on_market
 from kickbase_api.user import get_players_in_squad
 from kickbase_api.config import get_cdn_url
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from kickbase_api.player import get_player_info
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -209,6 +211,11 @@ def live_data_predictions(today_df, models, features, history_df=None, season_st
     for optional_column in ["predicted_mv_target_3d", "predicted_mv_target_7d"]:
         if optional_column not in today_df_results:
             today_df_results[optional_column] = np.nan
+    # Live Kickbase aggregates are attached only after market/squad rows are
+    # known. Keep the pure model output schema stable for callers and tests.
+    for live_column in ["kickbase_average_points", "kickbase_total_points"]:
+        if live_column not in today_df_results:
+            today_df_results[live_column] = np.nan
 
     today_df_results = add_player_quality_signals(today_df_results, history_df, season_start_date, report_only=report_only)
 
@@ -237,6 +244,8 @@ def live_data_predictions(today_df, models, features, history_df=None, season_st
         "predicted_mv_target_7d",
         "last_season_points",
         "last_season_avg_points",
+        "kickbase_average_points",
+        "kickbase_total_points",
         "last_3_points",
         "current_season_points",
         "lineup_score",
@@ -245,6 +254,66 @@ def live_data_predictions(today_df, models, features, history_df=None, season_st
     ]]
 
     return today_df_results
+
+
+def hydrate_report_points_from_kickbase(token, competition_id, *dataframes):
+    """Prefer the live Kickbase total and average over locally rebuilt points.
+
+    The historical database is retained for market-value model features, but it
+    can lag behind a newly transferred or recently promoted player. Kickbase's
+    player profile is the authoritative source for the values shown in a report.
+    """
+    frames = [frame.copy() if frame is not None else pd.DataFrame() for frame in dataframes]
+    player_ids = {
+        str(int(player_id))
+        for frame in frames if not frame.empty and "player_id" in frame
+        for player_id in pd.to_numeric(frame["player_id"], errors="coerce").dropna()
+    }
+    if not player_ids:
+        return tuple(frames)
+
+    live_stats = {}
+    failures = 0
+    with ThreadPoolExecutor(max_workers=min(8, len(player_ids))) as executor:
+        futures = {
+            executor.submit(get_player_info, token, competition_id, player_id): player_id
+            for player_id in player_ids
+        }
+        for future in as_completed(futures):
+            player_id = futures[future]
+            try:
+                info = future.result()
+            except Exception as exc:
+                failures += 1
+                print(f"Warning: Could not load Kickbase report stats for player {player_id}: {exc}")
+                continue
+            live_stats[player_id] = {
+                "kickbase_average_points": numeric_value(info.get("kickbase_average_points")),
+                "kickbase_total_points": numeric_value(info.get("kickbase_total_points")),
+            }
+
+    for frame in frames:
+        if frame.empty or "player_id" not in frame:
+            continue
+        keys = pd.to_numeric(frame["player_id"], errors="coerce").map(
+            lambda value: str(int(value)) if pd.notna(value) else None
+        )
+        frame["kickbase_average_points"] = keys.map(
+            lambda key: live_stats.get(key, {}).get("kickbase_average_points")
+        )
+        frame["kickbase_total_points"] = keys.map(
+            lambda key: live_stats.get(key, {}).get("kickbase_total_points")
+        )
+        if "current_season_points" in frame:
+            frame["current_season_points"] = frame["kickbase_total_points"].combine_first(
+                frame["current_season_points"]
+            )
+
+    print(
+        f"Kickbase live report stats: {len(live_stats)}/{len(player_ids)} players refreshed"
+        + (f", {failures} failed." if failures else ".")
+    )
+    return tuple(frames)
 
 
 def add_player_quality_signals(today_df_results, history_df=None, season_start_date=None, report_only=False):
@@ -1079,7 +1148,7 @@ def format_short_money(value):
     return f"{value / 1_000:.0f}k"
 
 
-def join_current_squad(token, league_id, today_df_results, current_user_id=None, league_start_date=None, competition_id=1, report_only=False):
+def join_current_squad(token, league_id, today_df_results, current_user_id=None, league_start_date=None, competition_id=1, report_only=False, include_player_id=False):
     squad_players = get_players_in_squad(token, league_id)
     players_on_market = get_league_players_on_market(token, league_id, current_user_id)
     listed_player_ids = {
@@ -1143,6 +1212,7 @@ def join_current_squad(token, league_id, today_df_results, current_user_id=None,
 
     # Keep only relevant columns
     squad_df = squad_df[[col for col in [
+        *( ["player_id"] if include_player_id else []),
         "recommendation",
         "first_name",
         "last_name",
@@ -1159,6 +1229,8 @@ def join_current_squad(token, league_id, today_df_results, current_user_id=None,
         "predicted_mv_target_7d",
         "last_season_points",
         "last_season_avg_points",
+        "kickbase_average_points",
+        "kickbase_total_points",
         "last_3_points",
         "current_season_points",
         "lineup_score",
@@ -1210,6 +1282,8 @@ def hydrate_squad_columns_from_kickbase_payload(df):
         "expected_change_pct_7d",
         "last_season_points",
         "last_season_avg_points",
+        "kickbase_average_points",
+        "kickbase_total_points",
         "last_3_points",
         "current_season_points",
         "lineup_score",
@@ -1500,6 +1574,10 @@ def join_current_market(token, league_id, today_df_results, current_user_id=None
         pd.merge(today_df_results, market_df, left_on="player_id", right_on="id")
         .drop(columns=["id"])
     )
+    if "market_mv" in bid_df:
+        bid_df["mv"] = pd.to_numeric(bid_df["market_mv"], errors="coerce").combine_first(
+            pd.to_numeric(bid_df.get("mv"), errors="coerce")
+        )
     bid_df = add_player_status_column(bid_df)
 
     # exp contains seconds until expiration. Kickbase can occasionally omit it.

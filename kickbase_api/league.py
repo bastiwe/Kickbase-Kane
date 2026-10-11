@@ -117,6 +117,9 @@ def get_league_players_on_market(token, league_id, current_user_id=None):
     for player in data.get('it', []):
         result.append({
             'id': player.get('i'),
+            # The market payload is fresher than the local prediction cache.
+            # Keep it under a distinct name to avoid a merge suffix later.
+            'market_mv': player.get('mv'),
             'prob': player.get('prob'),
             "player_status": player_status_value(player),
             "exp": player.get("exs"),

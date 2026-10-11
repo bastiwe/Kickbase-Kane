@@ -37,7 +37,7 @@ def get_player_market_value(token, competition_id, player_id, last_mv_values):
     return market_values
 
 def get_player_info(token, competition_id, player_id):
-    """Get basic information about a player."""
+    """Get basic player information plus the live Kickbase point aggregates."""
 
     url = f"{BASE_URL}/competitions/{competition_id}/players/{player_id}"
     data = get_json_with_token(url, token)
@@ -51,6 +51,11 @@ def get_player_info(token, competition_id, player_id):
         "position": data.get("pos"),
         "image_url": get_cdn_url(data.get("pim")),
         "team_image_url": get_cdn_url(data.get("tim")),
+        # ``tp`` and ``ap`` are the values displayed by Kickbase itself.
+        # Keep them separate from locally aggregated historic match rows.
+        "kickbase_total_points": data.get("tp"),
+        "kickbase_average_points": data.get("ap"),
+        "kickbase_minutes": data.get("sec"),
     }
 
     return player_info

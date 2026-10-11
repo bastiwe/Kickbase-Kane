@@ -3,6 +3,7 @@ from features.predictions.predictions import (
     live_data_predictions,
     join_current_market,
     join_current_squad,
+    hydrate_report_points_from_kickbase,
 )
 from features.predictions.preprocessing import preprocess_player_data, split_data
 from features.predictions.modeling import train_model, evaluate_model
@@ -16,9 +17,12 @@ from features.predictions.data_handler import (
     check_if_data_reload_needed,
     save_player_data_to_db,
     load_player_data_from_db,
+    hydrate_missing_live_players,
 )
 from features.budgets import calc_manager_budgets
 from features.ligainsider_signals import enrich_reports_with_ligainsider_signals
+from kickbase_api.league import get_league_players_on_market
+from kickbase_api.user import get_players_in_squad
 from IPython.display import display
 from dotenv import load_dotenv
 import os, pandas as pd
@@ -92,6 +96,15 @@ create_player_data_table()
 reload_data = check_if_data_reload_needed()
 save_player_data_to_db(token, competition_ids, last_mv_values, last_pfm_values, reload_data)
 player_df = load_player_data_from_db()
+live_player_ids = {
+    item.get("id") for item in get_league_players_on_market(token, league_id, current_user_id)
+}
+live_player_ids.update(
+    item.get("i") for item in get_players_in_squad(token, league_id).get("it", [])
+)
+player_df = hydrate_missing_live_players(
+    token, competition_ids[0], player_df, live_player_ids, last_mv_values, last_pfm_values
+)
 print("\nData loaded from database.")
 
 # Calculate (estimated) budgets of all managers in the league
@@ -121,10 +134,19 @@ live_predictions_df = live_data_predictions(today_df, models, features, proc_pla
 forecast_snapshot = write_prediction_snapshot(live_predictions_df, 'Spaet', competition_ids[0])
 
 # Join with current available players on the market
-market_recommendations_df = join_current_market(token, league_id, live_predictions_df, current_user_id, report_only=True)
+market_recommendations_df = join_current_market(
+    token, league_id, live_predictions_df, current_user_id, report_only=True, include_player_id=True
+)
 
 # Join with current players on the team
-squad_recommendations_df = join_current_squad(token, league_id, live_predictions_df, current_user_id, league_start_date, competition_ids[0], report_only=True)
+squad_recommendations_df = join_current_squad(
+    token, league_id, live_predictions_df, current_user_id, league_start_date,
+    competition_ids[0], report_only=True, include_player_id=True,
+)
+
+market_recommendations_df, squad_recommendations_df = hydrate_report_points_from_kickbase(
+    token, competition_ids[0], market_recommendations_df, squad_recommendations_df
+)
 
 market_recommendations_df, squad_recommendations_df = enrich_reports_with_ligainsider_signals(
     market_recommendations_df,

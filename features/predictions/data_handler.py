@@ -186,3 +186,103 @@ def load_player_data_from_db():
     conn.close()
 
     return df
+
+
+def hydrate_missing_live_players(token, competition_id, player_df, player_ids,
+                                 last_mv_values=365, last_pfm_values=50):
+    """Add current market/squad players absent from the local history cache.
+
+    A player can join the Bundesliga or become relevant on the market after a
+    previous full cache refresh. Without this small live repair, that player is
+    invisible to the model despite Kickbase already having market history.
+    """
+    if player_df is None:
+        player_df = pd.DataFrame()
+
+    known_ids = set()
+    latest_market_dates = {}
+    if not player_df.empty and "player_id" in player_df:
+        known_ids = {
+            str(int(value))
+            for value in pd.to_numeric(player_df["player_id"], errors="coerce").dropna()
+        }
+        if {"date", "mv"}.issubset(player_df.columns):
+            usable = player_df.dropna(subset=["mv"]).copy()
+            usable["date"] = pd.to_datetime(usable["date"], errors="coerce")
+            latest_market_dates = {
+                str(int(player_id)): stamp.date()
+                for player_id, stamp in usable.groupby("player_id")["date"].max().items()
+                if pd.notna(player_id) and pd.notna(stamp)
+            }
+
+    today = datetime.now(ZoneInfo("Europe/Berlin")).date()
+    cutoff = datetime.now(ZoneInfo("Europe/Berlin")).replace(hour=22, minute=0, second=0, microsecond=0)
+    expected_market_date = today if datetime.now(ZoneInfo("Europe/Berlin")) >= cutoff else today - timedelta(days=1)
+    requested_ids = {str(player_id) for player_id in player_ids if player_id is not None}
+    missing_ids = sorted(
+        player_id for player_id in requested_ids
+        if player_id not in known_ids or latest_market_dates.get(player_id, today) < expected_market_date
+    )
+    if not missing_ids:
+        return player_df
+
+    def fetch(player_id):
+        info = get_player_info(token, competition_id, player_id)
+        mv_df = pd.DataFrame(get_player_market_value(token, competition_id, player_id, last_mv_values))
+        if mv_df.empty:
+            return pd.DataFrame()
+        mv_df["date"] = pd.to_datetime(mv_df["date"])
+        mv_df = mv_df.sort_values("date")
+
+        performance = get_player_performance(
+            token, competition_id, player_id, last_pfm_values, info.get("team_id")
+        )
+        p_df = pd.DataFrame(performance)
+        if p_df.empty:
+            p_df = pd.DataFrame({"date": pd.to_datetime([])})
+        else:
+            p_df["date"] = pd.to_datetime(p_df["date"])
+            p_df = p_df.sort_values("date")
+
+        merged = pd.merge_asof(mv_df, p_df, on="date", direction="backward")
+        if not p_df.empty:
+            additional = p_df[p_df["date"] > mv_df["date"].max()]
+            merged = pd.concat([merged, additional], ignore_index=True)
+        if merged.empty:
+            return merged
+        result = pd.DataFrame([info]).merge(merged, how="cross")
+        result["competition_id"] = competition_id
+        return result
+
+    rows = []
+    failures = 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(missing_ids))) as executor:
+        futures = {executor.submit(fetch, player_id): player_id for player_id in missing_ids}
+        for future in concurrent.futures.as_completed(futures):
+            player_id = futures[future]
+            try:
+                frame = future.result()
+            except Exception as exc:
+                failures += 1
+                print(f"Warning: Could not hydrate live player {player_id}: {exc}")
+                continue
+            if frame is not None and not frame.empty:
+                rows.append(frame)
+
+    if not rows:
+        print(f"Live player hydration found no usable rows for {len(missing_ids)} players.")
+        return player_df
+
+    hydrated = pd.concat(rows, ignore_index=True)
+    for column in ("date", "md"):
+        if column in hydrated:
+            hydrated[column] = pd.to_datetime(hydrated[column], errors="coerce")
+    result = pd.concat([player_df, hydrated], ignore_index=True, sort=False)
+    for column in ("date", "md"):
+        if column in result:
+            result[column] = pd.to_datetime(result[column], errors="coerce")
+    print(
+        f"Live player hydration: {len(rows)}/{len(missing_ids)} missing players added"
+        + (f", {failures} failed." if failures else ".")
+    )
+    return result

@@ -18,7 +18,8 @@ from features.fast_notifier import table_html
 from features.notifier import send_mail
 from features.predictions.predictions import (
     REMOVED_REPORT_COLUMNS, add_recommendation_columns, add_player_quality_signals,
-    prepare_market_report, join_current_market, join_current_squad, live_data_predictions,
+    hydrate_report_points_from_kickbase, prepare_market_report, join_current_market,
+    join_current_squad, live_data_predictions,
 )
 from overpay_forecast import cached_predictions, refresh_market_players, main as overpay_main
 from features.overpay_tool import write_overpay_tool
@@ -39,6 +40,21 @@ def players():
 
 
 class LeanReportTests(unittest.TestCase):
+    def test_live_kickbase_point_aggregates_override_local_report_values(self):
+        market = pd.DataFrame([{
+            'player_id': 8872, 'current_season_points': 999,
+            'last_season_avg_points': 77,
+        }])
+        with patch('features.predictions.predictions.get_player_info', return_value={
+            'kickbase_total_points': 121,
+            'kickbase_average_points': 30,
+        }):
+            result, = hydrate_report_points_from_kickbase('token', 1, market)
+        self.assertEqual(result.iloc[0]['kickbase_total_points'], 121)
+        self.assertEqual(result.iloc[0]['kickbase_average_points'], 30)
+        self.assertEqual(result.iloc[0]['current_season_points'], 121)
+        self.assertEqual(result.iloc[0]['last_season_avg_points'], 77)
+
     def test_fast_report_renders_purchase_price_from_live_squad_gain_loss(self):
         predictions = players().drop(columns=['purchase_price', 'squad_profit_loss'])
         payload = {'it': [{'i': 0, 'mv': 11643600, 'mvgl': -3711956}]}

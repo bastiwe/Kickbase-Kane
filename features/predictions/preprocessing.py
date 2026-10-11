@@ -86,6 +86,19 @@ def preprocess_player_data(df):
     max_date = max_date.date()
 
     today_df = df[df["date"].dt.date >= max_date]
+    # A performance row for a newer matchday can exist without a market value.
+    # Retain the latest usable market-value row for that player instead of
+    # dropping the player from the live report altogether.
+    usable_ids = set(today_df.loc[today_df["mv"].notna(), "player_id"])
+    latest_usable = (
+        df.dropna(subset=["mv"])
+        .sort_values(["player_id", "date"])
+        .drop_duplicates("player_id", keep="last")
+    )
+    fallback_rows = latest_usable[~latest_usable["player_id"].isin(usable_ids)]
+    if not fallback_rows.empty:
+        today_df = pd.concat([today_df, fallback_rows], ignore_index=True)
+        print(f"Preprocessing restored {len(fallback_rows)} players from their latest usable market value.")
 
     # Drop those values from today from df
     df = df[df["date"].dt.date < max_date]

@@ -95,6 +95,7 @@ def table_html(df, is_market):
         ("Team", lambda row: escape(str(row.get("team_name", "-")))),
         ("Status", lambda row: status_badge(row.get("player_status"))),
         ("Marktwert", lambda row: format_number(row.get("mv"))),
+        ("Ø Pkt. (KB)", lambda row: format_number(row.get("kickbase_average_points"))),
         ("Kaufpreis", lambda row: format_number(row.get("purchase_price"))),
         ("G/V", lambda row: colored_number(row.get("squad_profit_loss"))),
         ("Letzte MW", lambda row: colored_number(row.get("mv_change_yesterday"))),

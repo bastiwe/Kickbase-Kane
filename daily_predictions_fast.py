@@ -5,12 +5,20 @@ from features.predictions.data_handler import (
     create_player_data_table,
     load_player_data_from_db,
     save_player_data_to_db,
+    hydrate_missing_live_players,
 )
 from features.predictions.modeling import evaluate_model, train_model
-from features.predictions.predictions import live_data_predictions, join_current_market, join_current_squad
+from features.predictions.predictions import (
+    hydrate_report_points_from_kickbase,
+    join_current_market,
+    join_current_squad,
+    live_data_predictions,
+)
 from features.predictions.preprocessing import preprocess_player_data, split_data
 from kickbase_api.league import get_league_id
 from kickbase_api.user import get_user_id, login
+from kickbase_api.user import get_players_in_squad
+from kickbase_api.league import get_league_players_on_market
 from dotenv import load_dotenv
 from IPython.display import display
 import os
@@ -51,6 +59,15 @@ create_player_data_table()
 reload_data = check_if_data_reload_needed()
 save_player_data_to_db(token, competition_ids, last_mv_values, last_pfm_values, reload_data)
 player_df = load_player_data_from_db()
+live_player_ids = {
+    item.get("id") for item in get_league_players_on_market(token, league_id, current_user_id)
+}
+live_player_ids.update(
+    item.get("i") for item in get_players_in_squad(token, league_id).get("it", [])
+)
+player_df = hydrate_missing_live_players(
+    token, competition_ids[0], player_df, live_player_ids, last_mv_values, last_pfm_values
+)
 print("\nData loaded from database.")
 
 proc_player_df, today_df = preprocess_player_data(player_df)
@@ -74,8 +91,16 @@ live_predictions_df = live_data_predictions(
 
 write_prediction_snapshot(live_predictions_df, 'Fast 1T', competition_ids[0])
 
-market_df = join_current_market(token, league_id, live_predictions_df, current_user_id, report_only=True)
-squad_df = join_current_squad(token, league_id, live_predictions_df, current_user_id, league_start_date, competition_ids[0], report_only=True)
+market_df = join_current_market(
+    token, league_id, live_predictions_df, current_user_id, report_only=True, include_player_id=True
+)
+squad_df = join_current_squad(
+    token, league_id, live_predictions_df, current_user_id, league_start_date,
+    competition_ids[0], report_only=True, include_player_id=True,
+)
+market_df, squad_df = hydrate_report_points_from_kickbase(
+    token, competition_ids[0], market_df, squad_df
+)
 
 market_count_before_filter = len(market_df)
 market_df = market_df[market_df["predicted_mv_target"].fillna(0) > min_market_prediction].copy()
