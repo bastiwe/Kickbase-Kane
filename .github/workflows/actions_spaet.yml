@@ -72,17 +72,6 @@ jobs:
         run: |
           python daily_predictions_spaet.py
 
-      - name: Upload S11 strategy
-        if: steps.berlin-time.outputs.run == 'true'
-        uses: actions/upload-artifact@v6
-        with:
-          name: s11-strategy-report
-          path: |
-            s11_strategy_report.html
-            s11_strategy_report.json
-          if-no-files-found: error
-          retention-days: 7
-
       - name: Upload lineup optimizer
         if: steps.berlin-time.outputs.run == 'true' && hashFiles('startelf_optimizer.html') != ''
         uses: actions/upload-artifact@v6

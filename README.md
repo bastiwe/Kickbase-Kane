@@ -256,10 +256,12 @@ Zur Aktualisierung nur die separate Aktion bzw. den lokalen Starter ausfuehren.
 Kaufpreis und G/V im Kaderreport stammen aus den aktuellen Kickbase-Kaderdaten:
 `G/V = mvgl`, `Kaufpreis = Marktwert - mvgl`. Fehlt `mvgl`, bleiben die Werte
 unbekannt. Eine separate Kaufpreis-Datenbank ist nicht erforderlich.
-# Automatische S11-Strategie im 1T-Report
+# Eigenständiger S11-Strategiereport
 
-Fast-1T- und Abendreport berechnen jetzt drei finanzierbare Startelfszenarien
-(maximale Punkte, ausgewogen, maximaler Budgetpuffer), prüfen den gesamten
-Transfermarkt und nennen konkrete Kauf-/Verkaufspläne bis morgen 06:00.
-Die Auswertung wird mit der vorhandenen Mail verschickt und als HTML/JSON in
-GitHub Actions bereitgestellt. [Bedienung, Rechenannahmen und Tests](docs/s11-strategy-report.md).
+Die separate GitHub-Aktion **Run S11 Strategy Report** berechnet drei
+Startelfszenarien (maximale Punkte, ausgewogen, maximaler Budgetpuffer), prüft den
+Transfermarkt und nennt Kauf-/Verkaufspläne bis morgen 06:00. Eigene Spieler mit
+aktuellem MW über 25 Mio. € sind in jeder Variante vor Verkauf geschützt.
+Die Auswertung kommt als eigene Mail und als HTML/JSON-Artifact; die bestehenden
+Fast- und Abendberichte enthalten sie nicht. Lokal: `python s11_strategy_report.py`.
+[Bedienung, Rechenannahmen und Tests](docs/s11-strategy-report.md).

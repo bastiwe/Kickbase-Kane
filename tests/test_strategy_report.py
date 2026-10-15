@@ -10,9 +10,9 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from features.ai_advisor import FORMATIONS
-from features.fast_notifier import send_fast_mail
+from s11_strategy_report import send_strategy_mail
 from features.lineup_optimizer import build_lineup_payload
-from features.strategy_report import build_strategy_report, prepare_players, solve, strategy_html, write_strategy_report
+from features.strategy_report import build_strategy_report, prepare_players, solve, strategy_html, write_strategy_report, lineup_pitch_html
 
 
 NOW = datetime(2026, 10, 15, 18, tzinfo=ZoneInfo('Europe/Berlin'))
@@ -44,6 +44,70 @@ class StrategyTests(unittest.TestCase):
         self.assertEqual(result['players'][0]['season'], 90)
         self.assertEqual(result['marketPlayers'][0]['season'], 80)
         self.assertEqual(result['marketPlayers'][0]['li'], 75)
+
+    def test_big_boy_stays_on_bench_instead_of_being_sold_in_every_plan(self):
+        data = payload()
+        data['players'][1].update(mv=26_000_000, l3=-100)
+        report = build_strategy_report(data, now=NOW)
+        plans = [report['baseline'], report['ownFeasible'], *report['scenarios'].values()]
+        plans += [check['plan'] for check in report['marketChecks'] if 'plan' in check]
+        optimal = [plan for plan in plans if plan['status'] == 'optimal']
+        self.assertTrue(optimal)
+        for plan in optimal:
+            self.assertNotIn('1', plan['sell'])
+            self.assertIn('1', plan['lineup'] + plan['retainedBench'])
+            self.assertLess(plan['sales'], 26_000_000)
+            self.assertEqual(plan['rosterSize'], 11 + len(plan['retainedBench']))
+        self.assertIn('1', report['scenarios']['Maximale Punkte']['retainedBench'])
+
+    def test_protection_uses_strict_current_25m_threshold_not_forecast(self):
+        data = payload()
+        data['players'][1].update(mv=25_000_000, change=2_000_000, l3=-100)
+        report = build_strategy_report(data, now=NOW)
+        self.assertFalse(report['players'][1]['saleProtected'])
+        self.assertIn('1', report['scenarios']['Maximale Punkte']['sell'])
+        data['players'][1].update(mv=25_000_001, change=-2_000_000)
+        report = build_strategy_report(data, now=NOW)
+        self.assertTrue(report['players'][1]['saleProtected'])
+        self.assertNotIn('1', report['scenarios']['Maximale Punkte']['sell'])
+
+    def test_injured_big_boy_cannot_finance_replacement(self):
+        data = payload()
+        data['players'] = data['players'][:11]
+        data['players'][1].update(mv=30_000_000, status='Verletzt')
+        report = build_strategy_report(data, now=NOW)
+        self.assertTrue(report['players'][1]['saleProtected'])
+        self.assertEqual(report['scenarios']['Maximale Punkte']['status'], 'infeasible')
+
+    def test_protected_bench_counts_against_club_limit(self):
+        data = payload()
+        data['players'][0]['teamId'] = 'A'
+        data['players'] += [player('star'+str(i), 2, mv=30_000_000) for i in range(3)]
+        for p in data['players'][-3:]:
+            p.update(teamId='A', status='Verletzt')
+        report = build_strategy_report(data, now=NOW)
+        self.assertEqual(report['scenarios']['Maximale Punkte']['status'], 'infeasible')
+
+    def test_protected_bench_counts_against_roster_limit(self):
+        data = payload()
+        data['players'] += [player('star'+str(i), 2, mv=30_000_000) for i in range(6)]
+        for p in data['players'][-6:]:
+            p['status'] = 'Verletzt'
+        report = build_strategy_report(data, now=NOW)
+        self.assertEqual(report['scenarios']['Maximale Punkte']['status'], 'infeasible')
+
+    def test_protected_starter_counts_once_and_expensive_market_player_is_not_locked(self):
+        data = payload()
+        data['players'][0].update(mv=30_000_000, teamId='A')
+        data['players'][1]['teamId'] = 'A'
+        data['players'][2]['teamId'] = 'A'
+        data['marketPlayers'][0]['mv'] = 30_000_000
+        report = build_strategy_report(data, now=NOW)
+        self.assertFalse(report['players'][-1]['saleProtected'])
+        best = report['scenarios']['Maximale Punkte']
+        self.assertEqual(best['status'], 'optimal')
+        self.assertIn('0', best['lineup'])
+        self.assertNotIn('0', best['retainedBench'])
 
     def test_solver_matches_exhaustive_search_for_points_and_buffer(self):
         data = payload()
@@ -154,10 +218,30 @@ class StrategyTests(unittest.TestCase):
             path = write_strategy_report(report, str(Path(tmp) / 'report'))
             self.assertIn('S11-Strategie', path.read_text(encoding='utf-8'))
             self.assertEqual(json.loads(path.with_suffix('.json').read_text(encoding='utf-8'))['updates'], 1)
-        with patch('features.fast_notifier.smtplib.SMTP_SSL') as smtp:
-            send_fast_mail(pd.DataFrame(), pd.DataFrame(), 'test@example.com', strategy_section=html)
-            message = smtp.return_value.__enter__.return_value.send_message.call_args.args[0]
+            with patch.dict('os.environ', EMAIL_USER='test@example.com', EMAIL_PASS='test'), \
+                    patch('features.fast_notifier.smtplib.SMTP_SSL') as smtp:
+                send_strategy_mail(report, path)
+                message = smtp.return_value.__enter__.return_value.send_message.call_args.args[0]
             self.assertIn('S11-Strategie', message.get_body(preferencelist=('html',)).get_content())
+
+    def test_graphical_lineup_uses_kickbase_positions_and_excludes_bench(self):
+        data = payload()
+        data['players'][1].update(mv=26_000_000, l3=-100)
+        report = build_strategy_report(data, now=NOW)
+        plan = report['scenarios']['Maximale Punkte']
+        players = {p['id']: p for p in report['players']}
+        html = lineup_pitch_html(plan, players)
+        self.assertNotIn(players['1']['name'] + '</td>', html)
+        for pid in plan['lineup']:
+            self.assertIn(players[pid]['name'] + '</td>', html)
+        self.assertLess(html.index('aria-label="Sturm"'), html.index('aria-label="Mittelfeld"'))
+        self.assertLess(html.index('aria-label="Mittelfeld"'), html.index('aria-label="Abwehr"'))
+        self.assertLess(html.index('aria-label="Abwehr"'), html.index('aria-label="Tor"'))
+        self.assertIn('KAUF', html)
+        self.assertNotIn('<script', html)
+        self.assertNotIn('<img', html)
+        self.assertEqual(strategy_html(report).count('aria-label="Grafische Startelf"'),
+                         sum(p['status'] == 'optimal' for p in report['scenarios'].values()))
 
     def test_timeout_is_reported_instead_of_claiming_optimality(self):
         rows, _ = prepare_players(payload(), NOW, NOW + timedelta(hours=12))

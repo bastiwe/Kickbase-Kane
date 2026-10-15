@@ -1,7 +1,8 @@
 """Exact, read-only S11 planning using the existing planner's live payload.
 
-All unselected owned players are sold; no speculative market purchases for the
-bench. Cash is never increased by an unrealised market-value change.
+Unselected owned players are sold unless their current MW exceeds 25m euros.
+Protected players can stay on the bench. No speculative market bench purchases.
+Cash is never increased by an unrealised market-value change.
 """
 
 from datetime import datetime, timedelta
@@ -18,6 +19,7 @@ from features.fast_notifier import format_number
 
 
 BERLIN = ZoneInfo('Europe/Berlin')
+SALE_PROTECTION_THRESHOLD = 25_000_000
 
 
 def prepare_players(payload, now, deadline):
@@ -38,6 +40,7 @@ def prepare_players(payload, now, deadline):
         for field in ('mv', 'change', 'l3', 'season', 'average', 'li', 'bid', 'askingPrice'):
             p[field] = numeric(p.get(field))
         mv, change = numeric(p.get('mv')), numeric(p.get('change'))
+        p['saleProtected'] = p['owned'] and mv is not None and mv > SALE_PROTECTION_THRESHOLD
         p['projectedValue'] = max(0, mv + updates * (change or 0)) if mv is not None else None
         p['forecastMissing'] = change is None
         score, basis = points(p, 'l3' if numeric(p.get('l3')) is not None else 'season')
@@ -78,14 +81,17 @@ def solve(players, cash, floor=0, club_limit=3, objective='points', forced=None)
     own = [p for p in players if p['owned']]
     if cash is None or any(p['projectedValue'] is None or p['mv'] < 0 for p in own):
         return {'status': 'incomplete', 'reason': 'Cash oder eigener Marktwert fehlt.'}
+    protected = [p for p in own if p.get('saleProtected')]
+    if any(not p.get('teamId') and p.get('team') in (None, '', 'Unbekannt') for p in protected):
+        return {'status': 'incomplete', 'reason': 'Verein eines verkaufsgeschützten Spielers fehlt.'}
     pool = [p for p in players if not p['excluded']]
     if len(pool) < 11:
         return {'status': 'infeasible', 'reason': 'Weniger als elf bewertbare Spieler.'}
     formations = sorted(FORMATIONS)
     n, f = len(pool), len(formations)
     size = n + f
-    liquidation = cash + sum(p['projectedValue'] for p in own)
-    costs = np.array([p['cost'] for p in pool] + [0] * f)
+    liquidation = cash + sum(p['projectedValue'] for p in own if not p.get('saleProtected'))
+    costs = np.array([0 if p.get('saleProtected') else p['cost'] for p in pool] + [0] * f)
     scores = np.array([p['expectedPoints'] for p in pool] + [0] * f)
     rows, lower, upper = [], [], []
 
@@ -98,9 +104,15 @@ def solve(players, cash, floor=0, club_limit=3, objective='points', forced=None)
     for position in (1, 2, 3, 4):
         counts = [1 if position == 1 else int(form.split('-')[position - 2]) for form in formations]
         constraint([int(p['position'] == position) for p in pool] + [-v for v in counts], 0, 0)
-    teams = {p.get('teamId') or p['team'] for p in pool}
+    teams = {p.get('teamId') or p['team'] for p in pool + protected}
     for team in sorted(teams):
-        constraint([int((p.get('teamId') or p['team']) == team) for p in pool] + [0] * f, 0, club_limit)
+        retained_count = sum((p.get('teamId') or p['team']) == team for p in protected)
+        constraint([int(not p.get('saleProtected') and (p.get('teamId') or p['team']) == team)
+                    for p in pool] + [0] * f, -np.inf, club_limit - retained_count)
+    # Protected reserves remain in the roster and count against the existing
+    # planner's 16-player limit, even when injured or not selected in the S11.
+    constraint([int(not p.get('saleProtected')) for p in pool] + [0] * f,
+               -np.inf, 16 - len(protected))
     # Scale euro amounts for numerical conditioning.
     constraint(costs / 1_000_000, -np.inf, (liquidation - floor) / 1_000_000)
     if forced is not None:
@@ -114,7 +126,8 @@ def solve(players, cash, floor=0, club_limit=3, objective='points', forced=None)
                 'reason': 'Keine zulässige Elf.' if result.status == 2 else 'Optimierung nicht abgeschlossen.'}
     selected = [p for i, p in enumerate(pool) if result.x[i] > .5]
     selected_ids = {p['id'] for p in selected}
-    sales = [p for p in own if p['id'] not in selected_ids]
+    sales = [p for p in own if p['id'] not in selected_ids and not p.get('saleProtected')]
+    retained_bench = [p['id'] for p in protected if p['id'] not in selected_ids]
     buys = [p for p in selected if not p['owned']]
     proceeds = sum(p['projectedValue'] for p in sales)
     spending = sum(p['cost'] for p in buys)
@@ -123,6 +136,7 @@ def solve(players, cash, floor=0, club_limit=3, objective='points', forced=None)
         return {'status': 'unresolved', 'reason': 'Numerische Budgetprüfung fehlgeschlagen.'}
     return {'status': 'optimal', 'formation': formations[int(np.argmax(result.x[n:]))],
             'lineup': [p['id'] for p in selected], 'sell': [p['id'] for p in sales],
+            'retainedBench': retained_bench, 'rosterSize': 11 + len(retained_bench),
             'buy': [p['id'] for p in buys], 'points': sum(p['expectedPoints'] for p in selected),
             'cashBefore': cash, 'sales': proceeds, 'purchases': spending, 'budget': end,
             'saleMwEffect': sum(p['projectedValue'] - p['mv'] for p in sales)}
@@ -156,7 +170,8 @@ def build_strategy_report(payload, now=None, buffer=1_000_000, club_limit=3):
                                      own_feasible['status'] == 'optimal' and plan['points'] > own_feasible['points'] + .01)
         market_checks.append(check)
     warnings = [
-        'Alle nicht aufgestellten eigenen Spieler werden in jedem Szenario verkauft; Restkader genau elf.',
+        'Eigene Spieler mit aktuellem MW über 25 Mio. € sind vor Verkauf geschützt, auch bei Verletzung oder schwachen Punktwerten. Sie können auf der Bank bleiben.',
+        'Nur ungeschützte Spieler außerhalb der Elf werden verkauft. Geschützte Bankspieler zählen zum Vereinslimit und zum 16er-Kaderlimit; ihr MW wird nicht als Verkaufserlös eingeplant.',
         'Punkte sind historische Vergleichswerte, gegebenenfalls mit LI-Quote gewichtet; keine sichere Spieltagsprognose.',
         'Verkauf zum prognostizierten MW und Kauf zum Gebot/Angebotspreis/MW sind Annahmen. Zuschlag, Verkaufszeitpunkt und sofortige Kaufkraft sind nicht garantiert.',
         'Offene Gebote werden nur bei Auswahl eingerechnet. Andere Gebote vor Umsetzung zurückziehen; Szenarien sind Alternativen.',
@@ -171,6 +186,65 @@ def build_strategy_report(payload, now=None, buffer=1_000_000, club_limit=3):
             'bufferTarget': buffer, 'clubLimit': club_limit, 'players': players,
             'baseline': baseline, 'ownFeasible': own_feasible, 'scenarios': scenarios,
             'marketChecks': market_checks, 'warnings': warnings}
+
+
+def lineup_pitch_html(plan, players):
+    """Email-compatible pitch: actual Kickbase positions, without scripts/assets."""
+    labels = {4: 'Sturm', 3: 'Mittelfeld', 2: 'Abwehr', 1: 'Tor'}
+    lines = []
+    for position in (4, 3, 2, 1):
+        group = [players[pid] for pid in plan['lineup'] if players[pid]['position'] == position]
+        cards = []
+        for player in group:
+            name = escape(player['name'])
+            team = escape(player.get('team') or 'Verein unbekannt')
+            protected = player.get('saleProtected') is True
+            new = not player.get('owned')
+            accent = '#f5c84c' if protected else '#55dfd0' if new else '#ffffff'
+            tag = 'GESCHÜTZT' if protected else 'KAUF' if new else 'EIGEN'
+            score = numeric(player.get('expectedPoints'))
+            score_label = f'{score:.1f}'.replace('.', ',') if score is not None else '–'
+            initials = ''.join(part[0] for part in player['name'].split()[:2]).upper()
+            cards.append(
+                f'<td width="{100 / len(group):.2f}%" valign="top" style="padding:3px;text-align:center;">'
+                '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" '
+                f'style="border-collapse:separate;border-spacing:0;background:#ffffff;border-top:4px solid {accent};'
+                'border-radius:8px;color:#142c25;table-layout:fixed;">'
+                '<tr><td style="padding:8px 3px 3px;text-align:center;">'
+                f'<span style="display:inline-block;background:#e7f1eb;border-radius:50%;padding:6px;'
+                f'font-size:11px;font-weight:bold;color:#174b37;">{escape(initials)}</span></td></tr>'
+                f'<tr><td style="padding:2px 4px;font-size:12px;font-weight:bold;word-wrap:break-word;overflow-wrap:anywhere;">{name}</td></tr>'
+                f'<tr><td style="padding:2px 4px;font-size:10px;color:#5a7065;word-wrap:break-word;overflow-wrap:anywhere;">{team}</td></tr>'
+                f'<tr><td style="padding:4px 2px;font-size:14px;font-weight:bold;">{score_label} '
+                '<span style="font-size:9px;font-weight:normal;">Pkt.</span></td></tr>'
+                f'<tr><td style="padding:3px 1px 7px;font-size:8px;font-weight:bold;color:#476355;">{tag}</td></tr>'
+                '</table></td>')
+        # Centre short lines while keeping roughly consistent card widths.
+        width = f'{min(100, max(1, len(group)) * 24)}%'
+        lines.append(
+            '<tr><td style="padding:9px 4px 13px;text-align:center;">'
+            f'<div style="font-size:9px;letter-spacing:2px;color:#cce8d5;margin-bottom:5px;">{labels[position].upper()}</div>'
+            f'<table role="presentation" aria-label="{labels[position]}" width="{width}" align="center" '
+            f'cellpadding="0" cellspacing="0" style="table-layout:fixed;margin:0 auto;"><tr>{"".join(cards)}</tr></table>'
+            '</td></tr>')
+    return (
+        '<table role="presentation" aria-label="Grafische Startelf" width="100%" cellspacing="0" cellpadding="0" '
+        'style="max-width:760px;border-collapse:separate;border-spacing:0;margin:12px 0 18px;border:1px solid #dbe7de;'
+        'border-radius:12px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;">'
+        '<tr><td style="padding:14px;background:#102f25;color:#ffffff;">'
+        f'<strong style="font-size:22px;">{escape(plan["formation"])}</strong>'
+        f'<span style="font-size:13px;"> &nbsp; {plan["points"]:.1f} Vergleichspunkte'
+        f' &nbsp; | &nbsp; {format_number(plan["budget"])} € Restbudget</span></td></tr>'
+        '<tr><td style="padding:10px;background:#216b43;">'
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" '
+        'style="border:2px solid #a2c8ab;border-radius:5px;background:#287a4c;">'
+        '<tr><td style="padding-top:6px;text-align:center;color:#cce8d5;font-size:10px;">'
+        'ANGRIFFSRICHTUNG ↑</td></tr>' + ''.join(lines) + '</table></td></tr>'
+        '<tr><td style="padding:10px 14px;background:#f1f6f2;font-size:11px;color:#405f4b;">'
+        'KAUF = Marktspieler · GESCHÜTZT = eigener Spieler über 25 Mio. € MW. '
+        'Punkte sind Vergleichswerte, keine sichere Prognose. Geschützte Reserven stehen unter dem Feld.'
+        '</td></tr></table>'
+    )
 
 
 def strategy_html(report):
@@ -191,11 +265,13 @@ def strategy_html(report):
         if plan['status'] != 'optimal':
             sections.append('<p>' + escape(plan['reason']) + '</p>')
             continue
+        sections.append(lineup_pitch_html(plan, players))
         sections += [f'<p>{plan["formation"]}: {plan["points"]:.1f} Vergleichspunkte. '
                      f'Cash {format_number(plan["cashBefore"])} + Verkäufe {format_number(plan["sales"])} '
                      f'− Käufe {format_number(plan["purchases"])} = <b>{format_number(plan["budget"])} €</b>. '
                      f'Davon Verkaufserlös durch MW-Änderung: {format_number(plan["saleMwEffect"])} €.</p>',
                      '<p><b>Startelf:</b> ' + names(plan['lineup']) + '</p>',
+                     '<p><b>Geschützte Bank:</b> ' + names(plan['retainedBench']) + '</p>',
                      '<p><b>Verkaufen:</b> ' + names(plan['sell']) + '</p>',
                      '<p><b>Kaufen:</b> ' + names(plan['buy']) + '</p>']
         if baseline['status'] == 'optimal':
@@ -213,22 +289,31 @@ def strategy_html(report):
             if check.get('pointsGain') is not None:
                 detail += f'; Δ Punkte {check["pointsGain"]:+.1f}, Δ Budget {format_number(check["budgetGain"])} € gegenüber eigener Elf ohne Budgetzwang'
             sections.append('<p><b>' + escape(p['name']) + '</b>: ' + escape(detail) +
-                            '. Kaufen: ' + names(plan['buy']) + '; verkaufen: ' + names(plan['sell']) + '</p>')
+                            '. Kaufen: ' + names(plan['buy']) + '; verkaufen: ' + names(plan['sell']) +
+                            '; geschützte Bank: ' + names(plan['retainedBench']) + '</p>')
         else:
             sections.append('<p>' + escape(p['name'] + ': ' + (detail or plan.get('reason', 'Ungeprüft'))) + '</p>')
-    sections.append('<h3>Spielerwerte und Annahmen</h3><table><tr><th>Spieler</th><th>Status / Basis</th><th>MW</th><th>1T</th><th>MW morgen</th><th>Punkte</th><th>Planpreis</th><th>Preisannahme / Ablauf</th></tr>')
+    sections.append('<h3>Spielerwerte und Annahmen</h3><div style="max-width:100%;overflow-x:auto;">'
+                    '<table style="width:100%;min-width:720px;font-size:12px;border-collapse:collapse;" cellpadding="6">'
+                    '<tr><th>Spieler</th><th>Status / Basis</th><th>MW</th><th>1T</th><th>MW morgen</th><th>Punkte</th><th>Planpreis</th><th>Preisannahme / Ablauf</th></tr>')
     for p in report['players']:
         sections.append('<tr><td>' + escape(p['name']) + (' (eigen)' if p['owned'] else ' (Markt)') +
+                        (' – Verkaufsschutz über 25 Mio. €' if p.get('saleProtected') else '') +
                         '</td><td>' + escape(str(p.get('status')) + '; ' + p['pointsBasis']) +
                         '</td>' + ''.join('<td>' + format_number(p.get(k)) + '</td>' for k in
                                          ('mv', 'change', 'projectedValue', 'expectedPoints', 'cost')) +
                         '<td>' + escape(p['priceBasis'] + ('; ' + str(p.get('expiresAt') or 'Ablauf unbekannt') if not p['owned'] else '')) + '</td></tr>')
-    sections.append('</table><ul>' + ''.join('<li>' + escape(w) + '</li>' for w in report['warnings']) + '</ul>')
-    return '\n'.join(sections)
+    sections.append('</table></div><ul>' + ''.join('<li>' + escape(w) + '</li>' for w in report['warnings']) + '</ul>')
+    return ('<div style="max-width:1000px;margin:0 auto;padding:16px;'
+            'font-family:Arial,Helvetica,sans-serif;color:#172e25;line-height:1.5;">'
+            + '\n'.join(sections) + '</div>')
 
 
 def write_strategy_report(report, prefix='s11_strategy_report'):
     Path(prefix + '.json').write_text(json.dumps(report, ensure_ascii=False, allow_nan=False, indent=2), encoding='utf-8')
     path = Path(prefix + '.html')
-    path.write_text('<!doctype html><meta charset="utf-8"><title>Kickbase S11-Strategie</title>' + strategy_html(report), encoding='utf-8')
+    path.write_text('<!doctype html><html lang="de"><head><meta charset="utf-8">'
+                    '<meta name="viewport" content="width=device-width, initial-scale=1">'
+                    '<title>Kickbase S11-Strategie</title></head><body style="margin:0;background:#f5f7f4;">'
+                    + strategy_html(report) + '</body></html>', encoding='utf-8')
     return path
