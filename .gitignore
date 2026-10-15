@@ -15,3 +15,5 @@ prediction_snapshot_1t.json
 .advisor-memory.json
 .advisor.log
 .advisor-report.tmp
+s11_strategy_report.html
+s11_strategy_report.json

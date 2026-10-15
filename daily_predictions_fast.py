@@ -1,4 +1,6 @@
 from features.fast_notifier import send_fast_mail
+from features.lineup_optimizer import build_lineup_payload
+from features.strategy_report import build_strategy_report, strategy_html, write_strategy_report
 from features.predictions.snapshot import write_prediction_snapshot
 from features.predictions.data_handler import (
     check_if_data_reload_needed,
@@ -89,7 +91,7 @@ live_predictions_df = live_data_predictions(
     report_only=True,
 )
 
-write_prediction_snapshot(live_predictions_df, 'Fast 1T', competition_ids[0])
+forecast_snapshot = write_prediction_snapshot(live_predictions_df, 'Fast 1T', competition_ids[0])
 
 market_df = join_current_market(
     token, league_id, live_predictions_df, current_user_id, report_only=True, include_player_id=True
@@ -101,6 +103,13 @@ squad_df = join_current_squad(
 market_df, squad_df = hydrate_report_points_from_kickbase(
     token, competition_ids[0], market_df, squad_df
 )
+
+# Plan against the entire live market, before the trading-only MW filter.
+strategy = build_strategy_report(build_lineup_payload(
+    token, league_id, current_user_id, squad_df, live_predictions_df,
+    history_df=player_df, forecast_snapshot=forecast_snapshot, market_df=market_df,
+))
+write_strategy_report(strategy)
 
 market_count_before_filter = len(market_df)
 market_df = market_df[market_df["predicted_mv_target"].fillna(0) > min_market_prediction].copy()
@@ -119,4 +128,4 @@ display(market_df)
 print("\n=== Fast Squad 1T Predictions ===")
 display(squad_df)
 
-send_fast_mail(market_df, squad_df, email)
+send_fast_mail(market_df, squad_df, email, strategy_section=strategy_html(strategy))
