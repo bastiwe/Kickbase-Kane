@@ -1,6 +1,4 @@
 from features.fast_notifier import send_fast_mail
-from features.lineup_optimizer import build_lineup_payload
-from features.strategy_report import build_strategy_report, strategy_html, write_strategy_report
 from features.predictions.snapshot import write_prediction_snapshot
 from features.predictions.data_handler import (
     check_if_data_reload_needed,
@@ -49,83 +47,90 @@ pd.set_option("display.max_columns", None)
 pd.set_option("display.max_rows", None)
 pd.set_option("display.width", 1000)
 
-token = login(os.getenv("KICK_USER"), os.getenv("KICK_PASS"))
-print("\nLogged in to Kickbase.")
-current_user_id = get_user_id(token)
-league_id = get_league_id(token, league_name)
-if os.getenv('REPORT_USER_ID') and str(current_user_id) != os.environ['REPORT_USER_ID']:
-    raise RuntimeError('Report-Konto passt nicht zum Optimierer.')
-league_id = os.getenv('REPORT_LEAGUE_ID') or league_id
+def generate_fast_report_data(source='Fast 1T'):
+    """Reuse the existing fresh 1T pipeline without rendering or sending mail."""
+    token = login(os.getenv("KICK_USER"), os.getenv("KICK_PASS"))
+    print("\nLogged in to Kickbase.")
+    current_user_id = get_user_id(token)
+    league_id = get_league_id(token, league_name)
+    if os.getenv('REPORT_USER_ID') and str(current_user_id) != os.environ['REPORT_USER_ID']:
+        raise RuntimeError('Report-Konto passt nicht zum Optimierer.')
+    league_id = os.getenv('REPORT_LEAGUE_ID') or league_id
 
-create_player_data_table()
-reload_data = check_if_data_reload_needed()
-save_player_data_to_db(token, competition_ids, last_mv_values, last_pfm_values, reload_data)
-player_df = load_player_data_from_db()
-live_player_ids = {
-    item.get("id") for item in get_league_players_on_market(token, league_id, current_user_id)
-}
-live_player_ids.update(
-    item.get("i") for item in get_players_in_squad(token, league_id).get("it", [])
-)
-player_df = hydrate_missing_live_players(
-    token, competition_ids[0], player_df, live_player_ids, last_mv_values, last_pfm_values
-)
-print("\nData loaded from database.")
+    create_player_data_table()
+    reload_data = check_if_data_reload_needed()
+    save_player_data_to_db(token, competition_ids, last_mv_values, last_pfm_values, reload_data)
+    player_df = load_player_data_from_db()
+    live_player_ids = {
+        item.get("id") for item in get_league_players_on_market(token, league_id, current_user_id)
+    }
+    live_player_ids.update(
+        item.get("i") for item in get_players_in_squad(token, league_id).get("it", [])
+    )
+    player_df = hydrate_missing_live_players(
+        token, competition_ids[0], player_df, live_player_ids, last_mv_values, last_pfm_values
+    )
+    print("\nData loaded from database.")
 
-proc_player_df, today_df = preprocess_player_data(player_df)
-print("\nData preprocessed.")
+    proc_player_df, today_df = preprocess_player_data(player_df)
+    print("\nData preprocessed.")
 
-X_train, X_test, y_train, y_test = split_data(proc_player_df, features, "mv_target_clipped")
-model = train_model(X_train, y_train)
-signs_percent, rmse, mae, r2 = evaluate_model(model, X_test, y_test)
-print(
-    "\n1T model evaluation: "
-    f"Signs correct: {signs_percent:.2f}% | RMSE: {rmse:.2f} | MAE: {mae:.2f} | R2: {r2:.2f}"
-)
+    X_train, X_test, y_train, y_test = split_data(proc_player_df, features, "mv_target_clipped")
+    model = train_model(X_train, y_train)
+    signs_percent, rmse, mae, r2 = evaluate_model(model, X_test, y_test)
+    print(
+        "\n1T model evaluation: "
+        f"Signs correct: {signs_percent:.2f}% | RMSE: {rmse:.2f} | MAE: {mae:.2f} | R2: {r2:.2f}"
+    )
 
-live_predictions_df = live_data_predictions(
-    today_df,
-    {"predicted_mv_target": model},
-    features,
-    None,
-    report_only=True,
-)
+    live_predictions_df = live_data_predictions(
+        today_df,
+        {"predicted_mv_target": model},
+        features,
+        None,
+        report_only=True,
+    )
 
-forecast_snapshot = write_prediction_snapshot(live_predictions_df, 'Fast 1T', competition_ids[0])
+    forecast_snapshot = write_prediction_snapshot(live_predictions_df, source, competition_ids[0])
 
-market_df = join_current_market(
-    token, league_id, live_predictions_df, current_user_id, report_only=True, include_player_id=True
-)
-squad_df = join_current_squad(
-    token, league_id, live_predictions_df, current_user_id, league_start_date,
-    competition_ids[0], report_only=True, include_player_id=True,
-)
-market_df, squad_df = hydrate_report_points_from_kickbase(
-    token, competition_ids[0], market_df, squad_df
-)
+    market_df = join_current_market(
+        token, league_id, live_predictions_df, current_user_id, report_only=True, include_player_id=True
+    )
+    squad_df = join_current_squad(
+        token, league_id, live_predictions_df, current_user_id, league_start_date,
+        competition_ids[0], report_only=True, include_player_id=True,
+    )
+    market_df, squad_df = hydrate_report_points_from_kickbase(
+        token, competition_ids[0], market_df, squad_df
+    )
 
-# Plan against the entire live market, before the trading-only MW filter.
-strategy = build_strategy_report(build_lineup_payload(
-    token, league_id, current_user_id, squad_df, live_predictions_df,
-    history_df=player_df, forecast_snapshot=forecast_snapshot, market_df=market_df,
-))
-write_strategy_report(strategy)
+    return dict(token=token, league_id=league_id, user_id=current_user_id,
+                market_df=market_df, squad_df=squad_df, predictions_df=live_predictions_df,
+                history_df=player_df, forecast_snapshot=forecast_snapshot)
 
-market_count_before_filter = len(market_df)
-market_df = market_df[market_df["predicted_mv_target"].fillna(0) > min_market_prediction].copy()
-print(
-    "\nFast market filter: "
-    f"{len(market_df)} of {market_count_before_filter} players kept "
-    f"with expected 1T change > {min_market_prediction:,.0f} EUR.".replace(",", ".")
-)
 
-market_df = market_df.sort_values("predicted_mv_target", ascending=False, ignore_index=True)
-squad_df = squad_df.sort_values("predicted_mv_target", ascending=False, ignore_index=True)
+def main():
+    data = generate_fast_report_data()
+    market_df, squad_df = data["market_df"], data["squad_df"]
+    market_count_before_filter = len(market_df)
+    market_df = market_df[market_df["predicted_mv_target"].fillna(0) > min_market_prediction].copy()
+    print(
+        "\nFast market filter: "
+        f"{len(market_df)} of {market_count_before_filter} players kept "
+        f"with expected 1T change > {min_market_prediction:,.0f} EUR.".replace(",", ".")
+    )
 
-print("\n=== Fast Market 1T Predictions ===")
-display(market_df)
+    market_df = market_df.sort_values("predicted_mv_target", ascending=False, ignore_index=True)
+    squad_df = squad_df.sort_values("predicted_mv_target", ascending=False, ignore_index=True)
 
-print("\n=== Fast Squad 1T Predictions ===")
-display(squad_df)
+    print("\n=== Fast Market 1T Predictions ===")
+    display(market_df)
 
-send_fast_mail(market_df, squad_df, email, strategy_section=strategy_html(strategy))
+    print("\n=== Fast Squad 1T Predictions ===")
+    display(squad_df)
+
+    send_fast_mail(market_df, squad_df, email)
+
+
+if __name__ == "__main__":
+    main()

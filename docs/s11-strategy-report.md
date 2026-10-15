@@ -1,28 +1,31 @@
 # Automatischer S11-Strategiereport
 
-Die vorhandenen Fast-1T- und Abendberichte enthalten zusätzlich eine automatisch
-berechnete S11-Auswertung. Es sind keine neuen Zugangsdaten erforderlich.
+Eigenständiger S11-Report mit eigener GitHub-Aktion und eigener Mail. Die
+bestehenden Fast-1T- und Abendberichte enthalten keine S11-Strategieauswertung.
+Es sind keine neuen Zugangsdaten erforderlich.
 
 ## Ausführen und empfangen
 
-In GitHub unter **Actions → Run Fast 1T Predictions and S11 Strategy → Run workflow**
-starten. Alternativ lokal `python daily_predictions_fast.py` ausführen. Die Aktion
+In GitHub unter **Actions → Run S11 Strategy Report → Run workflow** starten.
+Alternativ lokal `python s11_strategy_report.py` ausführen. Mit `--no-email`
+entstehen nur Dateien. Die Aktion
 nutzt weiterhin `KICK_USER`, `KICK_PASS`, `EMAIL_USER`, `EMAIL_PASS` aus den
 vorhandenen Secrets bzw. der lokalen `.env`. Mit `KICK_LEAGUE_NAME` kann lokal die
-Liga gewählt werden; Vorgabe bleibt „Die Spätzünder“. `REPORT_LEAGUE_ID` und
+Liga gewählt werden; die neue GitHub-Aktion liest dafür auch die Repository-Variable
+`KICK_LEAGUE_NAME`. Vorgabe bleibt „Die Spätzünder“. `REPORT_LEAGUE_ID` und
 `REPORT_USER_ID` funktionieren weiterhin für den lokalen Report-Aufruf.
 
-Die neue Auswertung steht direkt in der vorhandenen Report-Mail. Der Abendreport
-verschickt zusätzlich die HTML-Datei als Anhang und erzeugt weiterhin den
-interaktiven Startelfoptimierer. Die bestehenden automatischen Abendläufe
-übernehmen die Auswertung nach Übernahme der Änderung. Der Fast-Workflow bleibt
-manuell auslösbar.
+Die neue Auswertung wird ausschließlich über die separate Aktion manuell
+gestartet. Sie verschickt eine eigene Mail mit Betreff
+„Kickbase S11-Strategie – eigenständiger Report“, HTML-Inhalt und HTML-Anhang.
+Fast-Report und Abendreport behalten ihren bisherigen Versand und Zeitplan.
 
-Beide Workflows stellen `s11_strategy_report.html` und
+Der separate Workflow stellt `s11_strategy_report.html` und
 `s11_strategy_report.json` als Artifact **s11-strategy-report** für sieben Tage
 bereit. Sie enthalten private Liga-/Kaderdaten. Der bestehende Mail-Empfänger
-bleibt unverändert. Ohne `EMAIL_USER` überspringt der Fast-Report wie bisher den
-Versand; die Dateien entstehen trotzdem. Ein SMTP-Fehler lässt den Lauf scheitern.
+bleibt unverändert (`EMAIL_USER`). Fehlt `EMAIL_USER` oder `EMAIL_PASS`, überspringt
+der S11-Report den Versand; die Dateien entstehen trotzdem. Ein SMTP-Fehler lässt
+den Lauf scheitern, fertige Dateien werden trotzdem als Artifact bereitgestellt.
 
 ## Was berechnet wird
 
@@ -56,10 +59,22 @@ Rechnung bis morgen früh unverändert. Die separat ausgewiesene aktuelle
 
 `Cash morgen = Cash jetzt + prognostizierte Verkaufserlöse − geplante Kaufpreise`
 
-Unrealisierte MW-Steigerungen werden nie auf Cash addiert. In jedem Plan werden
-**alle nicht aufgestellten eigenen Spieler verkauft**; der Restkader besteht aus
-genau elf Spielern. Das maximiert die verfügbaren Mittel für die Startelf und
-verzichtet ausdrücklich auf eine Bank/Trader. Verkäufe zum prognostizierten MW
+Unrealisierte MW-Steigerungen werden nie auf Cash addiert. **Eigene Spieler mit
+aktuellem MW über 25.000.000 € sind strikt vor Verkauf geschützt** („Big Boys“).
+Maßgeblich ist der aktuelle Live-MW, nicht der prognostizierte MW. Genau
+25.000.000 € ist noch nicht geschützt. Der Schutz gilt in allen drei Szenarien,
+Vergleichsaufstellungen und Markt-/Tauschalternativen, auch bei Verletzung,
+schwachen Punkten oder negativem Budget. Der Optimierer erzwingt keinen Einsatz:
+geschützte Spieler können auf der Bank bleiben. Ihr MW wird nicht als möglicher
+Verkaufserlös eingeplant. Sie zählen auch auf der Bank zum Vereinslimit und zum
+16er-Kaderlimit.
+
+Alle übrigen, nicht aufgestellten eigenen Spieler werden in jedem Plan verkauft.
+Der Restkader besteht aus elf Startern plus eventuell geschützten Reserven.
+Ist das Budget damit nicht auszugleichen, wird „nicht finanzierbar“ gemeldet,
+statt einen geschützten Spieler zum Verkauf vorzuschlagen. Teure Marktspieler
+sind weiterhin mögliche Käufe; der Schutz betrifft ausschließlich eigene Spieler.
+Verkäufe zum prognostizierten MW
 sind Annahmen, keine garantierten Angebote. Login- und Transferboni werden ohne
 bestätigte Auszahlung nicht eingerechnet.
 
@@ -74,9 +89,12 @@ vor Umsetzung zurückgezogen werden. Die Funktion führt keine Transfers aus.
 
 Die Auswertung verwendet `build_lineup_payload`, also dieselben Kickbase-Clients,
 Live-Marktwerte, Budgetabfrage und Historienfunktionen wie der bestehende
-Startelfoptimierer. Beide Report-Pipelines trainieren ihre bisherigen Modelle
-und geben den gerade erzeugten Prognosesnapshot weiter. Der vollständige Markt
-wird **vor** dem bisherigen MW-Tradingfilter ausgewertet; auch Spieler mit
+Startelfoptimierer. Der eigenständige Report nutzt die mit dem Fast-Report
+geteilte Funktion `generate_fast_report_data()` ausschließlich zum Laden der Daten
+und zur frischen 1T-Modellberechnung. Diese Funktion verschickt keine Mail und
+wendet keinen Tradingfilter an. Der S11-Report ergänzt vorhandene LI-Signale und
+übergibt den gerade erzeugten Prognosesnapshot. Der vollständige Markt
+wird ohne den MW-Tradingfilter ausgewertet; auch Spieler mit
 negativer MW-Prognose können sportliche Verstärkungen sein.
 
 Punktebasis ist der vorhandene Schnitt der letzten drei Spiele, ersatzweise
@@ -85,7 +103,7 @@ LI-Quote vorliegt, wird damit gewichtet. Ohne Quote wird die Einsatzunsicherheit
 kenntlich gemacht. Historische Schnitte sind Vergleichswerte und keine neue
 trainierte Spieltagsprognose. Ausfallstatus, fehlende Punkte, fehlende Position,
 fehlender Verein oder ungültige Preise schließen einen Spieler aus der Elf aus.
-Verkaufen lässt er sich weiterhin.
+Verkaufen lässt sich ein eigener Spieler nur, wenn er nicht geschützt ist.
 
 Fehlende MW-Prognosen werden sichtbar als unsichere Annahme „unverändert“
 behandelt. Fehlendes Cash oder ein fehlender eigener MW verhindern eine belastbare
@@ -96,9 +114,12 @@ Qualität und Aktualität der vorhandenen Punkte-/Statusdaten abhängig.
 
 ## Tests
 
-`python -m unittest discover -s tests -p test_strategy_report.py -v`
+`python -m unittest discover -s tests -p "test_*strategy*.py" -v`
 
 Die Tests vergleichen den Solver mit vollständiger Enumeration kleiner Kader und
 prüfen Formationen, Budget, MW-Effekt, Vereinslimit, Angebote, negative/fehlende
 Punkte, LI-Gewichtung, Status, unbekannte Daten, Solver-Timeout, HTML-Escaping,
-Dateiausgabe und den vorhandenen SMTP-Versand mit einem Mock.
+Dateiausgabe und den vorhandenen SMTP-Transport mit einem Mock. Zusätzliche
+Tests prüfen die strikte 25-Mio.-Grenze, geschützte verletzte Bankspieler,
+Finanzierbarkeit ohne deren Verkauf, Vereins-/Kaderlimit, eigenständigen Versand
+und die Trennung von bestehenden Reports.

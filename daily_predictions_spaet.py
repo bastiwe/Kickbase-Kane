@@ -10,8 +10,7 @@ from features.predictions.modeling import train_model, evaluate_model
 from kickbase_api.league import get_league_id
 from kickbase_api.user import get_user_id, login
 from features.notifier import send_mail
-from features.lineup_optimizer import build_lineup_payload, render_optimizer
-from features.strategy_report import build_strategy_report, strategy_html, write_strategy_report
+from features.lineup_optimizer import write_lineup_optimizer
 from features.predictions.snapshot import write_prediction_snapshot
 from features.predictions.data_handler import (
     create_player_data_table,
@@ -153,7 +152,6 @@ market_recommendations_df, squad_recommendations_df = enrich_reports_with_ligain
     market_recommendations_df,
     squad_recommendations_df,
 )
-strategy_market_df = market_recommendations_df.copy()
 market_recommendations_df = prepare_market_report(
     market_recommendations_df,
     squad_recommendations_df,
@@ -166,17 +164,15 @@ print("\n=== Squad Recommendations ===")
 display(squad_recommendations_df)
 
 optimizer_path = None
-planner_payload = build_lineup_payload(
-    token, league_id, current_user_id, squad_recommendations_df, live_predictions_df,
-    history_df=player_df, forecast_snapshot=forecast_snapshot, market_df=strategy_market_df,
-)
-strategy = build_strategy_report(planner_payload)
-strategy_path = write_strategy_report(strategy)
 try:
-    optimizer_path = render_optimizer(planner_payload, 'startelf_optimizer.html')
+    optimizer_path = write_lineup_optimizer(
+        token, league_id, current_user_id, squad_recommendations_df, live_predictions_df,
+        history_df=player_df,
+        forecast_snapshot=forecast_snapshot,
+    )
 except Exception as exc:
     print(f"Warning: Startelf optimizer could not be generated: {exc}")
 
 # Send email with recommendations
 send_mail(manager_budgets_df, market_recommendations_df, squad_recommendations_df, email,
-          [optimizer_path, strategy_path], strategy_section=strategy_html(strategy))
+          [optimizer_path])

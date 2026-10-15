@@ -1,7 +1,8 @@
 """Exact, read-only S11 planning using the existing planner's live payload.
 
-All unselected owned players are sold; no speculative market purchases for the
-bench. Cash is never increased by an unrealised market-value change.
+Unselected owned players are sold unless their current MW exceeds 25m euros.
+Protected players can stay on the bench. No speculative market bench purchases.
+Cash is never increased by an unrealised market-value change.
 """
 
 from datetime import datetime, timedelta
@@ -18,6 +19,7 @@ from features.fast_notifier import format_number
 
 
 BERLIN = ZoneInfo('Europe/Berlin')
+SALE_PROTECTION_THRESHOLD = 25_000_000
 
 
 def prepare_players(payload, now, deadline):
@@ -38,6 +40,7 @@ def prepare_players(payload, now, deadline):
         for field in ('mv', 'change', 'l3', 'season', 'average', 'li', 'bid', 'askingPrice'):
             p[field] = numeric(p.get(field))
         mv, change = numeric(p.get('mv')), numeric(p.get('change'))
+        p['saleProtected'] = p['owned'] and mv is not None and mv > SALE_PROTECTION_THRESHOLD
         p['projectedValue'] = max(0, mv + updates * (change or 0)) if mv is not None else None
         p['forecastMissing'] = change is None
         score, basis = points(p, 'l3' if numeric(p.get('l3')) is not None else 'season')
@@ -78,14 +81,17 @@ def solve(players, cash, floor=0, club_limit=3, objective='points', forced=None)
     own = [p for p in players if p['owned']]
     if cash is None or any(p['projectedValue'] is None or p['mv'] < 0 for p in own):
         return {'status': 'incomplete', 'reason': 'Cash oder eigener Marktwert fehlt.'}
+    protected = [p for p in own if p.get('saleProtected')]
+    if any(not p.get('teamId') and p.get('team') in (None, '', 'Unbekannt') for p in protected):
+        return {'status': 'incomplete', 'reason': 'Verein eines verkaufsgeschützten Spielers fehlt.'}
     pool = [p for p in players if not p['excluded']]
     if len(pool) < 11:
         return {'status': 'infeasible', 'reason': 'Weniger als elf bewertbare Spieler.'}
     formations = sorted(FORMATIONS)
     n, f = len(pool), len(formations)
     size = n + f
-    liquidation = cash + sum(p['projectedValue'] for p in own)
-    costs = np.array([p['cost'] for p in pool] + [0] * f)
+    liquidation = cash + sum(p['projectedValue'] for p in own if not p.get('saleProtected'))
+    costs = np.array([0 if p.get('saleProtected') else p['cost'] for p in pool] + [0] * f)
     scores = np.array([p['expectedPoints'] for p in pool] + [0] * f)
     rows, lower, upper = [], [], []
 
@@ -98,9 +104,15 @@ def solve(players, cash, floor=0, club_limit=3, objective='points', forced=None)
     for position in (1, 2, 3, 4):
         counts = [1 if position == 1 else int(form.split('-')[position - 2]) for form in formations]
         constraint([int(p['position'] == position) for p in pool] + [-v for v in counts], 0, 0)
-    teams = {p.get('teamId') or p['team'] for p in pool}
+    teams = {p.get('teamId') or p['team'] for p in pool + protected}
     for team in sorted(teams):
-        constraint([int((p.get('teamId') or p['team']) == team) for p in pool] + [0] * f, 0, club_limit)
+        retained_count = sum((p.get('teamId') or p['team']) == team for p in protected)
+        constraint([int(not p.get('saleProtected') and (p.get('teamId') or p['team']) == team)
+                    for p in pool] + [0] * f, -np.inf, club_limit - retained_count)
+    # Protected reserves remain in the roster and count against the existing
+    # planner's 16-player limit, even when injured or not selected in the S11.
+    constraint([int(not p.get('saleProtected')) for p in pool] + [0] * f,
+               -np.inf, 16 - len(protected))
     # Scale euro amounts for numerical conditioning.
     constraint(costs / 1_000_000, -np.inf, (liquidation - floor) / 1_000_000)
     if forced is not None:
@@ -114,7 +126,8 @@ def solve(players, cash, floor=0, club_limit=3, objective='points', forced=None)
                 'reason': 'Keine zulässige Elf.' if result.status == 2 else 'Optimierung nicht abgeschlossen.'}
     selected = [p for i, p in enumerate(pool) if result.x[i] > .5]
     selected_ids = {p['id'] for p in selected}
-    sales = [p for p in own if p['id'] not in selected_ids]
+    sales = [p for p in own if p['id'] not in selected_ids and not p.get('saleProtected')]
+    retained_bench = [p['id'] for p in protected if p['id'] not in selected_ids]
     buys = [p for p in selected if not p['owned']]
     proceeds = sum(p['projectedValue'] for p in sales)
     spending = sum(p['cost'] for p in buys)
@@ -123,6 +136,7 @@ def solve(players, cash, floor=0, club_limit=3, objective='points', forced=None)
         return {'status': 'unresolved', 'reason': 'Numerische Budgetprüfung fehlgeschlagen.'}
     return {'status': 'optimal', 'formation': formations[int(np.argmax(result.x[n:]))],
             'lineup': [p['id'] for p in selected], 'sell': [p['id'] for p in sales],
+            'retainedBench': retained_bench, 'rosterSize': 11 + len(retained_bench),
             'buy': [p['id'] for p in buys], 'points': sum(p['expectedPoints'] for p in selected),
             'cashBefore': cash, 'sales': proceeds, 'purchases': spending, 'budget': end,
             'saleMwEffect': sum(p['projectedValue'] - p['mv'] for p in sales)}
@@ -156,7 +170,8 @@ def build_strategy_report(payload, now=None, buffer=1_000_000, club_limit=3):
                                      own_feasible['status'] == 'optimal' and plan['points'] > own_feasible['points'] + .01)
         market_checks.append(check)
     warnings = [
-        'Alle nicht aufgestellten eigenen Spieler werden in jedem Szenario verkauft; Restkader genau elf.',
+        'Eigene Spieler mit aktuellem MW über 25 Mio. € sind vor Verkauf geschützt, auch bei Verletzung oder schwachen Punktwerten. Sie können auf der Bank bleiben.',
+        'Nur ungeschützte Spieler außerhalb der Elf werden verkauft. Geschützte Bankspieler zählen zum Vereinslimit und zum 16er-Kaderlimit; ihr MW wird nicht als Verkaufserlös eingeplant.',
         'Punkte sind historische Vergleichswerte, gegebenenfalls mit LI-Quote gewichtet; keine sichere Spieltagsprognose.',
         'Verkauf zum prognostizierten MW und Kauf zum Gebot/Angebotspreis/MW sind Annahmen. Zuschlag, Verkaufszeitpunkt und sofortige Kaufkraft sind nicht garantiert.',
         'Offene Gebote werden nur bei Auswahl eingerechnet. Andere Gebote vor Umsetzung zurückziehen; Szenarien sind Alternativen.',
@@ -196,6 +211,7 @@ def strategy_html(report):
                      f'− Käufe {format_number(plan["purchases"])} = <b>{format_number(plan["budget"])} €</b>. '
                      f'Davon Verkaufserlös durch MW-Änderung: {format_number(plan["saleMwEffect"])} €.</p>',
                      '<p><b>Startelf:</b> ' + names(plan['lineup']) + '</p>',
+                     '<p><b>Geschützte Bank:</b> ' + names(plan['retainedBench']) + '</p>',
                      '<p><b>Verkaufen:</b> ' + names(plan['sell']) + '</p>',
                      '<p><b>Kaufen:</b> ' + names(plan['buy']) + '</p>']
         if baseline['status'] == 'optimal':
@@ -213,12 +229,14 @@ def strategy_html(report):
             if check.get('pointsGain') is not None:
                 detail += f'; Δ Punkte {check["pointsGain"]:+.1f}, Δ Budget {format_number(check["budgetGain"])} € gegenüber eigener Elf ohne Budgetzwang'
             sections.append('<p><b>' + escape(p['name']) + '</b>: ' + escape(detail) +
-                            '. Kaufen: ' + names(plan['buy']) + '; verkaufen: ' + names(plan['sell']) + '</p>')
+                            '. Kaufen: ' + names(plan['buy']) + '; verkaufen: ' + names(plan['sell']) +
+                            '; geschützte Bank: ' + names(plan['retainedBench']) + '</p>')
         else:
             sections.append('<p>' + escape(p['name'] + ': ' + (detail or plan.get('reason', 'Ungeprüft'))) + '</p>')
     sections.append('<h3>Spielerwerte und Annahmen</h3><table><tr><th>Spieler</th><th>Status / Basis</th><th>MW</th><th>1T</th><th>MW morgen</th><th>Punkte</th><th>Planpreis</th><th>Preisannahme / Ablauf</th></tr>')
     for p in report['players']:
         sections.append('<tr><td>' + escape(p['name']) + (' (eigen)' if p['owned'] else ' (Markt)') +
+                        (' – Verkaufsschutz über 25 Mio. €' if p.get('saleProtected') else '') +
                         '</td><td>' + escape(str(p.get('status')) + '; ' + p['pointsBasis']) +
                         '</td>' + ''.join('<td>' + format_number(p.get(k)) + '</td>' for k in
                                          ('mv', 'change', 'projectedValue', 'expectedPoints', 'cost')) +

@@ -30,7 +30,7 @@ STATUS_STYLES = {
 POSITION_LABELS = {1: "TW", 2: "ABW", 3: "MIT", 4: "ST", "1": "TW", "2": "ABW", "3": "MIT", "4": "ST"}
 
 
-def send_fast_mail(market_df, squad_df, email, strategy_section=''):
+def send_fast_mail(market_df, squad_df, email):
     if not email:
         print("Fast mail skipped: EMAIL_USER is not set.")
         return
@@ -53,7 +53,6 @@ def send_fast_mail(market_df, squad_df, email, strategy_section=''):
             Fokus auf schnelle Ausführung: nur 1-Tages-Prognose, aktueller Transfermarkt und eigener Kader.
           </p>
 
-          {strategy_section}
           <h3 style="margin:18px 0 8px 0;">Transfermarkt: beste erwartete MW-Steigerungen</h3>
           {table_html(market_df, is_market=True)}
 
@@ -64,10 +63,15 @@ def send_fast_mail(market_df, squad_df, email, strategy_section=''):
     </html>
     """, subtype="html")
 
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+    deliver_report_message(msg)
+    print("Fast report email sent.")
+
+
+def deliver_report_message(msg):
+    """Shared configured SMTP transport for fast and standalone reports."""
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as smtp:
         smtp.login(os.getenv("EMAIL_USER"), os.getenv("EMAIL_PASS"))
         smtp.send_message(msg)
-    print("Fast report email sent.")
 
 
 def sort_fast_market(df):
