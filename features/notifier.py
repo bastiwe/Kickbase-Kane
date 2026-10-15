@@ -196,7 +196,7 @@ def load_backtest_summary():
         print(f"\nWarning: Could not read model backtest summary: {error}")
         return None
 
-def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
+def send_mail(budget_df, market_df, squad_df, email, attachment_path=None, strategy_section=''):
     """Sends an email with the provided DataFrames as HTML tables."""
 
     if not email:
@@ -1194,6 +1194,8 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
         <div style="max-width: 1500px; width: 100%; margin: auto; background: #ffffff; padding: 14px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); overflow-x: auto; box-sizing: border-box;">
         
         <h2 style="color: #1f2933; text-align: center; margin-top: 0;">Kickbase Report für {today}</h2>
+
+        {strategy_section}
 
         {action_overview}
         

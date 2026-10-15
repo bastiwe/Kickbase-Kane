@@ -58,9 +58,24 @@ def write_lineup_optimizer(token, league_id, user_id, squad_df, predictions_df,
                            output_path='startelf_optimizer.html', history_df=None,
                            refresh_missing_history=False, competition_id=1, history_note=None,
                            forecast_snapshot=None):
+    payload = build_lineup_payload(
+        token, league_id, user_id, squad_df, predictions_df, history_df,
+        refresh_missing_history, competition_id, history_note, forecast_snapshot)
+    return render_optimizer(payload, output_path)
+
+
+def build_lineup_payload(token, league_id, user_id, squad_df, predictions_df,
+                         history_df=None, refresh_missing_history=False,
+                         competition_id=1, history_note=None, forecast_snapshot=None,
+                         market_df=None):
+    """Shared live data for the interactive planner and automatic strategy report."""
     squad = get_players_in_squad(token, league_id).get('it', [])
     market = get_json_with_token(f'{BASE_URL}/leagues/{league_id}/market', token).get('it', [])
     predictions = {str(row['player_id']): row for row in predictions_df.to_dict('records')}
+    if market_df is not None:
+        for row in market_df.to_dict('records'):
+            player_id = str(row['player_id'])
+            predictions[player_id] = {**predictions.get(player_id, {}), **row}
     reports = {' '.join((text(row.get('first_name')), text(row.get('last_name')))).strip(): row
                for row in squad_df.to_dict('records')}
     own_ids = {str(item['i']) for item in squad}
@@ -104,14 +119,15 @@ def write_lineup_optimizer(token, league_id, user_id, squad_df, predictions_df,
             'status': (normalize_player_status(player_status_value(item))
                        if player_status_value(item) is not None
                        else text(row.get('player_status')) or 'Unbekannt'),
-            'l3': None, 'season': None,
+            'l3': None, 'season': number(row.get('kickbase_average_points')),
             'average': number(row.get('last_season_avg_points')),
             'li': number(row.get('starter_rate')),
             'change': number((forecast_snapshot or {}).get('predictions', {}).get(player_id)),
             'change7': multi_day_prediction(forecast_snapshot, player_id, 7),
         })
         if player_history is not None and not player_history.empty:
-            players[-1].update(history_context(player_history, player_id))
+            players[-1].update({key: value for key, value in history_context(player_history, player_id).items()
+                                if value is not None or key not in players[-1]})
     horizon = None
     if squad:
         try:
@@ -131,7 +147,7 @@ def write_lineup_optimizer(token, league_id, user_id, squad_df, predictions_df,
                'forecast': forecast_metadata(forecast_snapshot),
                'forecastHorizon': horizon,
                'generated': datetime.now(ZoneInfo('Europe/Berlin')).strftime('%d.%m.%Y %H:%M')}
-    return render_optimizer(payload, output_path)
+    return payload
 
 
 def market_context(market, own_ids, user_id, predictions, history, forecasts):
@@ -162,10 +178,13 @@ def market_context(market, own_ids, user_id, predictions, history, forecasts):
             'status': normalize_player_status(player_status_value(item))
             if player_status_value(item) is not None else 'Unbekannt',
             'change': number((forecasts or {}).get('predictions', {}).get(player_id)),
-            'l3': None, 'season': None, 'average': number(row.get('last_season_avg_points')),
+            'l3': None, 'season': number(row.get('kickbase_average_points')),
+            'average': number(row.get('last_season_avg_points')),
+            'li': number(row.get('starter_rate')),
         }
         if history is not None and not history.empty:
-            player.update(history_context(history, player_id))
+            player.update({key: value for key, value in history_context(history, player_id).items()
+                           if value is not None or key not in player})
         result.append(player)
     return result
 

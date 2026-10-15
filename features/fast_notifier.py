@@ -30,7 +30,7 @@ STATUS_STYLES = {
 POSITION_LABELS = {1: "TW", 2: "ABW", 3: "MIT", 4: "ST", "1": "TW", "2": "ABW", "3": "MIT", "4": "ST"}
 
 
-def send_fast_mail(market_df, squad_df, email):
+def send_fast_mail(market_df, squad_df, email, strategy_section=''):
     if not email:
         print("Fast mail skipped: EMAIL_USER is not set.")
         return
@@ -53,6 +53,7 @@ def send_fast_mail(market_df, squad_df, email):
             Fokus auf schnelle Ausführung: nur 1-Tages-Prognose, aktueller Transfermarkt und eigener Kader.
           </p>
 
+          {strategy_section}
           <h3 style="margin:18px 0 8px 0;">Transfermarkt: beste erwartete MW-Steigerungen</h3>
           {table_html(market_df, is_market=True)}
 

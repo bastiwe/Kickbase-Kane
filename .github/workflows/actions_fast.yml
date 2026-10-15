@@ -1,4 +1,4 @@
-name: Run Fast 1T Predictions
+name: Run Fast 1T Predictions and S11 Strategy
 
 on:
   workflow_dispatch:
@@ -31,6 +31,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Test S11 strategy
+        run: python -m unittest discover -s tests -p test_strategy_report.py -v
+
       - name: Run daily_predictions_fast.py
         env:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
@@ -39,6 +42,16 @@ jobs:
           KICK_PASS: ${{ secrets.KICK_PASS }}
         run: |
           python daily_predictions_fast.py
+
+      - name: Upload S11 strategy
+        uses: actions/upload-artifact@v6
+        with:
+          name: s11-strategy-report
+          path: |
+            s11_strategy_report.html
+            s11_strategy_report.json
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Save completed 1T forecasts
         if: ${{ !cancelled() && hashFiles('prediction_snapshot_1t.json') != '' }}
