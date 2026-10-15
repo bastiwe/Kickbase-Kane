@@ -12,7 +12,7 @@ import pandas as pd
 from features.ai_advisor import FORMATIONS
 from s11_strategy_report import send_strategy_mail
 from features.lineup_optimizer import build_lineup_payload
-from features.strategy_report import build_strategy_report, prepare_players, solve, strategy_html, write_strategy_report
+from features.strategy_report import build_strategy_report, prepare_players, solve, strategy_html, write_strategy_report, lineup_pitch_html
 
 
 NOW = datetime(2026, 10, 15, 18, tzinfo=ZoneInfo('Europe/Berlin'))
@@ -223,6 +223,25 @@ class StrategyTests(unittest.TestCase):
                 send_strategy_mail(report, path)
                 message = smtp.return_value.__enter__.return_value.send_message.call_args.args[0]
             self.assertIn('S11-Strategie', message.get_body(preferencelist=('html',)).get_content())
+
+    def test_graphical_lineup_uses_kickbase_positions_and_excludes_bench(self):
+        data = payload()
+        data['players'][1].update(mv=26_000_000, l3=-100)
+        report = build_strategy_report(data, now=NOW)
+        plan = report['scenarios']['Maximale Punkte']
+        players = {p['id']: p for p in report['players']}
+        html = lineup_pitch_html(plan, players)
+        self.assertNotIn(players['1']['name'] + '</td>', html)
+        for pid in plan['lineup']:
+            self.assertIn(players[pid]['name'] + '</td>', html)
+        self.assertLess(html.index('aria-label="Sturm"'), html.index('aria-label="Mittelfeld"'))
+        self.assertLess(html.index('aria-label="Mittelfeld"'), html.index('aria-label="Abwehr"'))
+        self.assertLess(html.index('aria-label="Abwehr"'), html.index('aria-label="Tor"'))
+        self.assertIn('KAUF', html)
+        self.assertNotIn('<script', html)
+        self.assertNotIn('<img', html)
+        self.assertEqual(strategy_html(report).count('aria-label="Grafische Startelf"'),
+                         sum(p['status'] == 'optimal' for p in report['scenarios'].values()))
 
     def test_timeout_is_reported_instead_of_claiming_optimality(self):
         rows, _ = prepare_players(payload(), NOW, NOW + timedelta(hours=12))

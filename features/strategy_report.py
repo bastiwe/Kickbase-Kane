@@ -188,6 +188,65 @@ def build_strategy_report(payload, now=None, buffer=1_000_000, club_limit=3):
             'marketChecks': market_checks, 'warnings': warnings}
 
 
+def lineup_pitch_html(plan, players):
+    """Email-compatible pitch: actual Kickbase positions, without scripts/assets."""
+    labels = {4: 'Sturm', 3: 'Mittelfeld', 2: 'Abwehr', 1: 'Tor'}
+    lines = []
+    for position in (4, 3, 2, 1):
+        group = [players[pid] for pid in plan['lineup'] if players[pid]['position'] == position]
+        cards = []
+        for player in group:
+            name = escape(player['name'])
+            team = escape(player.get('team') or 'Verein unbekannt')
+            protected = player.get('saleProtected') is True
+            new = not player.get('owned')
+            accent = '#f5c84c' if protected else '#55dfd0' if new else '#ffffff'
+            tag = 'GESCHÜTZT' if protected else 'KAUF' if new else 'EIGEN'
+            score = numeric(player.get('expectedPoints'))
+            score_label = f'{score:.1f}'.replace('.', ',') if score is not None else '–'
+            initials = ''.join(part[0] for part in player['name'].split()[:2]).upper()
+            cards.append(
+                f'<td width="{100 / len(group):.2f}%" valign="top" style="padding:3px;text-align:center;">'
+                '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" '
+                f'style="border-collapse:separate;border-spacing:0;background:#ffffff;border-top:4px solid {accent};'
+                'border-radius:8px;color:#142c25;table-layout:fixed;">'
+                '<tr><td style="padding:8px 3px 3px;text-align:center;">'
+                f'<span style="display:inline-block;background:#e7f1eb;border-radius:50%;padding:6px;'
+                f'font-size:11px;font-weight:bold;color:#174b37;">{escape(initials)}</span></td></tr>'
+                f'<tr><td style="padding:2px 4px;font-size:12px;font-weight:bold;word-wrap:break-word;overflow-wrap:anywhere;">{name}</td></tr>'
+                f'<tr><td style="padding:2px 4px;font-size:10px;color:#5a7065;word-wrap:break-word;overflow-wrap:anywhere;">{team}</td></tr>'
+                f'<tr><td style="padding:4px 2px;font-size:14px;font-weight:bold;">{score_label} '
+                '<span style="font-size:9px;font-weight:normal;">Pkt.</span></td></tr>'
+                f'<tr><td style="padding:3px 1px 7px;font-size:8px;font-weight:bold;color:#476355;">{tag}</td></tr>'
+                '</table></td>')
+        # Centre short lines while keeping roughly consistent card widths.
+        width = f'{min(100, max(1, len(group)) * 24)}%'
+        lines.append(
+            '<tr><td style="padding:9px 4px 13px;text-align:center;">'
+            f'<div style="font-size:9px;letter-spacing:2px;color:#cce8d5;margin-bottom:5px;">{labels[position].upper()}</div>'
+            f'<table role="presentation" aria-label="{labels[position]}" width="{width}" align="center" '
+            f'cellpadding="0" cellspacing="0" style="table-layout:fixed;margin:0 auto;"><tr>{"".join(cards)}</tr></table>'
+            '</td></tr>')
+    return (
+        '<table role="presentation" aria-label="Grafische Startelf" width="100%" cellspacing="0" cellpadding="0" '
+        'style="max-width:760px;border-collapse:separate;border-spacing:0;margin:12px 0 18px;border:1px solid #dbe7de;'
+        'border-radius:12px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;">'
+        '<tr><td style="padding:14px;background:#102f25;color:#ffffff;">'
+        f'<strong style="font-size:22px;">{escape(plan["formation"])}</strong>'
+        f'<span style="font-size:13px;"> &nbsp; {plan["points"]:.1f} Vergleichspunkte'
+        f' &nbsp; | &nbsp; {format_number(plan["budget"])} € Restbudget</span></td></tr>'
+        '<tr><td style="padding:10px;background:#216b43;">'
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" '
+        'style="border:2px solid #a2c8ab;border-radius:5px;background:#287a4c;">'
+        '<tr><td style="padding-top:6px;text-align:center;color:#cce8d5;font-size:10px;">'
+        'ANGRIFFSRICHTUNG ↑</td></tr>' + ''.join(lines) + '</table></td></tr>'
+        '<tr><td style="padding:10px 14px;background:#f1f6f2;font-size:11px;color:#405f4b;">'
+        'KAUF = Marktspieler · GESCHÜTZT = eigener Spieler über 25 Mio. € MW. '
+        'Punkte sind Vergleichswerte, keine sichere Prognose. Geschützte Reserven stehen unter dem Feld.'
+        '</td></tr></table>'
+    )
+
+
 def strategy_html(report):
     players = {p['id']: p for p in report['players']}
 
@@ -206,6 +265,7 @@ def strategy_html(report):
         if plan['status'] != 'optimal':
             sections.append('<p>' + escape(plan['reason']) + '</p>')
             continue
+        sections.append(lineup_pitch_html(plan, players))
         sections += [f'<p>{plan["formation"]}: {plan["points"]:.1f} Vergleichspunkte. '
                      f'Cash {format_number(plan["cashBefore"])} + Verkäufe {format_number(plan["sales"])} '
                      f'− Käufe {format_number(plan["purchases"])} = <b>{format_number(plan["budget"])} €</b>. '
@@ -233,7 +293,9 @@ def strategy_html(report):
                             '; geschützte Bank: ' + names(plan['retainedBench']) + '</p>')
         else:
             sections.append('<p>' + escape(p['name'] + ': ' + (detail or plan.get('reason', 'Ungeprüft'))) + '</p>')
-    sections.append('<h3>Spielerwerte und Annahmen</h3><table><tr><th>Spieler</th><th>Status / Basis</th><th>MW</th><th>1T</th><th>MW morgen</th><th>Punkte</th><th>Planpreis</th><th>Preisannahme / Ablauf</th></tr>')
+    sections.append('<h3>Spielerwerte und Annahmen</h3><div style="max-width:100%;overflow-x:auto;">'
+                    '<table style="width:100%;min-width:720px;font-size:12px;border-collapse:collapse;" cellpadding="6">'
+                    '<tr><th>Spieler</th><th>Status / Basis</th><th>MW</th><th>1T</th><th>MW morgen</th><th>Punkte</th><th>Planpreis</th><th>Preisannahme / Ablauf</th></tr>')
     for p in report['players']:
         sections.append('<tr><td>' + escape(p['name']) + (' (eigen)' if p['owned'] else ' (Markt)') +
                         (' – Verkaufsschutz über 25 Mio. €' if p.get('saleProtected') else '') +
@@ -241,12 +303,17 @@ def strategy_html(report):
                         '</td>' + ''.join('<td>' + format_number(p.get(k)) + '</td>' for k in
                                          ('mv', 'change', 'projectedValue', 'expectedPoints', 'cost')) +
                         '<td>' + escape(p['priceBasis'] + ('; ' + str(p.get('expiresAt') or 'Ablauf unbekannt') if not p['owned'] else '')) + '</td></tr>')
-    sections.append('</table><ul>' + ''.join('<li>' + escape(w) + '</li>' for w in report['warnings']) + '</ul>')
-    return '\n'.join(sections)
+    sections.append('</table></div><ul>' + ''.join('<li>' + escape(w) + '</li>' for w in report['warnings']) + '</ul>')
+    return ('<div style="max-width:1000px;margin:0 auto;padding:16px;'
+            'font-family:Arial,Helvetica,sans-serif;color:#172e25;line-height:1.5;">'
+            + '\n'.join(sections) + '</div>')
 
 
 def write_strategy_report(report, prefix='s11_strategy_report'):
     Path(prefix + '.json').write_text(json.dumps(report, ensure_ascii=False, allow_nan=False, indent=2), encoding='utf-8')
     path = Path(prefix + '.html')
-    path.write_text('<!doctype html><meta charset="utf-8"><title>Kickbase S11-Strategie</title>' + strategy_html(report), encoding='utf-8')
+    path.write_text('<!doctype html><html lang="de"><head><meta charset="utf-8">'
+                    '<meta name="viewport" content="width=device-width, initial-scale=1">'
+                    '<title>Kickbase S11-Strategie</title></head><body style="margin:0;background:#f5f7f4;">'
+                    + strategy_html(report) + '</body></html>', encoding='utf-8')
     return path

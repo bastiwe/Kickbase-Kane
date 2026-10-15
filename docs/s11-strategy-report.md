@@ -29,6 +29,16 @@ den Lauf scheitern, fertige Dateien werden trotzdem als Artifact bereitgestellt.
 
 ## Was berechnet wird
 
+Jedes finanzierbare Hauptszenario enthält eine grafische Spielfeldansicht:
+Sturm oben, dann Mittelfeld, Abwehr und Torwart unten. Die tatsächlichen
+Kickbase-Positionen bestimmen die Reihen; Spielername, Verein und individuelle
+Vergleichspunkte stehen auf den Karten. Marktspieler sind als „KAUF“ markiert,
+eigene Spieler über 25 Mio. € als „GESCHÜTZT“. Formation, Gesamtpunkte und
+Restbudget stehen über dem Feld; geschützte Bankspieler werden darunter genannt.
+Unlösbare Szenarien zeigen ihren Grund statt einer erfundenen Aufstellung.
+Die Darstellung funktioniert ohne JavaScript, externe Bilder oder Schriftarten
+im HTML-Anhang und in der Mail (Tabellenlayout mit Inline-Stilen).
+
 - **Maximale Punkte:** höchste Summe bewerteter Punkte bei Cash ≥ 0.
 - **Ausgewogen:** höchste Summe bei mindestens 1.000.000 € Restbudget. Eine
   nicht finanzierbare Variante wird ausdrücklich als nicht machbar ausgegeben.
