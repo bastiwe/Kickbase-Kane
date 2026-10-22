@@ -24,7 +24,44 @@ class ReportJobs:
 
     def read(self):
         with self.lock:
-            return deepcopy(self.status)
+            status = deepcopy(self.status)
+        if status.get('status') == 'running':
+            status.update(self._progress_from_log(status.get('kind')))
+        return status
+
+    def _progress_from_log(self, kind):
+        """Translate stable report milestones into UI-safe progress information."""
+        try:
+            log = (self.data_root / '.advisor-report-run.log').read_text(
+                encoding='utf-8', errors='replace'
+            )
+        except OSError:
+            return {'progress': 5, 'phase': 'Report wird vorbereitet …'}
+
+        milestones = [
+            ('Logged in to Kickbase.', 12, 'Bei Kickbase angemeldet'),
+            ('Data reload needed', 22, 'Historische Daten werden aktualisiert'),
+            ('Data loaded from database.', 34, 'Markt- und Historiedaten geladen'),
+            ('Data preprocessed.', 47, 'Daten für das Modell aufbereitet'),
+            ('Model evaluation:', 58, 'Marktwertmodell wird berechnet'),
+            ('1T model evaluation:', 66, '1T-Marktwertmodell wird berechnet'),
+            ('predicted_mv_target_7d:', 74, 'Mehrtag-Prognosen berechnet'),
+            ('=== Market Recommendations ===', 82, 'Transfermarkt wird ausgewertet'),
+            ('=== Fast Market 1T Predictions ===', 82, 'Transfermarkt wird ausgewertet'),
+            ('=== Squad Recommendations ===', 89, 'Kader wird ausgewertet'),
+            ('=== Fast Squad 1T Predictions ===', 89, 'Kader wird ausgewertet'),
+        ]
+        progress, phase = 8, 'Verbindung und Daten werden vorbereitet'
+        for marker, value, message in milestones:
+            if marker in log and value >= progress:
+                progress, phase = value, message
+        if 'Email sent' in log or 'Mail sent' in log:
+            progress, phase = 96, 'E-Mail wird versendet'
+        elif kind == 'fast' and 'Fast Squad 1T Predictions' in log:
+            progress, phase = 94, 'Schnellreport wird abgeschlossen'
+        elif kind == 'full' and 'Squad Recommendations' in log:
+            progress, phase = 94, 'Vollreport wird abgeschlossen'
+        return {'progress': progress, 'phase': phase}
 
     def start(self, kind):
         scripts = {'full': 'daily_predictions_spaet.py', 'fast': 'daily_predictions_fast.py'}
@@ -38,7 +75,10 @@ class ReportJobs:
         with self.lock:
             if self.status['status'] == 'running':
                 raise RuntimeError('Es läuft bereits ein Report.')
-            self.status = {'status': 'running', 'kind': kind, 'id': uuid.uuid4().hex}
+            self.status = {
+                'status': 'running', 'kind': kind, 'id': uuid.uuid4().hex,
+                'progress': 5, 'phase': 'Report wird vorbereitet …',
+            }
         env = os.environ.copy()
         env.update(KICK_USER=client.username, KICK_PASS=client.password,
                    REPORT_LEAGUE_ID=str(report['league']), REPORT_USER_ID=str(report['user']),
@@ -109,6 +149,7 @@ class ReportJobs:
             with self.lock:
                 self.status.update(
                     status='done', patches=patches, forecast=forecast, forecastHorizon=horizon,
+                    progress=100, phase='Report abgeschlossen',
                     message='Report abgeschlossen. ' + ('E-Mail wurde angestoßen.' if os.getenv('EMAIL_USER') else 'Keine E-Mail-Adresse konfiguriert.')
                 )
         except Exception as exc:
