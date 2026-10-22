@@ -3,14 +3,19 @@ FROM ghcr.io/home-assistant/${BUILD_ARCH}-base-python:3.11-alpine3.21
 
 ARG KICKBASE_REF=main
 
-# Home Assistant caches Docker layers aggressively. Copying the app manifest
-# before cloning invalidates the clone layer on every app-version update, so
-# the container always receives the matching current Kickbase source.
+# This layer changes only when Python dependencies change. It is the expensive
+# part on a Raspberry Pi and stays cached across ordinary dashboard updates.
+COPY requirements-addon.txt /tmp/requirements.txt
+RUN apk add --no-cache build-base gfortran lapack-dev linux-headers openblas-dev && \
+    pip install --no-cache-dir -r /tmp/requirements.txt && \
+    apk del build-base gfortran linux-headers
+
+# An app version bump refreshes only the shallow source checkout. The runtime
+# packages above remain cached, but every release still gets current GitHub code.
 COPY config.yaml /tmp/kickbase-addon-config.yaml
-RUN apk add --no-cache build-base gfortran git lapack-dev linux-headers openblas-dev && \
+RUN apk add --no-cache git && \
     git clone --depth=1 --branch "${KICKBASE_REF}" https://github.com/bastiwe/Kickbase-Kane.git /app && \
-    pip install --no-cache-dir -r /app/requirements.txt && \
-    apk del build-base gfortran git linux-headers
+    apk del git
 COPY run.sh /run.sh
 COPY schedule_reports.py /app/addon_schedule_reports.py
 RUN chmod a+x /run.sh
