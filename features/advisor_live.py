@@ -136,6 +136,8 @@ class LiveKickbase:
         self.market_change_lock = threading.Lock()
         self.market_history_cache = {}
         self.market_history_lock = threading.Lock()
+        self.purchase_price_cache = {}
+        self.purchase_price_lock = threading.Lock()
 
     def player_profiles(self, player_ids):
         """Read current player facts directly from Kickbase, with a short cache."""
@@ -164,6 +166,53 @@ class LiveKickbase:
                     with self.profile_lock:
                         self.profile_cache[player_id] = (now, profile)
         return profiles
+
+    def player_purchase_prices(self, league_id, player_ids, user_id, user_name):
+        """Read each current owner's paid price from the league transfer history."""
+        now = time.monotonic()
+        ids = [str(player_id) for player_id in player_ids if str(player_id).isdigit()]
+        prices = {}
+        missing = []
+        with self.purchase_price_lock:
+            for player_id in ids:
+                key = (str(league_id), player_id, str(user_id))
+                cached = self.purchase_price_cache.get(key)
+                if cached and now - cached[0] < 3600:
+                    prices[player_id] = cached[1]
+                else:
+                    missing.append(player_id)
+        if missing:
+            def load(player_id):
+                payload = self.get(
+                    '/leagues/' + quote(str(league_id), safe='') + '/players/'
+                    + quote(player_id, safe='') + '/transferHistory?start=0'
+                )
+                entries = payload.get('it', [])
+                if not isinstance(entries, list):
+                    return player_id, None
+                for entry in sorted(entries, key=lambda item: str(item.get('dt') or ''), reverse=True):
+                    if not isinstance(entry, dict):
+                        continue
+                    buyer = entry.get('u') or entry.get('buyer') or entry.get('byr')
+                    if not activity_party_matches(buyer, user_id, user_name):
+                        continue
+                    value = entry.get('trp', entry.get('price', entry.get('prc')))
+                    try:
+                        return player_id, float(value)
+                    except (TypeError, ValueError):
+                        return player_id, None
+                return player_id, None
+            with ThreadPoolExecutor(max_workers=min(4, len(missing))) as executor:
+                futures = [executor.submit(load, player_id) for player_id in missing]
+                for future in as_completed(futures):
+                    try:
+                        player_id, price = future.result()
+                    except (requests.RequestException, RuntimeError, ValueError, KeyError, TypeError):
+                        continue
+                    prices[player_id] = price
+                    with self.purchase_price_lock:
+                        self.purchase_price_cache[(str(league_id), player_id, str(user_id))] = (now, price)
+        return prices
 
     def player_market_changes(self, player_ids):
         """Read the last completed market-value movement for owned players."""
@@ -451,6 +500,7 @@ class LiveKickbase:
         profile_ids = [item.get('i') for item in squad] + [item.get('i') for item in market]
         live_profiles = self.player_profiles(profile_ids)
         live_market_changes = self.player_market_changes([item.get('i') for item in squad])
+        purchase_prices = self.player_purchase_prices(league_id, [item.get('i') for item in squad], user_id, str(user.get('n') or user.get('name') or ''))
         forecast_horizon = None
         if squad:
             first_profile = live_profiles.get(str(squad[0].get('i')), {})
@@ -519,6 +569,9 @@ class LiveKickbase:
                         player[field] = previous[field]
                 if owned and player['id'] in live_market_changes:
                     player['lastMvChange'] = live_market_changes[player['id']]
+                if owned and purchase_prices.get(player['id']) is not None:
+                    player['purchasePrice'] = purchase_prices[player['id']]
+                    player['profitLoss'] = (player.get('mv') or 0) - purchase_prices[player['id']]
                 if player['team'] == 'Unbekannt' and previous.get('team') not in (None, '', 'Unbekannt'):
                     player['team'] = previous['team']
                 player['owned'] = owned
