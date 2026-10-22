@@ -492,13 +492,6 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 "Verletzt", "Reha", "Rotgesperrt", "Gelb-Rot-Sperre",
                 "Gelbsperre", "Nicht im Kader", "Nicht in Liga", "Abwesend",
             ])]
-        # A real LigaInsider player-page quote of 0% is strong evidence against
-        # a short-term headline pick. Missing LI data remains eligible.
-        if {"starter_rate", "li_status"}.issubset(candidates.columns):
-            starter_rate = pd.to_numeric(candidates["starter_rate"], errors="coerce")
-            candidates = candidates[
-                ~((candidates["li_status"] == "LI-Spielerseite") & (starter_rate <= 0))
-            ]
         if "team_limit_warning" in candidates:
             candidates = candidates[candidates["team_limit_warning"] != "Vereinslimit voll"]
         return candidates
