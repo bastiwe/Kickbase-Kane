@@ -154,7 +154,7 @@ class LiveKickbase:
                 for future in as_completed(futures):
                     try:
                         player_id, profile = future.result()
-                    except requests.RequestException:
+                    except (requests.RequestException, RuntimeError, ValueError):
                         continue
                     profiles[player_id] = profile
                     with self.profile_lock:
