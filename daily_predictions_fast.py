@@ -113,10 +113,13 @@ def generate_fast_report_data(source="Fast 1T"):
     )
     # Keep the dashboard's player names, clubs, images and current market
     # in sync without running the slower full mail rendering.
-    write_lineup_optimizer(
-        token, league_id, current_user_id, squad_df, predictions_df,
-        history_df=player_df, forecast_snapshot=forecast_snapshot, market_df=market_df,
-    )
+    try:
+        write_lineup_optimizer(
+            token, league_id, current_user_id, squad_df, predictions_df,
+            history_df=player_df, forecast_snapshot=forecast_snapshot, market_df=market_df,
+        )
+    except Exception as exc:
+        print(f"Warning: Dashboard data export unavailable: {exc}")
     return {
         "token": token,
         "league_id": league_id,
