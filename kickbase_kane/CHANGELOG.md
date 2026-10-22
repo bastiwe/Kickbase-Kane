@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.24
+
+- Jede Kaderzeile zeigt nun direkt G/V seit dem eigenen Kauf, Kickbase-Gesamtpunkte und den aktuellen Kickbase-Punkteschnitt.
+- Kaufpreise werden über die Liga-Transferhistorie geladen und pro Spieler zwischengespeichert; fehlende Kaufdaten werden nicht geschätzt.
+
+
 ## 0.2.23
 
 - Das Dashboard kann „Vollreport“ und „Fast 1T“ direkt als GitHub-Action starten.
