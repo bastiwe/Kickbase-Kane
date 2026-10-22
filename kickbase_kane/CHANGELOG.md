@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.17
+
+- Dashboard zeigt unter dem verfügbaren Budget die Kaufkraft nach der Kickbase-33%-Regel, abzüglich eigener offener Gebote.
+- Die erwartete Kaderentwicklung zeigt zusätzlich die tatsächlich erzielte Bilanz des letzten Marktwert-Updates aus der Kickbase-API.
+- Die nicht handlungsrelevante Kennzahl „Trading-Chancen“ wurde entfernt.
+
+
 ## 0.2.16
 
 - „Beste Chancen vor MW-Update“ zeigt ausschließlich Angebote mit Ablauf vor dem nächsten 22-Uhr-Update und mindestens +100.000 EUR erwarteter 1T-Steigerung.
