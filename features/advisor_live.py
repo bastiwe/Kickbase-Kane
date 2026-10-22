@@ -312,6 +312,23 @@ class LiveKickbase:
         return {'response': response, 'stored': stored, 'verificationWarning': verification_warning}
 
 
+    def bootstrap(self, league_name):
+        """Create a live dashboard context without requiring a local report."""
+        user = self.get('/user/settings').get('u', {})
+        user_id = str(user.get('i') or user.get('id') or user.get('ui') or '')
+        leagues = self.get('/leagues/selection').get('it', [])
+        selected = next((league for league in leagues if league.get('n') == league_name), None)
+        if selected is None and leagues:
+            selected = leagues[0]
+        if not selected:
+            raise RuntimeError('Im Kickbase-Konto wurde keine Liga gefunden.')
+        report = {
+            'players': [], 'marketPlayers': [], 'budget': None,
+            'league': str(selected.get('i')), 'user': user_id,
+            'generated': 'Live aus Kickbase',
+        }
+        return self._refresh(report, {'selection': [], 'plans': {}, 'budget': None})
+
     def refresh(self, report, raw_state):
         try:
             return self._refresh(report, raw_state)
