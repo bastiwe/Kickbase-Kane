@@ -398,8 +398,8 @@ class LiveKickbase:
                     player['l3'] = sum(player['recent']) / len(player['recent'])
                 if live_profile.get('ap') is not None:
                     player['season'] = float(live_profile['ap'])
-                if live_profile.get('mv') is not None:
-                    player['mv'] = float(live_profile['mv'])
+                # The market/squad endpoint is refreshed for every page load
+                # and therefore remains the source of truth for current MV.
                 if live_profile.get('pim'):
                     from kickbase_api.config import get_cdn_url
                     player['image'] = get_cdn_url(live_profile['pim'])
