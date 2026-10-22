@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.16
+
+- „Beste Chancen vor MW-Update“ zeigt ausschließlich Angebote mit Ablauf vor dem nächsten 22-Uhr-Update und mindestens +100.000 EUR erwarteter 1T-Steigerung.
+- Die Kachel zeigt maximal sechs passende Spieler im 3×2-Raster.
+
+
 ## 0.2.15
 
 - Lokale Schnellreport- und Vollreport-Buttons sowie die Fortschrittsanzeige aus dem Dashboard entfernt.
