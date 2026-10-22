@@ -106,11 +106,13 @@ class ReportJobs:
             if not snapshot:
                 raise RuntimeError('Neue Prognosen sind ungültig.')
             li = {}
+            generated_by_id = {}
             horizon = initial.get('forecastHorizon')
-            if kind == 'full':
+            generated_fresh = optimizer_path.exists() and optimizer_path.stat().st_mtime_ns != previous_optimizer
+            if kind == 'full' and not generated_fresh:
+                raise RuntimeError('Report fertig, aber Dashboard-Daten fehlen. Details in .advisor-report-run.log.')
+            if generated_fresh:
                 from advisor_server import read_report
-                if not optimizer_path.exists() or optimizer_path.stat().st_mtime_ns == previous_optimizer:
-                    raise RuntimeError('Report fertig, aber Optimierer-Daten fehlen. Details in .advisor-report-run.log.')
                 generated = read_report(optimizer_path.read_text(encoding='utf-8'))
                 if (generated['user'], generated['league']) != (initial['user'], initial['league']):
                     raise RuntimeError('Ergebnis gehört zu einer anderen Liga.')
@@ -126,9 +128,9 @@ class ReportJobs:
                     raise RuntimeError('Liga wurde gewechselt; Ergebnis nicht übernommen.')
                 patches = {}
                 for p in report['players'] + report.get('marketPlayers', []):
-                    # A full report has richer player metadata than the lean
+                    # The report export has richer player metadata than the lean
                     # live market endpoint. Keep its complete name, club and image.
-                    if kind == 'full':
+                    if generated_by_id:
                         generated_player = generated_by_id.get(p['id'])
                         if generated_player:
                             p.update({
