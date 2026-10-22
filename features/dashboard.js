@@ -36,6 +36,7 @@
   function renderMetrics(){
     const budget=number(data.budget) ?? number(data.availableBudget) ?? number(data.cash);
     const rosterValue=players.reduce((sum,p)=>sum+mv(p),0);
+    const adjustedRosterValue=rosterValue+Math.min(budget ?? 0,0);
     const availableForecasts=players.map(prediction).filter(value=>value!==null);
     const rosterChange=availableForecasts.reduce((sum,value)=>sum+value,0);
     const realisedChanges=players.map(lastMarketChange).filter(value=>value!==null);
@@ -45,7 +46,7 @@
     $('metric-budget').textContent=budget===null?'–':euros(budget);$('metric-budget').className=cls(budget||0);
     $('metric-budget-note').textContent=buyingPower===null?'Kaufkraft wird geladen':'Kaufkraft nach offenen Geboten: '+signed(buyingPower)+(openBidTotal?' · Gebote '+euros(openBidTotal):'');
     $('metric-budget-note').className=buyingPower===null?'':' '+cls(buyingPower);
-    $('metric-roster-value').textContent=euros(rosterValue);$('metric-roster-count').textContent=players.length+'/16 Spieler';
+    $('metric-roster-value').textContent=euros(rosterValue);$('metric-roster-count').textContent=(budget!==null && budget<0?'Bereinigt: '+euros(adjustedRosterValue)+' · ':'')+players.length+'/16 Spieler';
     $('metric-roster-change').textContent=availableForecasts.length ? signed(rosterChange) : '–';
     $('metric-roster-change').className=availableForecasts.length ? cls(rosterChange) : 'neutral';
     $('metric-roster-change-note').textContent=realisedChanges.length ? 'Letztes MW-Update: '+signed(realisedChange)+' · '+realisedChanges.length+'/'+players.length+' Spieler' : 'Letztes MW-Update wird geladen';
