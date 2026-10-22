@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.5
+
+- Top-Chance-Kacheln bewerten reine Trading-Chancen wieder unabhängig von der Startelfquote.
+- Die Mindestschwelle von +50.000 EUR erwarteter 1T-Steigerung bleibt bestehen.
+
 ## 0.2.4
 
 - Top-Chance- und Top-Pick-Kacheln verlangen nun mindestens +50.000 EUR erwartete 1T-Steigerung.
