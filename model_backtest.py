@@ -16,6 +16,10 @@ from features.predictions.data_handler import (
     create_market_snapshot_table,
 )
 from features.predictions.modeling import evaluate_model, train_model
+from features.predictions.online_correction import (
+    online_correction_status,
+    settle_online_forecasts,
+)
 from features.predictions.preprocessing import preprocess_player_data
 from kickbase_api.user import login
 
@@ -49,6 +53,7 @@ def main():
     reload_data = check_if_data_reload_needed()
     save_player_data_to_db(token, competition_ids, last_mv_values, last_pfm_values, reload_data)
     player_df = load_player_data_from_db()
+    settle_online_forecasts(player_df)
 
     processed_df, _ = preprocess_player_data(player_df)
     backtest_df = processed_df.dropna(subset=features + ["mv_target_clipped", "mv_target"]).copy()
@@ -103,6 +108,7 @@ def main():
         },
         "walk_forward": walk_forward_summary,
         "market_snapshot_validation": market_snapshot_summary,
+        "online_correction": online_correction_status(),
         "phases": phase_summaries,
     }
 
