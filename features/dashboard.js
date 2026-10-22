@@ -104,46 +104,18 @@
     $('market-table').innerHTML=sortedMarket().slice(0,50).map(p=>'<tr><td><div class="table-player">'+avatar(p)+'<div><div class="name">'+escapeHtml(name(p))+'</div><div class="sub">'+escapeHtml(club(p))+'</div></div></div></td><td>'+escapeHtml(position(p))+'</td><td>'+euros(mv(p))+'</td><td class="'+cls(change(p))+'">'+signed(change(p))+'</td><td>'+((li(p)===null)?'–':Math.round(li(p))+' %')+'</td><td>'+escapeHtml(formatTime(deadline(p)))+'</td></tr>').join('')||'<tr><td colspan="6" class="empty">Keine Marktangebote im aktuellen Stand.</td></tr>';
   }
   function render(){renderMetrics();renderTopChances();renderRoster();renderRisks();renderTable();}
-  function showProgress(progress, phase, failed=false) {
-    const box = $('report-progress');
-    const value = Math.max(0, Math.min(100, Number(progress) || 0));
-    box.hidden = false;
-    box.classList.toggle('failed', failed);
-    $('report-phase').textContent = phase || 'Report wird vorbereitet …';
-    $('report-percent').textContent = value + ' %';
-    $('report-progress-bar').style.width = value + '%';
-    box.querySelector('[role="progressbar"]').setAttribute('aria-valuenow', String(value));
+  function renderForecastStatus(){
+    const forecast=data.forecast||{};
+    const source=forecast.source||'noch nicht synchronisiert';
+    const raw=forecast.generatedAt;
+    let stamp='–';
+    if(raw){
+      const parsed=new Date(raw);
+      if(!Number.isNaN(parsed.getTime())) stamp=parsed.toLocaleString('de-DE',{timeZone:'Europe/Berlin',dateStyle:'short',timeStyle:'short'});
+    }
+    $('forecast-status').textContent=raw?'Prognose: '+source+' · '+stamp:'Prognose: '+source;
   }
-  async function report(kind){
-    $('run-fast').disabled=$('run-full').disabled=true;
-    showProgress(5, kind==='fast' ? 'Schnellreport wird vorbereitet …' : 'Vollreport wird vorbereitet …');
-    $('report-status').textContent=(kind==='fast'?'Schnellreport':'Vollreport')+' läuft …';
-    try{
-      const response=await fetch(apiPath('/api/report-job'),{method:'POST',headers:{'Content-Type':'application/json','X-Advisor-Token':settings.csrf},body:JSON.stringify({kind})});
-      const result=await response.json();if(!response.ok)throw Error(result.error||'Report konnte nicht gestartet werden.');
-      pollJob();
-    }catch(error){showProgress(100, 'Report konnte nicht gestartet werden', true);$('report-status').textContent=error.message;$('run-fast').disabled=$('run-full').disabled=false;}
-  }
-  async function pollJob(){
-    try{const response=await fetch(apiPath('/api/report-job'),{cache:'no-store'});const job=await response.json();
-      if(job.status==='running'){
-        showProgress(job.progress, job.phase);
-        $('report-status').textContent=(job.kind==='fast'?'Schnellreport':'Vollreport')+' läuft …';
-        setTimeout(pollJob,5000);return;
-      }
-      if(job.status==='done'){
-        showProgress(100, job.phase || 'Report abgeschlossen');
-        $('report-status').textContent=job.message || 'Report fertig. Dashboard wird aktualisiert …';
-        setTimeout(()=>location.reload(),900);return;
-      }
-      if(job.status==='failed'){
-        showProgress(100, 'Report fehlgeschlagen', true);
-        throw Error(job.error||'Report fehlgeschlagen.');
-      }
-      $('run-fast').disabled=$('run-full').disabled=false;
-    }catch(error){$('report-status').textContent=error.message;$('run-fast').disabled=$('run-full').disabled=false;}
-  }
-  $('run-fast').onclick=()=>report('fast');$('run-full').onclick=()=>report('full');$('market-sort').onchange=renderTable;
+  $('market-sort').onchange=renderTable;
   $('live-status').textContent=settings.liveMessage||data.generated||'Reportstand geladen';
-  render();renderValueHistory();pollJob();
+  renderForecastStatus();render();renderValueHistory();
 })();
