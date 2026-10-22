@@ -33,6 +33,7 @@ from kickbase_api.league import get_league_players_on_market
 from kickbase_api.user import get_players_in_squad
 from IPython.display import display
 from dotenv import load_dotenv
+import gc
 import os, pandas as pd
 
 # Load environment variables from .env file
@@ -148,6 +149,7 @@ for prediction_column, target in prediction_targets.items():
     )
     # Release split arrays before the next target model is trained.
     del X_train, X_test, y_train, y_test
+    gc.collect()
 
 
 # Make live data predictions
