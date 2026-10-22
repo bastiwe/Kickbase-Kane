@@ -27,7 +27,7 @@ options:
   report_times: "21:40,22:10"
   github_forecast_token: ""
   github_forecast_repository: "bastiwe/Kickbase-Kane"
-  github_forecast_sync_seconds: 600
+  github_forecast_sync_seconds: 300
 schema:
   kick_user: str
   kick_pass: password
