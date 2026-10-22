@@ -12,6 +12,9 @@ export EMAIL_PASS="$(bashio::config 'email_pass')"
 export OPENAI_API_KEY="$(bashio::config 'openai_api_key')"
 export OPENAI_MODEL="$(bashio::config 'openai_model')"
 export KICKBASE_REPORT_TIMES="$(bashio::config 'report_times')"
+export GITHUB_FORECAST_TOKEN="$(bashio::config 'github_forecast_token')"
+export GITHUB_FORECAST_REPOSITORY="$(bashio::config 'github_forecast_repository')"
+export GITHUB_FORECAST_SYNC_SECONDS="$(bashio::config 'github_forecast_sync_seconds')"
 
 # The Pi keeps the two useful forecast horizons (1T and 3T) but trains them
 # one CPU worker at a time. This avoids a memory spike when three forests are
@@ -30,5 +33,11 @@ fi
 # page load. Forecast snapshots are filled by scheduled or manual reports.
 cd /data
 
-python /app/addon_schedule_reports.py &
+if [ -n "$GITHUB_FORECAST_TOKEN" ] && [ "$GITHUB_FORECAST_TOKEN" != "null" ]; then
+  bashio::log.info "GitHub-Prognose-Sync aktiv; lokale Modellberechnung ist deaktiviert."
+  python /app/features/github_forecast_sync.py &
+else
+  bashio::log.info "Kein GitHub-Prognose-Token konfiguriert; lokale Vollreports bleiben aktiv."
+  python /app/addon_schedule_reports.py &
+fi
 exec python /app/advisor_server.py --port 8099 --no-browser
