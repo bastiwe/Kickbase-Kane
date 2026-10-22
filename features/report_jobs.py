@@ -99,7 +99,17 @@ class ReportJobs:
                                         timeout=3600, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
             log_tail = (self.data_root / '.advisor-report-run.log').read_text(encoding='utf-8', errors='replace')[-1600:]
             if result.returncode:
-                raise RuntimeError('Report fehlgeschlagen. Details im Add-on-Log: ' + log_tail[-500:].replace('\n', ' '))
+                if result.returncode < 0:
+                    diagnostic = (
+                        f'Reportprozess wurde vom System beendet (Signal {-result.returncode}). '
+                        'Das deutet meist auf einen Speicherengpass hin. '
+                    )
+                else:
+                    diagnostic = f'Report endete mit Code {result.returncode}. '
+                raise RuntimeError(
+                    'Report fehlgeschlagen. ' + diagnostic
+                    + 'Details im Add-on-Log: ' + log_tail[-700:].replace('\n', ' ')
+                )
             if not snapshot_path.exists() or snapshot_path.read_bytes() == before:
                 raise RuntimeError('Report lieferte keine neuen Prognosedaten.')
             snapshot = read_prediction_snapshot(snapshot_path)
@@ -107,6 +117,7 @@ class ReportJobs:
                 raise RuntimeError('Neue Prognosen sind ungültig.')
             li = {}
             generated_by_id = {}
+            generated = None
             horizon = initial.get('forecastHorizon')
             generated_fresh = optimizer_path.exists() and optimizer_path.stat().st_mtime_ns != previous_optimizer
             if kind == 'full' and not generated_fresh:
@@ -126,6 +137,12 @@ class ReportJobs:
                 report = self.server.report
                 if (report['user'], report['league']) != (initial['user'], initial['league']):
                     raise RuntimeError('Liga wurde gewechselt; Ergebnis nicht übernommen.')
+                # A generated optimizer report contains richer identity data than
+                # the lean live market payload. Replace both collections rather
+                # than patching only rows that happen to overlap.
+                if generated is not None:
+                    report['players'] = generated['players']
+                    report['marketPlayers'] = generated.get('marketPlayers', [])
                 patches = {}
                 for p in report['players'] + report.get('marketPlayers', []):
                     # The report export has richer player metadata than the lean
