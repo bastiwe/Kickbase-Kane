@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.15
+
+- Lokale Schnellreport- und Vollreport-Buttons sowie die Fortschrittsanzeige aus dem Dashboard entfernt.
+- Der Kopf zeigt stattdessen kompakt Quelle und Berliner Zeitpunkt des zuletzt geladenen Prognose-Snapshots.
+
+
 ## 0.2.14
 
 - GitHub Actions veröffentlichen nach Voll- und Schnellreport einen kleinen Prognose-Artifact.
