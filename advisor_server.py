@@ -210,11 +210,15 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             player_id = path.rsplit('/', 1)[-1]
             with self.server.lock:
                 client = self.server.kickbase
-                owned = {str(p['id']) for p in self.server.report.get('players', []) if p.get('owned')}
+                known = {
+                    str(p['id']) for p in (
+                        self.server.report.get('players', []) + self.server.report.get('marketPlayers', [])
+                    )
+                }
             if not client:
                 self.reply(409, {'error': 'Kickbase-Livezugriff ist nicht aktiviert.'})
-            elif player_id not in owned:
-                self.reply(404, {'error': 'Spieler nicht im aktuellen Kader.'})
+            elif player_id not in known:
+                self.reply(404, {'error': 'Spieler nicht im aktuellen Kader oder Markt.'})
             else:
                 try:
                     self.reply(200, client.player_daily_market_changes(player_id))
