@@ -1,5 +1,5 @@
 name: Kickbase Kane
-version: "0.1.4"
+version: "0.2.0"
 slug: kickbase_kane
 description: Privates Kickbase-Dashboard mit taeglichen Marktwertprognosen und Startelf-Optimierer.
 url: https://github.com/bastiwe/Kickbase-Kane
@@ -20,13 +20,17 @@ options:
   kick_user: ""
   kick_pass: ""
   league_name: "Die Spätzünder"
+  email_user: ""
+  email_pass: ""
   openai_api_key: ""
   openai_model: "gpt-5-mini"
-  report_time: "22:15"
+  report_times: "21:40,22:10"
 schema:
   kick_user: str
   kick_pass: password
   league_name: str
+  email_user: str?
+  email_pass: password?
   openai_api_key: password?
   openai_model: str
-  report_time: match(^([01]?[0-9]|2[0-3]):[0-5][0-9]$)
+  report_times: str
