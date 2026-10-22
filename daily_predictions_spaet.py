@@ -12,6 +12,12 @@ from kickbase_api.user import get_user_id, login
 from features.notifier import send_mail
 from features.lineup_optimizer import write_lineup_optimizer
 from features.predictions.snapshot import write_prediction_snapshot
+from features.predictions.online_correction import (
+    apply_online_correction,
+    online_correction_status,
+    record_online_forecasts,
+    settle_online_forecasts,
+)
 from features.predictions.data_handler import (
     create_player_data_table,
     create_market_snapshot_table,
@@ -110,6 +116,9 @@ live_player_ids.update(
 player_df = hydrate_missing_live_players(
     token, competition_ids[0], player_df, live_player_ids, last_mv_values, last_pfm_values
 )
+settled_online_forecasts = settle_online_forecasts(player_df)
+if settled_online_forecasts:
+    print(f"Online calibration settled {settled_online_forecasts} previous forecasts.")
 print("\nData loaded from database.")
 
 # Calculate (estimated) budgets of all managers in the league
@@ -136,6 +145,10 @@ for prediction_column, target in prediction_targets.items():
 
 # Make live data predictions
 live_predictions_df = live_data_predictions(today_df, models, features, proc_player_df, league_start_date, report_only=True)
+record_online_forecasts(live_predictions_df)
+live_predictions_df = apply_online_correction(live_predictions_df)
+print(f"Online calibration status: {online_correction_status()}")
+
 forecast_snapshot = write_prediction_snapshot(live_predictions_df, 'Spaet', competition_ids[0])
 
 # Join with current available players on the market
