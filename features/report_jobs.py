@@ -57,8 +57,9 @@ class ReportJobs:
                 result = subprocess.run([sys.executable, '-u', str(self.app_root / script)],
                                         cwd=self.data_root, env=report_env, stdout=log, stderr=subprocess.STDOUT,
                                         timeout=3600, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+            log_tail = (self.data_root / '.advisor-report-run.log').read_text(encoding='utf-8', errors='replace')[-1600:]
             if result.returncode:
-                raise RuntimeError('Report fehlgeschlagen. Details in .advisor-report-run.log.')
+                raise RuntimeError('Report fehlgeschlagen. Details im Add-on-Log: ' + log_tail[-500:].replace('\n', ' '))
             if not snapshot_path.exists() or snapshot_path.read_bytes() == before:
                 raise RuntimeError('Report lieferte keine neuen Prognosedaten.')
             snapshot = read_prediction_snapshot(snapshot_path)
@@ -74,6 +75,9 @@ class ReportJobs:
                 if (generated['user'], generated['league']) != (initial['user'], initial['league']):
                     raise RuntimeError('Ergebnis gehört zu einer anderen Liga.')
                 li = {p['id']: p.get('li') for p in generated['players']}
+                generated_by_id = {
+                    p['id']: p for p in generated['players'] + generated.get('marketPlayers', [])
+                }
                 horizon = generated.get('forecastHorizon')
             updates = (horizon or {}).get('updates')
             with self.server.lock:
@@ -82,6 +86,17 @@ class ReportJobs:
                     raise RuntimeError('Liga wurde gewechselt; Ergebnis nicht übernommen.')
                 patches = {}
                 for p in report['players'] + report.get('marketPlayers', []):
+                    # A full report has richer player metadata than the lean
+                    # live market endpoint. Keep its complete name, club and image.
+                    if kind == 'full':
+                        generated_player = generated_by_id.get(p['id'])
+                        if generated_player:
+                            p.update({
+                                key: generated_player[key] for key in (
+                                    'name', 'team', 'teamId', 'position', 'image', 'status',
+                                    'l3', 'season', 'average', 'li', 'expiresAt'
+                                ) if generated_player.get(key) not in (None, '', 'Unbekannt')
+                            })
                     patch = {'change': snapshot['predictions'].get(p['id']),
                              'change7': multi_day_prediction(snapshot, p['id'], 7),
                              'matchdayChange': project_to_matchday(snapshot, p['id'], updates)}
@@ -92,7 +107,10 @@ class ReportJobs:
                 forecast = forecast_metadata(snapshot)
                 report.update(forecast=forecast, forecastHorizon=horizon)
             with self.lock:
-                self.status.update(status='done', patches=patches, forecast=forecast, forecastHorizon=horizon)
+                self.status.update(
+                    status='done', patches=patches, forecast=forecast, forecastHorizon=horizon,
+                    message='Report abgeschlossen. ' + ('E-Mail wurde angestoßen.' if os.getenv('EMAIL_USER') else 'Keine E-Mail-Adresse konfiguriert.')
+                )
         except Exception as exc:
             with self.lock:
                 self.status.update(status='failed', error=str(exc) if isinstance(exc, RuntimeError)
