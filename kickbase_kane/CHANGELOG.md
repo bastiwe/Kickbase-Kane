@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.14
+
+- GitHub Actions veröffentlichen nach Voll- und Schnellreport einen kleinen Prognose-Artifact.
+- Das Home-Assistant-Add-on kann diesen Snapshot mit einem Fine-grained GitHub-Token (Actions: Read-only) alle fünf Minuten abrufen.
+- Sobald der GitHub-Sync konfiguriert ist, wird die lokale rechenintensive Vollreport-Planung im Add-on nicht gestartet.
+
+
 ## 0.2.13
 
 - Dashboard startet ohne lokalen Report und lädt Kader, Cash, Transfermarkt, aktuelle Marktwerte, Positionen, Status, Punkte und Bilder direkt aus der Kickbase-API.
