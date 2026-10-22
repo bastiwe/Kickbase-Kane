@@ -13,19 +13,10 @@
         <h1>Trading Dashboard</h1>
       </div>
       <div class="header-actions">
+        <span id="forecast-status" class="status">Prognose wird geladen …</span>
         <span id="live-status" class="status">Daten werden geladen …</span>
-        <button id="run-fast" class="button secondary" type="button">Schnellreport</button>
-        <button id="run-full" class="button primary" type="button">Vollreport</button>
       </div>
     </header>
-
-    <section id="report-progress" class="report-progress" hidden aria-live="polite">
-      <div class="progress-meta"><strong id="report-phase">Report wird vorbereitet …</strong><span id="report-percent">0 %</span></div>
-      <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-        <span id="report-progress-bar"></span>
-      </div>
-      <p id="report-status" class="report-status" role="status"></p>
-    </section>
 
     <section class="metrics" aria-label="Kennzahlen">
       <article class="metric">
