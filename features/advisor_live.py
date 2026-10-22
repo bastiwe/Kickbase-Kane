@@ -410,7 +410,7 @@ class LiveKickbase:
                 profile = live_profiles.get(player_id, {})
                 # Market and squad payloads are sparse. Current profile values
                 # are authoritative; the local cache is only a last fallback.
-                for field in ('fn', 'ln', 'tn', 'tid', 'pim', 'ap', 'ph'):
+                for field in ('fn', 'ln', 'tn', 'tid', 'pim', 'pos', 'st', 'prob', 'tp', 'sec', 'mv', 'ap', 'ph'):
                     if profile.get(field) not in (None, ''):
                         item[field] = profile[field]
                 stored = cached_metadata.get(player_id, {})
@@ -439,6 +439,13 @@ class LiveKickbase:
                     player['l3'] = sum(player['recent']) / len(player['recent'])
                 if live_profile.get('ap') is not None:
                     player['season'] = float(live_profile['ap'])
+                if live_profile.get('tp') is not None:
+                    player['totalPoints'] = float(live_profile['tp'])
+                if live_profile.get('sec') is not None:
+                    player['minutes'] = round(float(live_profile['sec']) / 60)
+                status = live_profile.get('st', live_profile.get('status'))
+                if status is not None:
+                    player['status'] = status
                 # The market/squad endpoint is refreshed for every page load
                 # and therefore remains the source of truth for current MV.
                 if live_profile.get('pim'):
@@ -503,4 +510,4 @@ class LiveKickbase:
                    'cashBefore': raw_state.get('budget'), 'cashNow': budget}
         return current, state, {'source': 'Kickbase API', 'fetchedAt': datetime.now(timezone.utc).isoformat(),
                                 'marketCount': len(available_ids), 'changes': changes,
-                                'note': 'Kader, Cash, Marktwerte, Spielerstatus und Punkte stammen live aus der Kickbase-API. Nur Marktwertprognosen kommen aus dem letzten Prognose-Snapshot.'}
+                                'note': 'Kader, Cash, Kaufkraft, offene Gebote, Marktwerte, Positionen, Status, Punkte und Minuten stammen live aus der Kickbase-API. Nur Marktwertprognosen und LigaInsider-Werte kommen aus dem letzten Prognose-Snapshot.'}
