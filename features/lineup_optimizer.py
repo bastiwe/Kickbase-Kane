@@ -268,7 +268,7 @@ def forecast_horizon_from_matchdays(matchdays, now=None):
 
 def history_context(history, player_id):
     """Use completed, unique matchdays, never forward-filled daily price rows."""
-    rows = history[history['player_id'].astype(str) == player_id].copy()
+    rows = history[history['player_id'].map(player_key) == player_id].copy()
     if rows.empty:
         return {}
     today = pd.Timestamp(datetime.now(ZoneInfo('Europe/Berlin')).date())
