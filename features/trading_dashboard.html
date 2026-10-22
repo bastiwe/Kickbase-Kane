@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kickbase Kane</title>
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">KICKBASE KANE</p>
+        <h1>Trading Dashboard</h1>
+      </div>
+      <div class="header-actions">
+        <span id="live-status" class="status">Daten werden geladen …</span>
+        <button id="run-fast" class="button secondary" type="button">Schnellreport</button>
+        <button id="run-full" class="button primary" type="button">Vollreport</button>
+      </div>
+    </header>
+
+    <section class="metrics" aria-label="Kennzahlen">
+      <article class="metric">
+        <span>Verfügbares Budget</span>
+        <strong id="metric-budget">–</strong>
+        <small id="metric-budget-note">Live aus Kickbase</small>
+      </article>
+      <article class="metric">
+        <span>Kaderwert</span>
+        <strong id="metric-roster-value">–</strong>
+        <small id="metric-roster-count">–</small>
+      </article>
+      <article class="metric">
+        <span>Erw. Kader-MW in 1T</span>
+        <strong id="metric-roster-change">–</strong>
+        <small id="metric-roster-change-note">aus Prognose</small>
+      </article>
+      <article class="metric accent">
+        <span>Trading-Chancen</span>
+        <strong id="metric-opportunities">–</strong>
+        <small>mind. +50.000 EUR in 1T</small>
+      </article>
+    </section>
+
+    <section class="dashboard-grid">
+      <article class="panel panel-wide">
+        <div class="panel-heading">
+          <div><p class="eyebrow">TRANSFERMARKT</p><h2>Beste Chancen vor MW-Update</h2></div>
+          <span id="market-count" class="panel-meta"></span>
+        </div>
+        <div id="top-chances" class="chance-grid"></div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-heading">
+          <div><p class="eyebrow">DEIN KADER</p><h2>Wertentwicklung</h2></div>
+        </div>
+        <div id="roster-movers" class="compact-list"></div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-heading">
+          <div><p class="eyebrow">HANDELSDRUCK</p><h2>Risiken & Timing</h2></div>
+        </div>
+        <div id="timing-risks" class="compact-list"></div>
+      </article>
+
+      <article class="panel panel-wide">
+        <div class="panel-heading market-heading">
+          <div><p class="eyebrow">ALLE ANGEBOTE</p><h2>Transfermarkt</h2></div>
+          <label class="select-label">Sortieren
+            <select id="market-sort">
+              <option value="change">Erw. 1T</option>
+              <option value="expiry">Ablauf</option>
+              <option value="mv">Marktwert</option>
+              <option value="points">Punkteschnitt</option>
+            </select>
+          </label>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Spieler</th><th>Pos.</th><th>Marktwert</th><th>Erw. 1T</th><th>LI</th><th>Ablauf</th></tr></thead>
+            <tbody id="market-table"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+    <p id="report-status" class="report-status" role="status"></p>
+  </main>
+  <script id="data" type="application/json">__PAYLOAD__</script>
+  <script>window.KICKBASE_DASHBOARD=__SETTINGS__;</script>
+  <link rel="stylesheet" href="dashboard.css">
+  <script src="dashboard.js"></script>
+</body>
+</html>
