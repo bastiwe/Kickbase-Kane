@@ -43,6 +43,85 @@ def create_player_data_table():
 
     conn.commit()
 
+def create_market_snapshot_table():
+    """Create a persistent record of which players were actually on the market."""
+
+    with sqlite3.connect("player_data_total.db") as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS market_snapshots (
+                observed_at TEXT NOT NULL,
+                market_value_date TEXT NOT NULL,
+                league_id TEXT NOT NULL,
+                player_id TEXT NOT NULL,
+                market_mv REAL,
+                expires_at TEXT,
+                exp_seconds REAL,
+                has_open_bid INTEGER NOT NULL DEFAULT 0,
+                is_own_listing INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (observed_at, league_id, player_id)
+            );
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_market_snapshots_value_date "
+            "ON market_snapshots (market_value_date, player_id);"
+        )
+
+
+def save_market_snapshot(league_id, market_players, observed_at=None):
+    """Persist the live transfer-market offer set for later honest backtests."""
+
+    observed_at = observed_at or datetime.now(ZoneInfo("Europe/Berlin"))
+    if observed_at.tzinfo is None:
+        observed_at = observed_at.replace(tzinfo=ZoneInfo("Europe/Berlin"))
+    market_value_date = observed_at.date()
+    if observed_at.hour < 22:
+        market_value_date -= timedelta(days=1)
+
+    rows = []
+    for player in market_players or []:
+        player_id = player.get("id")
+        if player_id is None:
+            continue
+        exp_seconds = pd.to_numeric(player.get("exp"), errors="coerce")
+        expires_at = None
+        if pd.notna(exp_seconds):
+            expires_at = (observed_at + timedelta(seconds=float(exp_seconds))).isoformat(timespec="seconds")
+        rows.append((
+            observed_at.isoformat(timespec="seconds"),
+            market_value_date.isoformat(),
+            str(league_id),
+            str(player_id),
+            pd.to_numeric(player.get("market_mv"), errors="coerce"),
+            expires_at,
+            float(exp_seconds) if pd.notna(exp_seconds) else None,
+            int(bool(player.get("has_open_bid"))),
+            int(bool(player.get("is_own_listing"))),
+        ))
+
+    if not rows:
+        print("Market snapshot skipped: no market players returned by Kickbase.")
+        return 0
+
+    create_market_snapshot_table()
+    with sqlite3.connect("player_data_total.db") as conn:
+        conn.executemany("""
+            INSERT OR REPLACE INTO market_snapshots (
+                observed_at, market_value_date, league_id, player_id, market_mv,
+                expires_at, exp_seconds, has_open_bid, is_own_listing
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, rows)
+    print(f"Market snapshot saved: {len(rows)} offers for {market_value_date.isoformat()}.")
+    return len(rows)
+
+
+def load_market_snapshots():
+    """Return all saved market offers; an empty frame is valid for a new cache."""
+
+    create_market_snapshot_table()
+    with sqlite3.connect("player_data_total.db") as conn:
+        return pd.read_sql("SELECT * FROM market_snapshots", conn)
+
+
 def check_if_data_reload_needed():
     """Check if data reload is needed based on the last entry with null market value"""
 
