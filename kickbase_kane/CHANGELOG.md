@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.8
+
+- Fast-Report repariert; er kann wieder Prognosen erzeugen und die E-Mail auslösen.
+- Dashboard zeigt fehlende Prognosen nicht mehr als 0 EUR an.
+- Vollreport aktualisiert Namen, Vereine, Bilder und Spielerdaten im Dashboard.
+- Handlungsbedarf erklärt Marktwertverluste und nah ablaufende Angebote verständlich.
+
 ## 0.2.7
 
 - Docker-Build in eine langlebige Python-Abhängigkeitsschicht und einen schnellen Anwendungscode-Checkout getrennt.
