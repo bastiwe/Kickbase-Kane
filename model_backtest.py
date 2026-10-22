@@ -69,6 +69,8 @@ def main():
         test_df["mv_target_clipped"],
     )
     top_trade_summary = simulate_top_trades(test_df)
+    daily_best_pick_summary = simulate_top_trades(test_df, top_n=1)
+    momentum_baseline = evaluate_momentum_baseline(test_df)
     phase_summaries = build_phase_summaries(test_df)
 
     generated_at = datetime.now(ZoneInfo("Europe/Berlin")).isoformat(timespec="seconds")
@@ -86,6 +88,13 @@ def main():
         "rmse": round(float(rmse), 2),
         "r2": round(float(r2), 4),
         **top_trade_summary,
+        "daily_best_pick": daily_best_pick_summary,
+        "momentum_baseline": momentum_baseline,
+        "top_trade_assumptions": {
+            "selection": "Model\'s highest positive 1T predictions per day",
+            "historical_market_availability": "not recorded; the test cannot prove that a player was on the market",
+            "budget_and_roster_limits": "not simulated",
+        },
         "phases": phase_summaries,
     }
 
@@ -114,7 +123,7 @@ def split_backtest_data(df):
     return train_df, test_df
 
 
-def simulate_top_trades(test_df):
+def simulate_top_trades(test_df, top_n=None):
     positive_candidates = test_df[test_df["prediction"] > 0].copy()
     if positive_candidates.empty:
         return {
@@ -124,7 +133,7 @@ def simulate_top_trades(test_df):
             "top_trade_total_profit": 0,
         }
 
-    top_n = int(os.getenv("BACKTEST_TOP_N_PER_DAY", "10"))
+    top_n = top_n or int(os.getenv("BACKTEST_TOP_N_PER_DAY", "10"))
     selected = (
         positive_candidates.sort_values(["date", "prediction"], ascending=[True, False])
         .groupby(positive_candidates["date"].dt.date, group_keys=False)
@@ -161,6 +170,7 @@ def summarize_phase(df):
     direction_accuracy = (actual.apply(sign) == predicted.apply(sign)).mean() * 100
     errors = (actual - predicted).abs()
     top_trade_summary = simulate_top_trades(df)
+    daily_best_pick_summary = simulate_top_trades(df, top_n=1)
 
     return {
         "rows": int(len(df)),
@@ -170,6 +180,27 @@ def summarize_phase(df):
         "direction_accuracy_pct": round(float(direction_accuracy), 2),
         "mae": round(float(errors.mean()), 2),
         **top_trade_summary,
+        "daily_best_pick": daily_best_pick_summary,
+        "momentum_baseline": evaluate_momentum_baseline(df),
+    }
+
+
+def evaluate_momentum_baseline(df):
+    """Evaluate a transparent no-model baseline against the same test target.
+
+    The baseline simply assumes that tomorrow\'s change equals today\'s change.
+    A model is only useful when it meaningfully outperforms this simple
+    momentum rule on unseen dates.
+    """
+    actual = df["mv_target_clipped"]
+    predicted = df["mv_change_1d"].fillna(0)
+    errors = actual - predicted
+    direction_accuracy = (actual.apply(sign) == predicted.apply(sign)).mean() * 100
+    return {
+        "strategy": "Tagesdynamik fortschreiben",
+        "direction_accuracy_pct": round(float(direction_accuracy), 2),
+        "mae": round(float(errors.abs().mean()), 2),
+        "rmse": round(float((errors.pow(2).mean()) ** 0.5), 2),
     }
 
 
