@@ -7,6 +7,8 @@ from urllib.parse import quote
 
 import os
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 import requests
 import re
 import time
@@ -128,6 +130,36 @@ class LiveKickbase:
         self.token = None
         self.detail_cache = {}
         self.detail_lock = threading.Lock()
+        self.profile_cache = {}
+        self.profile_lock = threading.Lock()
+
+    def player_profiles(self, player_ids):
+        """Read current player facts directly from Kickbase, with a short cache."""
+        now = time.monotonic()
+        wanted = [str(player_id) for player_id in player_ids if str(player_id).isdigit()]
+        profiles = {}
+        missing = []
+        with self.profile_lock:
+            for player_id in wanted:
+                cached = self.profile_cache.get(player_id)
+                if cached and now - cached[0] < 600:
+                    profiles[player_id] = cached[1]
+                else:
+                    missing.append(player_id)
+        if missing:
+            def load(player_id):
+                return player_id, self.get('/competitions/1/players/' + quote(player_id, safe=''))
+            with ThreadPoolExecutor(max_workers=min(6, len(missing))) as executor:
+                futures = [executor.submit(load, player_id) for player_id in missing]
+                for future in as_completed(futures):
+                    try:
+                        player_id, profile = future.result()
+                    except requests.RequestException:
+                        continue
+                    profiles[player_id] = profile
+                    with self.profile_lock:
+                        self.profile_cache[player_id] = (now, profile)
+        return profiles
 
     def player_details(self, player_id):
         with self.detail_lock:
@@ -302,30 +334,28 @@ class LiveKickbase:
         budget = self.get(base + '/me/budget')['b']
         if not isinstance(squad, list) or not isinstance(market, list):
             raise RuntimeError('Kickbase lieferte unvollständige Kader-/Marktdaten.')
+        profile_ids = [item.get('i') for item in squad] + [item.get('i') for item in market]
+        live_profiles = self.player_profiles(profile_ids)
         forecast_horizon = None
         if squad:
-            try:
-                first_profile = self.get('/competitions/1/players/' + quote(str(squad[0].get('i')), safe=''))
-                forecast_horizon = forecast_horizon_from_matchdays(first_profile.get('mdsum', []))
-            except (requests.RequestException, KeyError, TypeError, RuntimeError, ValueError):
-                forecast_horizon = None
+            first_profile = live_profiles.get(str(squad[0].get('i')), {})
+            forecast_horizon = forecast_horizon_from_matchdays(first_profile.get('mdsum', []))
         old = {str(p['id']): p for p in report['players'] + report.get('marketPlayers', [])}
         own_ids = {str(p['i']) for p in squad}
-        cached_metadata = local_player_metadata(
-            [item.get('i') for item in squad] + [item.get('i') for item in market]
-        )
-        name_lookups = 0
+        cached_metadata = local_player_metadata(profile_ids)
 
         def convert(items, owned):
-            nonlocal name_lookups
             enriched = []
             for item in items:
                 item = dict(item)
                 player_id = str(item.get('i'))
-                previous = old.get(player_id, {})
+                profile = live_profiles.get(player_id, {})
+                # Market and squad payloads are sparse. Current profile values
+                # are authoritative; the local cache is only a last fallback.
+                for field in ('fn', 'ln', 'tn', 'tid', 'pim', 'ap', 'ph'):
+                    if profile.get(field) not in (None, ''):
+                        item[field] = profile[field]
                 stored = cached_metadata.get(player_id, {})
-                # /market and /squad are intentionally lean. The local model
-                # database already knows names and clubs for nearly all players.
                 if not item.get('fn') and stored.get('first_name'):
                     item['fn'] = stored['first_name']
                 if not item.get('ln') and stored.get('last_name'):
@@ -336,19 +366,6 @@ class LiveKickbase:
                     item['tid'] = stored['team_id']
                 if not item.get('image_url') and stored.get('image_url'):
                     item['image_url'] = stored['image_url']
-                known_name = previous.get('name', '')
-                if re.fullmatch(r'Spieler\s+\d+', known_name):
-                    known_name = ''
-                # The squad endpoint often omits names; keep the report identity.
-                if not item.get('ln') and not known_name and name_lookups < 8:
-                    name_lookups += 1
-                    try:
-                        detail = self.get('/competitions/1/players/' + quote(str(item.get('i')), safe=''))
-                        for field in ('fn', 'ln', 'tn', 'tid', 'pim'):
-                            if detail.get(field):
-                                item[field] = detail[field]
-                    except requests.RequestException:
-                        pass
                 enriched.append(item)
             parsed = market_context(enriched, set(), user_id if not owned else None, {}, None, None)
             raw = {str(item.get('i')): item for item in enriched}
@@ -356,12 +373,7 @@ class LiveKickbase:
             for player in parsed:
                 previous = old.get(player['id'], {})
                 live_item = raw[player['id']]
-                live_profile = live_item
-                if not live_item.get('ap') or not live_item.get('ph'):
-                    try:
-                        live_profile = self.get('/competitions/1/players/' + quote(player['id'], safe=''))
-                    except (requests.RequestException, KeyError, TypeError, RuntimeError):
-                        live_profile = live_item
+                live_profile = live_profiles.get(player['id'], live_item)
                 live_ph = [entry.get('p') for entry in live_profile.get('ph', [])
                            if isinstance(entry, dict) and entry.get('p') is not None]
                 if live_ph:
@@ -423,4 +435,4 @@ class LiveKickbase:
                    'cashBefore': raw_state.get('budget'), 'cashNow': budget}
         return current, state, {'source': 'Kickbase API', 'fetchedAt': datetime.now(timezone.utc).isoformat(),
                                 'marketCount': len(available_ids), 'changes': changes,
-                                'note': 'Live-Cash und Besitz ersetzen den Reportstand für diese Antwort. Manuelle Pläne bleiben soweit möglich erhalten. Punkte und Prognosen stammen weiterhin aus dem Report; Spielfeld nicht automatisch aktualisiert.'}
+                                'note': 'Kader, Cash, Marktwerte, Spielerstatus und Punkte stammen live aus der Kickbase-API. Nur Marktwertprognosen kommen aus dem letzten Prognose-Snapshot.'}
