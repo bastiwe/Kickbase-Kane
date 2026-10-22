@@ -11,6 +11,7 @@ import threading
 import webbrowser
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
 import requests
@@ -138,7 +139,8 @@ class AdvisorHandler(BaseHTTPRequestHandler):
         if not self.valid_host():
             self.reply(403, {'error': 'Nur lokaler Zugriff erlaubt.'})
             return
-        if self.path == '/':
+        path = urlsplit(self.path).path
+        if path == '/':
             live_message = ''
             with self.server.lock:
                 report, kickbase = self.server.report, self.server.kickbase
@@ -178,20 +180,22 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                 payload = json.dumps(self.server.report, ensure_ascii=True, allow_nan=False).replace('<', '\\u003c')
                 settings = json.dumps({'csrf': self.server.csrf, 'revision': self.server.revision,
                                        'liveMessage': live_message}, ensure_ascii=True).replace('<', '\\u003c')
-            ingress_path = self.headers.get('X-Ingress-Path', '').rstrip('/')
             template = (APP_ROOT / 'features/lineup_optimizer.html').read_text(encoding='utf-8')
             page = template.replace('__PAYLOAD__', payload)
-            page = page.replace('</head>', '<link rel="stylesheet" href="/advisor.css"><script>window.KICKBASE_ADVISOR='
-                                + settings[:-1] + ',"basePath":' + json.dumps(ingress_path) + '};</script></head>')
-            page = page.replace('href="/advisor.css"', 'href="' + ingress_path + '/advisor.css"')
-            page = page.replace('</body>', '<script src="' + ingress_path + '/advisor.js"></script></body>')
+            # Home Assistant serves Ingress below a per-installation path. Keep
+            # all browser URLs relative to the current document so the proxy
+            # remains inside that path rather than redirecting to Home Assistant.
+            page = page.replace('</head>', '<link rel="stylesheet" href="advisor.css"><script>window.KICKBASE_ADVISOR='
+                                + settings + ';</script></head>')
+            page = page.replace('<header>', '<header><div class="ha-app-status">KICKBASE KANE <span>Home Assistant · lokal</span></div>')
+            page = page.replace('</body>', '<script src="advisor.js"></script></body>')
             self.reply(200, page, 'text/html; charset=utf-8')
-        elif self.path in ('/advisor.js', '/advisor.css'):
-            name = self.path.lstrip('/')
+        elif path in ('/advisor.js', '/advisor.css'):
+            name = path.lstrip('/')
             content_type = 'text/javascript; charset=utf-8' if name.endswith('.js') else 'text/css; charset=utf-8'
             self.reply(200, (APP_ROOT / 'features' / name).read_text(encoding='utf-8'), content_type)
-        elif self.path.startswith('/api/player-details/'):
-            player_id = self.path.rsplit('/', 1)[-1]
+        elif path.startswith('/api/player-details/'):
+            player_id = path.rsplit('/', 1)[-1]
             with self.server.lock:
                 client = self.server.kickbase
                 known = {str(p['id']) for p in self.server.report['players'] + self.server.report.get('marketPlayers', [])}
@@ -205,14 +209,14 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                 except (requests.RequestException, RuntimeError, ValueError, KeyError, TypeError) as exc:
                     self.server.log_event('ERROR Spielerdetails: ' + type(exc).__name__)
                     self.reply(502, {'error': 'Kickbase-Spielerdetails derzeit nicht abrufbar. Bitte erneut öffnen.'})
-        elif self.path == '/api/report-job':
+        elif path == '/api/report-job':
             self.reply(200, self.server.report_jobs.read())
-        elif self.path == '/api/status':
+        elif path == '/api/status':
             self.reply(200, {'configured': bool(self.server.api_key), 'model': self.server.model,
                              'liveConfigured': self.server.kickbase is not None,
                              'revision': self.server.revision, 'marketCount': len(self.server.report.get('marketPlayers', [])),
                              'memoryCount': len(self.server.memory)})
-        elif self.path == '/api/current-lineup':
+        elif path == '/api/current-lineup':
             with self.server.lock:
                 kickbase, league_id = self.server.kickbase, self.server.report.get('league')
             if not kickbase:
@@ -227,6 +231,7 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             self.reply(404, {'error': 'Nicht gefunden.'})
 
     def do_POST(self):
+        path = urlsplit(self.path).path
         home_assistant = os.getenv('KICKBASE_HOME_ASSISTANT') == '1'
         # The browser origin is the user's Home Assistant URL in Ingress mode,
         # never the private container address. Ingress authentication plus our
@@ -245,16 +250,16 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(length))
             if not isinstance(body, dict):
                 raise ValueError('Ungültige Anfrage.')
-            if self.path == '/api/report-job':
+            if path == '/api/report-job':
                 self.reply(202, self.server.report_jobs.start(body.get('kind')))
-            elif self.path == '/api/key':
+            elif path == '/api/key':
                 key = body.get('key')
                 if not isinstance(key, str) or len(key) > 512 or (key and not key.startswith('sk-')):
                     raise ValueError('Bitte einen gültigen OpenAI-API-Schlüssel eingeben.')
                 with self.server.lock:
                     self.server.api_key = key.strip()
                 self.reply(200, {'configured': bool(key)})
-            elif self.path == '/api/kickbase':
+            elif path == '/api/kickbase':
                 username, password = body.get('username', ''), body.get('password', '')
                 if not all(isinstance(v, str) and len(v) <= 512 for v in (username, password)):
                     raise ValueError('Ungültige Zugangsdaten.')
@@ -263,7 +268,7 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                 with self.server.lock:
                     self.server.kickbase = LiveKickbase(username, password) if username else None
                 self.reply(200, {'configured': bool(username)})
-            elif self.path == '/api/memory':
+            elif path == '/api/memory':
                 action, note = body.get('action'), body.get('note')
                 with self.server.lock:
                     if action == 'add':
@@ -279,9 +284,9 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                     else:
                         raise ValueError('Ungültige Gedächtnisaktion.')
                     self.reply(200, {'memory': self.server.memory})
-            elif self.path == '/api/apply-lineup':
+            elif path == '/api/apply-lineup':
                 self.apply_lineup(body)
-            elif self.path == '/api/report':
+            elif path == '/api/report':
                 html = body.get('html')
                 if not isinstance(html, str):
                     raise ValueError('HTML-Report fehlt.')
@@ -294,7 +299,7 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                     self.server.report = report
                     self.server.revision += 1
                 self.reply(200, {'loaded': True})
-            elif self.path == '/api/chat':
+            elif path == '/api/chat':
                 self.chat(body)
             else:
                 self.reply(404, {'error': 'Nicht gefunden.'})
