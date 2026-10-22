@@ -101,7 +101,16 @@
   function renderRoster(){
     const chosen=[...players].sort((a,b)=>change(b)-change(a));
     $('roster-count').textContent=chosen.length+' Spieler';
-    $('roster-movers').innerHTML=chosen.length?chosen.map(p=>'<details class="roster-player" data-player-id="'+escapeHtml(p.id)+'"><summary><div class="list-row">'+playerLabel(p)+'<div class="roster-values"><span class="sub">Erw. 1T</span><strong class="list-value '+cls(change(p))+'">'+forecastText(p)+'</strong></div></div></summary><div class="player-history"><p class="empty">Aufklappen lädt die Tagesänderungen.</p></div></details>').join(''):'<p class="empty">Noch kein Kader geladen.</p>';
+    const rosterLabel=p=>{
+      const profit=number(field(p,'profitLoss','profit_loss'));
+      const total=number(field(p,'totalPoints','total_points','pointsTotal'));
+      const average=number(field(p,'season','average','avgPoints','pointsAverage'));
+      const profitText=profit===null?'G/V –':'G/V '+signed(profit);
+      const pointsText=total===null?'Pkt. –':'Pkt. '+Math.round(total).toLocaleString('de-DE');
+      const averageText=average===null?'Ø –':'Ø '+average.toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1});
+      return '<div class="player">'+avatar(p)+'<div><div class="name">'+escapeHtml(name(p))+'</div><div class="sub">'+escapeHtml(club(p))+' · '+escapeHtml(position(p))+'</div><div class="roster-statline"><span class="'+(profit===null?'':cls(profit))+'">'+profitText+'</span><span>'+pointsText+'</span><span>'+averageText+'</span></div></div></div>';
+    };
+    $('roster-movers').innerHTML=chosen.length?chosen.map(p=>'<details class="roster-player" data-player-id="'+escapeHtml(p.id)+'"><summary><div class="list-row">'+rosterLabel(p)+'<div class="roster-values"><span class="sub">Erw. 1T</span><strong class="list-value '+cls(change(p))+'">'+forecastText(p)+'</strong></div></div></summary><div class="player-history"><p class="empty">Aufklappen lädt die Tagesänderungen.</p></div></details>').join(''):'<p class="empty">Noch kein Kader geladen.</p>';
     document.querySelectorAll('.roster-player').forEach(details=>details.addEventListener('toggle',()=>{if(details.open)loadPlayerHistory(details);}));
   }
   function nextMarketUpdate(){
