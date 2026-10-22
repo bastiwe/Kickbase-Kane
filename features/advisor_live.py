@@ -280,6 +280,33 @@ class LiveKickbase:
                         self.market_history_cache[player_id] = (now, history)
         return histories
 
+    def player_daily_market_changes(self, player_id, limit=4):
+        """Return the last completed daily market-value movements for one player."""
+        raw_history = self.player_market_histories([player_id]).get(str(player_id), [])
+        epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+        values = {}
+        for entry in raw_history:
+            if not isinstance(entry, dict) or entry.get('dt') is None or entry.get('mv') is None:
+                continue
+            try:
+                day = (epoch + timedelta(days=int(entry['dt']))).date().isoformat()
+                values[day] = float(entry['mv'])
+            except (TypeError, ValueError, OverflowError):
+                continue
+        timeline = sorted(values.items())
+        changes = []
+        for index in range(1, len(timeline)):
+            day, value = timeline[index]
+            previous = timeline[index - 1][1]
+            changes.append({
+                'date': day,
+                'change': round(value - previous),
+                'marketValue': round(value),
+                'previousMarketValue': round(previous),
+                'percent': ((value - previous) / previous * 100) if previous else None,
+            })
+        return {'changes': list(reversed(changes[-max(1, limit):]))}
+
     def squad_value_history(self, league_id, player_ids):
         """Reconstruct squad value from Kickbase's transfer feed and MV histories."""
         current_ids = {str(player_id) for player_id in player_ids if str(player_id).isdigit()}
