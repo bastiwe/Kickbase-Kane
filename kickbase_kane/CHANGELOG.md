@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.13
+
+- Dashboard startet ohne lokalen Report und lädt Kader, Cash, Transfermarkt, aktuelle Marktwerte, Positionen, Status, Punkte und Bilder direkt aus der Kickbase-API.
+- Spielerprofile werden zehn Minuten lokal zwischengespeichert, damit wiederholtes Öffnen der Oberfläche die Kickbase-API nicht unnötig belastet.
+- Prognosewerte bleiben bewusst vom letzten Hintergrundreport getrennt: Sie sind die einzige nicht von Kickbase gelieferte Kennzahl.
+
+
 ## 0.2.12
 
 - Trading-Chancen beginnen nun erst ab einer erwarteten 1T-Marktwertsteigerung von +100.000 EUR.
