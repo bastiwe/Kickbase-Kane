@@ -61,9 +61,47 @@
       .slice(0,6);
     $('top-chances').innerHTML=chosen.length?chosen.map(p=>'<article class="chance"><div class="chance-top">'+playerLabel(p)+'<span class="tag">'+escapeHtml(position(p))+'</span></div><div class="chance-change"><span>Erw. MW in 1T</span><strong class="positive">'+forecastText(p)+'</strong></div><div class="chance-details"><span>MW '+euros(mv(p))+'</span><span>Ablauf '+escapeHtml(formatTime(deadline(p)))+'</span></div></article>').join(''):'<p class="empty">Keine passende Chance vor dem nächsten MW-Update.</p>';
   }
+  const historyCache=new Map();
+  const berlinDay=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Berlin'}).format(new Date());
+  function historyLabel(date){
+    const today=new Date(berlinDay()+'T12:00:00Z');
+    const target=new Date(date+'T12:00:00Z');
+    const diff=Math.round((today-target)/86400000);
+    if(diff===0)return 'Heute';
+    if(diff===1)return 'Gestern';
+    if(diff===2)return 'Vor 2 Tagen';
+    if(diff===3)return 'Vor 3 Tagen';
+    return target.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'});
+  }
+  function historyMarkup(entries){
+    if(!entries.length)return '<p class="empty">Keine täglichen Marktwertänderungen verfügbar.</p>';
+    const maximum=Math.max(...entries.map(entry=>Math.abs(Number(entry.change)||0)),1);
+    return '<div class="daily-changes">'+entries.map(entry=>{
+      const value=Number(entry.change)||0;
+      const width=Math.max(3,Math.round(Math.abs(value)/maximum*100));
+      const percent=number(entry.percent);
+      return '<div class="daily-change"><div class="daily-change-head"><span>'+escapeHtml(historyLabel(entry.date))+'</span><strong class="'+cls(value)+'">'+signed(value)+(percent===null?'':' <small>('+percent.toLocaleString('de-DE',{maximumFractionDigits:1,signDisplay:'always'})+' %)</small>')+'</strong></div><div class="daily-bar"><span class="'+cls(value)+'" style="width:'+width+'%"></span></div></div>';
+    }).join('')+'</div>';
+  }
+  async function loadPlayerHistory(details){
+    const playerId=details.dataset.playerId;
+    const target=details.querySelector('.player-history');
+    if(historyCache.has(playerId)){target.innerHTML=historyMarkup(historyCache.get(playerId));return;}
+    target.innerHTML='<p class="empty">Marktwerthistorie wird von Kickbase geladen …</p>';
+    try{
+      const response=await fetch(apiPath('/api/player-market-history/'+encodeURIComponent(playerId)),{cache:'no-store'});
+      const payload=await response.json();
+      if(!response.ok)throw new Error(payload.error||'Nicht verfügbar');
+      const entries=Array.isArray(payload.changes)?payload.changes:[];
+      historyCache.set(playerId,entries);
+      target.innerHTML=historyMarkup(entries);
+    }catch(error){target.innerHTML='<p class="empty">Marktwerthistorie derzeit nicht verfügbar.</p>';}
+  }
   function renderRoster(){
-    const chosen=[...players].filter(p=>prediction(p)!==null).sort((a,b)=>change(b)-change(a)).slice(0,5);
-    $('roster-movers').innerHTML=chosen.length?chosen.map(p=>'<div class="list-row">'+playerLabel(p)+'<div class="list-value '+cls(change(p))+'">'+forecastText(p)+'</div></div>').join(''):'<p class="empty">Noch kein Kader geladen.</p>';
+    const chosen=[...players].sort((a,b)=>change(b)-change(a));
+    $('roster-count').textContent=chosen.length+' Spieler';
+    $('roster-movers').innerHTML=chosen.length?chosen.map(p=>'<details class="roster-player" data-player-id="'+escapeHtml(p.id)+'"><summary><div class="list-row">'+playerLabel(p)+'<div class="roster-values"><span class="sub">Erw. 1T</span><strong class="list-value '+cls(change(p))+'">'+forecastText(p)+'</strong></div></div></summary><div class="player-history"><p class="empty">Aufklappen lädt die Tagesänderungen.</p></div></details>').join(''):'<p class="empty">Noch kein Kader geladen.</p>';
+    document.querySelectorAll('.roster-player').forEach(details=>details.addEventListener('toggle',()=>{if(details.open)loadPlayerHistory(details);}));
   }
   function nextMarketUpdate(){
     const update=new Date(); update.setHours(22,0,0,0);
