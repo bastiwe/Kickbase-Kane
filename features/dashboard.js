@@ -59,7 +59,8 @@
       .filter(p=>prediction(p)!==null && prediction(p)>=TRADING_THRESHOLD && timeValue(deadline(p))<nextUpdate)
       .sort((a,b)=>change(b)-change(a))
       .slice(0,6);
-    $('top-chances').innerHTML=chosen.length?chosen.map(p=>'<article class="chance"><div class="chance-top">'+playerLabel(p)+'<span class="tag">'+escapeHtml(position(p))+'</span></div><div class="chance-change"><span>Erw. MW in 1T</span><strong class="positive">'+forecastText(p)+'</strong></div><div class="chance-details"><span>MW '+euros(mv(p))+'</span><span>Ablauf '+escapeHtml(formatTime(deadline(p)))+'</span></div></article>').join(''):'<p class="empty">Keine passende Chance vor dem nächsten MW-Update.</p>';
+    $('top-chances').innerHTML=chosen.length?chosen.map(p=>'<details class="chance market-history-player" data-player-id="'+escapeHtml(p.id)+'"><summary><div class="chance-top">'+playerLabel(p)+'<span class="tag">'+escapeHtml(position(p))+'</span></div><div class="chance-change"><span>Erw. MW in 1T</span><strong class="positive">'+forecastText(p)+'</strong></div><div class="chance-details"><span>MW '+euros(mv(p))+'</span><span>Ablauf '+escapeHtml(formatTime(deadline(p)))+'</span></div></summary><div class="player-history"><p class="empty">Aufklappen lädt die Tagesänderungen.</p></div></details>').join(''):'<p class="empty">Keine passende Chance vor dem nächsten MW-Update.</p>';
+    document.querySelectorAll('.market-history-player').forEach(details=>details.addEventListener('toggle',()=>{if(details.open)loadPlayerHistory(details);}));
   }
   const historyCache=new Map();
   const berlinDay=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Berlin'}).format(new Date());
