@@ -15,7 +15,7 @@ def train_model(X_train, y_train, n_estimators=None):
         min_samples_split=5,
         min_samples_leaf=2,
         max_features="sqrt",
-        n_jobs=-1,
+        n_jobs=int(os.getenv("MODEL_N_JOBS", "-1")),
         random_state=42,
     )
 
