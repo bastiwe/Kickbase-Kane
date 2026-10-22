@@ -28,6 +28,9 @@ export FULL_REPORT_INCLUDE_7D="${FULL_REPORT_INCLUDE_7D:-0}"
 if [ -z "$KICKBASE_REPORT_TIMES" ] || [ "$KICKBASE_REPORT_TIMES" = "null" ]; then
   export KICKBASE_REPORT_TIMES="21:40,22:10"
 fi
+if [ -z "$GITHUB_FORECAST_SYNC_SECONDS" ] || [ "$GITHUB_FORECAST_SYNC_SECONDS" = "null" ]; then
+  export GITHUB_FORECAST_SYNC_SECONDS="300"
+fi
 
 # The dashboard establishes its live context directly from Kickbase on first
 # page load. Forecast snapshots are filled by scheduled or manual reports.
