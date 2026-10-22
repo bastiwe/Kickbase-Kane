@@ -19,6 +19,14 @@
       </div>
     </header>
 
+    <section id="report-progress" class="report-progress" hidden aria-live="polite">
+      <div class="progress-meta"><strong id="report-phase">Report wird vorbereitet …</strong><span id="report-percent">0 %</span></div>
+      <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <span id="report-progress-bar"></span>
+      </div>
+      <p id="report-status" class="report-status" role="status"></p>
+    </section>
+
     <section class="metrics" aria-label="Kennzahlen">
       <article class="metric">
         <span>Verfügbares Budget</span>
@@ -85,13 +93,7 @@
         </div>
       </article>
     </section>
-    <section id="report-progress" class="report-progress" hidden aria-live="polite">
-      <div class="progress-meta"><strong id="report-phase">Report wird vorbereitet …</strong><span id="report-percent">0 %</span></div>
-      <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-        <span id="report-progress-bar"></span>
-      </div>
-      <p id="report-status" class="report-status" role="status"></p>
-    </section>
+
   </main>
   <script id="data" type="application/json">__PAYLOAD__</script>
   <script>window.KICKBASE_DASHBOARD=__SETTINGS__;</script>
