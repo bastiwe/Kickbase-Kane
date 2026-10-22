@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.6
+
+- Startelf-Optimierer in der Home-Assistant-Oberfläche durch ein fokussiertes Trading-Dashboard ersetzt.
+- Zeigt Live-Budget, Kaderwert, erwartete 1T-Kaderentwicklung, Top-Chancen, Risikosignale und einen sortierbaren Transfermarkt.
+- Vollreport und Schnellreport lassen sich direkt aus dem Dashboard starten.
+
+# Changelog
+
 ## 0.2.5
 
 - Top-Chance-Kacheln bewerten reine Trading-Chancen wieder unabhängig von der Startelfquote.
