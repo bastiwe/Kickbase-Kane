@@ -52,13 +52,43 @@
     const chosen=[...players].filter(p=>prediction(p)!==null).sort((a,b)=>change(b)-change(a)).slice(0,5);
     $('roster-movers').innerHTML=chosen.length?chosen.map(p=>'<div class="list-row">'+playerLabel(p)+'<div class="list-value '+cls(change(p))+'">'+forecastText(p)+'</div></div>').join(''):'<p class="empty">Noch kein Kader geladen.</p>';
   }
+  function nextMarketUpdate(){
+    const update=new Date(); update.setHours(22,0,0,0);
+    if(update.getTime()<=Date.now()) update.setDate(update.getDate()+1);
+    return update.getTime();
+  }
   function renderRisks(){
+    const update=nextMarketUpdate();
+    const nightEnd=update+11*60*60*1000;
     const risky=[...players].filter(p=>prediction(p)!==null && change(p)<0).sort((a,b)=>change(a)-change(b)).slice(0,3);
-    const expiring=[...market].filter(p=>deadline(p)).sort((a,b)=>timeValue(deadline(a))-timeValue(deadline(b))).slice(0,2);
+    const beforeUpdate=[...market].filter(p=>prediction(p)!==null && change(p)>=50000 && timeValue(deadline(p))<=update).sort((a,b)=>change(b)-change(a)).slice(0,2);
+    const overnight=[...market].filter(p=>prediction(p)!==null && change(p)>=50000 && timeValue(deadline(p))>update && timeValue(deadline(p))<=nightEnd).sort((a,b)=>change(b)-change(a)).slice(0,2);
     const rows=[];
-    risky.forEach(p=>rows.push('<div class="list-row">'+playerLabel(p)+'<div class="list-value negative"><span class="risk-dot red"></span>MW-Verlust '+forecastText(p)+'</div></div>'));
-    expiring.forEach(p=>rows.push('<div class="list-row">'+playerLabel(p)+'<div class="list-value neutral"><span class="risk-dot"></span>Ablauf '+escapeHtml(formatTime(deadline(p)))+'</div></div>'));
-    $('timing-risks').innerHTML=rows.length?rows.join(''):'<p class="empty">Aktuell keine auffälligen Risiken.</p>';
+    risky.forEach(p=>rows.push('<div class="list-row">'+playerLabel(p)+'<div class="list-value negative"><span class="risk-dot red"></span>Drohender MW-Verlust '+forecastText(p)+'</div></div>'));
+    beforeUpdate.forEach(p=>rows.push('<div class="list-row">'+playerLabel(p)+'<div class="list-value positive"><span class="risk-dot green"></span>Top-Chance vor 22 Uhr '+forecastText(p)+'</div></div>'));
+    overnight.forEach(p=>rows.push('<div class="list-row">'+playerLabel(p)+'<div class="list-value neutral"><span class="risk-dot"></span>Nachtgebot 22–09 Uhr '+forecastText(p)+'</div></div>'));
+    $('timing-risks').innerHTML=rows.length?rows.join(''):'<p class="empty">Kein unmittelbarer Handlungsbedarf erkannt.</p>';
+  }
+  async function renderValueHistory(){
+    try{
+      const response=await fetch(apiPath('/api/squad-value-history'),{cache:'no-store'});
+      const history=await response.json();
+      const series=Array.isArray(history.series)?history.series:[];
+      $('history-note').textContent=history.note||'';
+      if(series.length<2){$('value-chart').innerHTML='<div class="chart-empty">Noch nicht genügend historische Daten verfügbar.</div>';return;}
+      const width=1000, height=190, pad={left:8,right:8,top:16,bottom:24};
+      const values=series.map(item=>Number(item.value));
+      const low=Math.min(...values), high=Math.max(...values), spread=Math.max(high-low,1);
+      const x=index=>pad.left+(width-pad.left-pad.right)*index/(series.length-1);
+      const y=value=>pad.top+(height-pad.top-pad.bottom)*(1-(value-low)/spread);
+      const line=series.map((item,index)=>x(index).toFixed(1)+','+y(Number(item.value)).toFixed(1)).join(' ');
+      const area=line+' '+x(series.length-1).toFixed(1)+','+(height-pad.bottom)+' '+x(0).toFixed(1)+','+(height-pad.bottom);
+      const first=series[0], last=series[series.length-1], delta=Number(last.value)-Number(first.value);
+      const labelDate=value=>new Date(value+'T12:00:00').toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'});
+      $('history-summary').textContent=signed(delta)+' seit '+labelDate(first.date);
+      $('history-summary').className='panel-meta '+cls(delta);
+      $('value-chart').innerHTML='<svg viewBox="0 0 '+width+' '+height+'" preserveAspectRatio="none" aria-hidden="true"><line class="chart-grid" x1="0" x2="'+width+'" y1="'+(height-pad.bottom)+'" y2="'+(height-pad.bottom)+'"/><polygon class="chart-area" points="'+area+'"/><polyline class="chart-line" points="'+line+'"/><text class="chart-label" x="'+pad.left+'" y="'+(height-4)+'">'+labelDate(first.date)+'</text><text class="chart-label" text-anchor="end" x="'+(width-pad.right)+'" y="'+(height-4)+'">'+labelDate(last.date)+'</text><text class="chart-label" text-anchor="end" x="'+(width-pad.right)+'" y="12">'+euros(last.value)+'</text></svg>';
+    }catch(error){$('value-chart').innerHTML='<div class="chart-empty">Kaderwertverlauf derzeit nicht verfügbar.</div>';}
   }
   function sortedMarket(){
     const mode=$('market-sort').value;
@@ -114,5 +144,5 @@
   }
   $('run-fast').onclick=()=>report('fast');$('run-full').onclick=()=>report('full');$('market-sort').onchange=renderTable;
   $('live-status').textContent=settings.liveMessage||data.generated||'Reportstand geladen';
-  render();pollJob();
+  render();renderValueHistory();pollJob();
 })();
