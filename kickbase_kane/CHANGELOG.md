@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.10
+
+- Report-Fortschritt direkt unter dem Dashboard-Kopf und den Report-Buttons platziert.
+
 ## 0.2.9
 
 - Fortschrittsbalken für Vollreport und Schnellreport im Trading-Dashboard ergänzt.
