@@ -56,42 +56,6 @@ def read_report(html):
     return validate_report(report)
 
 
-def current_squad_value_history(player_ids):
-    """Approximate season path from historic market values of today's squad."""
-    valid_ids = [str(player_id) for player_id in player_ids if str(player_id).isdigit()]
-    if not valid_ids:
-        return {'series': [], 'note': 'Kein Kader geladen.'}
-    today = datetime.now(ZoneInfo('Europe/Berlin')).date()
-    season_year = today.year if today.month >= 7 else today.year - 1
-    season_start = f'{season_year}-08-01'
-    database = DATA_ROOT / 'player_data_total.db'
-    if not database.exists():
-        return {'series': [], 'note': 'Historische Marktwerte werden mit dem nächsten Vollreport aufgebaut.'}
-    placeholders = ','.join('?' for _ in valid_ids)
-    query = f"""
-        WITH daily_values AS (
-            SELECT date, player_id, MAX(mv) AS market_value
-            FROM player_data_1d
-            WHERE player_id IN ({placeholders}) AND date >= ? AND mv IS NOT NULL
-            GROUP BY date, player_id
-        )
-        SELECT date, SUM(market_value) AS value, COUNT(*) AS player_count
-        FROM daily_values
-        GROUP BY date
-        ORDER BY date
-    """
-    try:
-        with sqlite3.connect(database) as connection:
-            rows = connection.execute(query, [*valid_ids, season_start]).fetchall()
-    except sqlite3.Error:
-        return {'series': [], 'note': 'Historische Marktwerte sind derzeit nicht lesbar.'}
-    series = [{'date': row[0], 'value': round(row[1]), 'players': row[2]} for row in rows if row[1] is not None]
-    return {
-        'series': series,
-        'note': 'Historische Marktwerte der Spieler, die aktuell in deinem Kader stehen.',
-    }
-
-
 class AdvisorServer(ThreadingHTTPServer):
     daemon_threads = True
 
@@ -241,8 +205,17 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                     self.reply(502, {'error': 'Kickbase-Spielerdetails derzeit nicht abrufbar. Bitte erneut öffnen.'})
         elif path == '/api/squad-value-history':
             with self.server.lock:
+                client = self.server.kickbase
+                league_id = self.server.report.get('league')
                 player_ids = [player.get('id') for player in self.server.report.get('players', []) if player.get('owned')]
-            self.reply(200, current_squad_value_history(player_ids))
+            if not client:
+                self.reply(409, {'series': [], 'note': 'Kickbase-Livezugriff ist nicht aktiviert.'})
+            else:
+                try:
+                    self.reply(200, client.squad_value_history(league_id, player_ids))
+                except (requests.RequestException, RuntimeError, ValueError, KeyError, TypeError):
+                    self.server.log_event('ERROR Kaderwertverlauf nicht geladen')
+                    self.reply(502, {'series': [], 'note': 'Kaderwertverlauf aus Kickbase derzeit nicht abrufbar.'})
         elif path == '/api/report-job':
             self.reply(200, self.server.report_jobs.read())
         elif path == '/api/status':
