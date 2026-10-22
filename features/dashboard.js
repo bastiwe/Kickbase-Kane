@@ -11,13 +11,18 @@
   const players = Array.isArray(data.players) ? data.players : [];
   const market = (Array.isArray(data.marketPlayers) ? data.marketPlayers : []).filter(p => !p.owned);
   const mv = p => number(field(p,'mv','marketValue','market_value')) || 0;
-  const change = p => number(field(p,'change','predicted_mv_target','prediction1T','predictedChange')) || 0;
+  const prediction = p => number(field(p,'change','predicted_mv_target','prediction1T','predictedChange'));
+  const change = p => prediction(p) ?? 0;
+  const forecastText = p => prediction(p) === null ? '–' : signed(prediction(p));
   const points = p => number(field(p,'season','l3','average','avgPoints','pointsAverage','points_avg','seasonAverage'));
   const li = p => number(field(p,'li','liPercent','startingProbability'));
   const deadline = p => field(p,'expiresAt','expires_at','expiry','expiration');
   const image = p => field(p,'image','imageUrl','profileImage') || '';
-  const club = p => field(p,'team','club','teamName') || '–';
-  const position = p => field(p,'position','pos') || '–';
+  const club = p => {
+    const value = field(p,'team','club','teamName');
+    return value && value !== 'Unbekannt' ? value : 'Verein nicht geladen';
+  };
+  const position = p => ({1:'TW',2:'ABW',3:'MIT',4:'ANG'}[Number(field(p,'position','pos'))] || '–');
   const name = p => field(p,'name','playerName') || 'Unbekannt';
   const cls = value => value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral';
   const avatar = p => image(p) ? '<img class="avatar" src="'+escapeHtml(image(p))+'" alt="" loading="lazy">' : '<span class="avatar"></span>';
@@ -29,27 +34,30 @@
   function renderMetrics(){
     const budget=number(data.budget) ?? number(data.availableBudget) ?? number(data.cash);
     const rosterValue=players.reduce((sum,p)=>sum+mv(p),0);
-    const rosterChange=players.reduce((sum,p)=>sum+change(p),0);
-    const opportunities=market.filter(p=>change(p)>=50000).length;
+    const availableForecasts=players.map(prediction).filter(value=>value!==null);
+    const rosterChange=availableForecasts.reduce((sum,value)=>sum+value,0);
+    const opportunities=market.filter(p=>prediction(p)!==null && prediction(p)>=50000).length;
     $('metric-budget').textContent=budget===null?'–':euros(budget);$('metric-budget').className=cls(budget||0);
     $('metric-roster-value').textContent=euros(rosterValue);$('metric-roster-count').textContent=players.length+'/16 Spieler';
-    $('metric-roster-change').textContent=signed(rosterChange);$('metric-roster-change').className=cls(rosterChange);
+    $('metric-roster-change').textContent=availableForecasts.length ? signed(rosterChange) : '–';
+    $('metric-roster-change').className=availableForecasts.length ? cls(rosterChange) : 'neutral';
+    $('metric-roster-change-note').textContent=availableForecasts.length ? availableForecasts.length+'/'+players.length+' Prognosen verfügbar' : 'Vollreport erforderlich';
     $('metric-opportunities').textContent=String(opportunities);$('market-count').textContent=market.length+' Angebote';
   }
   function renderTopChances(){
-    const chosen=[...market].filter(p=>change(p)>=50000).sort((a,b)=>change(b)-change(a)).slice(0,3);
-    $('top-chances').innerHTML=chosen.length?chosen.map(p=>'<article class="chance"><div class="chance-top">'+playerLabel(p)+'<span class="tag">'+escapeHtml(position(p))+'</span></div><div class="chance-change"><span>Erw. MW in 1T</span><strong class="positive">'+signed(change(p))+'</strong></div><div class="chance-details"><span>MW '+euros(mv(p))+'</span><span>Ablauf '+escapeHtml(formatTime(deadline(p)))+'</span></div></article>').join(''):'<p class="empty">Keine positive Marktwertchance über der gewählten Schwelle.</p>';
+    const chosen=[...market].filter(p=>prediction(p)!==null && prediction(p)>=50000).sort((a,b)=>change(b)-change(a)).slice(0,3);
+    $('top-chances').innerHTML=chosen.length?chosen.map(p=>'<article class="chance"><div class="chance-top">'+playerLabel(p)+'<span class="tag">'+escapeHtml(position(p))+'</span></div><div class="chance-change"><span>Erw. MW in 1T</span><strong class="positive">'+forecastText(p)+'</strong></div><div class="chance-details"><span>MW '+euros(mv(p))+'</span><span>Ablauf '+escapeHtml(formatTime(deadline(p)))+'</span></div></article>').join(''):'<p class="empty">Keine positive Marktwertchance über der gewählten Schwelle.</p>';
   }
   function renderRoster(){
-    const chosen=[...players].sort((a,b)=>change(b)-change(a)).slice(0,5);
-    $('roster-movers').innerHTML=chosen.length?chosen.map(p=>'<div class="list-row">'+playerLabel(p)+'<div class="list-value '+cls(change(p))+'">'+signed(change(p))+'</div></div>').join(''):'<p class="empty">Noch kein Kader geladen.</p>';
+    const chosen=[...players].filter(p=>prediction(p)!==null).sort((a,b)=>change(b)-change(a)).slice(0,5);
+    $('roster-movers').innerHTML=chosen.length?chosen.map(p=>'<div class="list-row">'+playerLabel(p)+'<div class="list-value '+cls(change(p))+'">'+forecastText(p)+'</div></div>').join(''):'<p class="empty">Noch kein Kader geladen.</p>';
   }
   function renderRisks(){
-    const risky=[...players].filter(p=>change(p)<0).sort((a,b)=>change(a)-change(b)).slice(0,3);
+    const risky=[...players].filter(p=>prediction(p)!==null && change(p)<0).sort((a,b)=>change(a)-change(b)).slice(0,3);
     const expiring=[...market].filter(p=>deadline(p)).sort((a,b)=>timeValue(deadline(a))-timeValue(deadline(b))).slice(0,2);
     const rows=[];
-    risky.forEach(p=>rows.push('<div class="list-row">'+playerLabel(p)+'<div class="list-value negative"><span class="risk-dot red"></span>'+signed(change(p))+'</div></div>'));
-    expiring.forEach(p=>rows.push('<div class="list-row">'+playerLabel(p)+'<div class="list-value neutral"><span class="risk-dot"></span>'+escapeHtml(formatTime(deadline(p)))+'</div></div>'));
+    risky.forEach(p=>rows.push('<div class="list-row">'+playerLabel(p)+'<div class="list-value negative"><span class="risk-dot red"></span>MW-Verlust '+forecastText(p)+'</div></div>'));
+    expiring.forEach(p=>rows.push('<div class="list-row">'+playerLabel(p)+'<div class="list-value neutral"><span class="risk-dot"></span>Ablauf '+escapeHtml(formatTime(deadline(p)))+'</div></div>'));
     $('timing-risks').innerHTML=rows.length?rows.join(''):'<p class="empty">Aktuell keine auffälligen Risiken.</p>';
   }
   function sortedMarket(){
@@ -77,7 +85,7 @@
   async function pollJob(){
     try{const response=await fetch(apiPath('/api/report-job'),{cache:'no-store'});const job=await response.json();
       if(job.status==='running'){ $('report-status').textContent=(job.kind==='fast'?'Schnellreport':'Vollreport')+' läuft …';setTimeout(pollJob,5000);return;}
-      if(job.status==='done'){ $('report-status').textContent='Report fertig. Dashboard wird aktualisiert …';location.reload();return;}
+      if(job.status==='done'){ $('report-status').textContent=job.message || 'Report fertig. Dashboard wird aktualisiert …';setTimeout(()=>location.reload(),900);return;}
       if(job.status==='failed')throw Error(job.error||'Report fehlgeschlagen.');
       $('run-fast').disabled=$('run-full').disabled=false;
     }catch(error){$('report-status').textContent=error.message;$('run-fast').disabled=$('run-full').disabled=false;}
