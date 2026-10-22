@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.20
+
+- Kaderwertdiagramm nutzt nun die historische Marktwert-API von Kickbase statt einer vorausgesetzten lokalen SQLite-Historie.
+- Der Verlauf berücksichtigt deinen verfügbaren Transferfeed; ohne zuordenbare ältere Transfers zeigt er transparent die historische Entwicklung des heutigen Kaders.
+
+
 ## 0.2.19
 
 - Kaderwert-Kachel zeigt bei negativem Cash zusätzlich den bereinigten Gesamtwert: Kaderwert minus aktuellem Fehlbetrag.
