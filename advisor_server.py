@@ -22,6 +22,7 @@ from features.advisor_live import LiveKickbase, normalize_lineup
 from features.sale_bonus import load_sale_bonus
 from features.predictions.snapshot import forecast_metadata, multi_day_prediction, read_prediction_snapshot, project_to_matchday
 from features.report_jobs import ReportJobs
+from features.github_forecast_sync import dispatch_workflow
 
 
 APP_ROOT = Path(__file__).resolve().parent
@@ -279,7 +280,19 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(length))
             if not isinstance(body, dict):
                 raise ValueError('Ungültige Anfrage.')
-            if path == '/api/report-job':
+            if path == '/api/github-report':
+                kind = body.get('kind')
+                workflows = {'full': 'actions_spaet.yml', 'fast': 'actions_fast.yml'}
+                if kind not in workflows:
+                    raise ValueError('Ungültige Reportart.')
+                result = dispatch_workflow(
+                    os.getenv('GITHUB_FORECAST_TOKEN', ''),
+                    os.getenv('GITHUB_FORECAST_REPOSITORY', 'bastiwe/Kickbase-Kane'),
+                    workflows[kind],
+                )
+                self.server.log_event('OK /api/github-report kind=' + kind)
+                self.reply(202, result)
+            elif path == '/api/report-job':
                 self.reply(202, self.server.report_jobs.start(body.get('kind')))
             elif path == '/api/key':
                 key = body.get('key')
