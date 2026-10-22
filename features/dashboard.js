@@ -10,6 +10,7 @@
   const field = (player,...names) => { for(const name of names){if(player && player[name] !== undefined && player[name] !== null && player[name] !== '') return player[name];} return null; };
   const players = Array.isArray(data.players) ? data.players : [];
   const market = (Array.isArray(data.marketPlayers) ? data.marketPlayers : []).filter(p => !p.owned);
+  const TRADING_THRESHOLD = 100000;
   const mv = p => number(field(p,'mv','marketValue','market_value')) || 0;
   const prediction = p => number(field(p,'change','predicted_mv_target','prediction1T','predictedChange'));
   const change = p => prediction(p) ?? 0;
@@ -36,7 +37,7 @@
     const rosterValue=players.reduce((sum,p)=>sum+mv(p),0);
     const availableForecasts=players.map(prediction).filter(value=>value!==null);
     const rosterChange=availableForecasts.reduce((sum,value)=>sum+value,0);
-    const opportunities=market.filter(p=>prediction(p)!==null && prediction(p)>=50000).length;
+    const opportunities=market.filter(p=>prediction(p)!==null && prediction(p)>=TRADING_THRESHOLD).length;
     $('metric-budget').textContent=budget===null?'–':euros(budget);$('metric-budget').className=cls(budget||0);
     $('metric-roster-value').textContent=euros(rosterValue);$('metric-roster-count').textContent=players.length+'/16 Spieler';
     $('metric-roster-change').textContent=availableForecasts.length ? signed(rosterChange) : '–';
@@ -45,7 +46,7 @@
     $('metric-opportunities').textContent=String(opportunities);$('market-count').textContent=market.length+' Angebote';
   }
   function renderTopChances(){
-    const chosen=[...market].filter(p=>prediction(p)!==null && prediction(p)>=50000).sort((a,b)=>change(b)-change(a)).slice(0,3);
+    const chosen=[...market].filter(p=>prediction(p)!==null && prediction(p)>=TRADING_THRESHOLD).sort((a,b)=>change(b)-change(a)).slice(0,3);
     $('top-chances').innerHTML=chosen.length?chosen.map(p=>'<article class="chance"><div class="chance-top">'+playerLabel(p)+'<span class="tag">'+escapeHtml(position(p))+'</span></div><div class="chance-change"><span>Erw. MW in 1T</span><strong class="positive">'+forecastText(p)+'</strong></div><div class="chance-details"><span>MW '+euros(mv(p))+'</span><span>Ablauf '+escapeHtml(formatTime(deadline(p)))+'</span></div></article>').join(''):'<p class="empty">Keine positive Marktwertchance über der gewählten Schwelle.</p>';
   }
   function renderRoster(){
@@ -61,8 +62,8 @@
     const update=nextMarketUpdate();
     const nightEnd=update+11*60*60*1000;
     const risky=[...players].filter(p=>prediction(p)!==null && change(p)<0).sort((a,b)=>change(a)-change(b)).slice(0,3);
-    const beforeUpdate=[...market].filter(p=>prediction(p)!==null && change(p)>=50000 && timeValue(deadline(p))<=update).sort((a,b)=>change(b)-change(a)).slice(0,2);
-    const overnight=[...market].filter(p=>prediction(p)!==null && change(p)>=50000 && timeValue(deadline(p))>update && timeValue(deadline(p))<=nightEnd).sort((a,b)=>change(b)-change(a)).slice(0,2);
+    const beforeUpdate=[...market].filter(p=>prediction(p)!==null && change(p)>=TRADING_THRESHOLD && timeValue(deadline(p))<=update).sort((a,b)=>change(b)-change(a)).slice(0,2);
+    const overnight=[...market].filter(p=>prediction(p)!==null && change(p)>=TRADING_THRESHOLD && timeValue(deadline(p))>update && timeValue(deadline(p))<=nightEnd).sort((a,b)=>change(b)-change(a)).slice(0,2);
     const rows=[];
     risky.forEach(p=>rows.push('<div class="list-row">'+playerLabel(p)+'<div class="list-value negative"><span class="risk-dot red"></span>Drohender MW-Verlust '+forecastText(p)+'</div></div>'));
     beforeUpdate.forEach(p=>rows.push('<div class="list-row">'+playerLabel(p)+'<div class="list-value positive"><span class="risk-dot green"></span>Top-Chance vor 22 Uhr '+forecastText(p)+'</div></div>'));
