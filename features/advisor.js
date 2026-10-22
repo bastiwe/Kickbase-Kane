@@ -3,8 +3,9 @@
 (() => {
   const local = window.KICKBASE_ADVISOR;
   if (!local) return;
-  const basePath = local.basePath || '';
-  const appPath = path => basePath + path;
+  // In Home Assistant Ingress the document already lives below the
+  // per-session proxy path. Relative URLs must stay below that path.
+  const appPath = path => path.replace(/^\\//, '');
   const element = id => document.getElementById(id);
   let history = [], pending = false, lastPlan = null;
   const shell = document.createElement('section');
