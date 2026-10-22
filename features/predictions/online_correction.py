@@ -225,9 +225,10 @@ def settle_online_forecasts(player_df: pd.DataFrame, settled_at: datetime | None
             str(target_date),
             str(player_id),
         )
-        for target_date, player_id, actual, prediction in settled[
-            ["target_date", "player_id", "actual_change"]
-        ].itertuples(index=False, name=None)
+        for (target_date, player_id, actual), prediction in zip(
+            settled[["target_date", "player_id", "actual_change"]].itertuples(index=False, name=None),
+            online_predictions,
+        )
     ]
     with sqlite3.connect(DB_PATH) as conn:
         conn.executemany(
