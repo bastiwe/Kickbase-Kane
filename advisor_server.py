@@ -145,12 +145,15 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             live_message = ''
             with self.server.lock:
                 report, kickbase = self.server.report, self.server.kickbase
-            if kickbase and report.get('players'):
+            if kickbase:
                 try:
-                    seed = {'selection': [], 'plans': {
-                        str(p['id']): {'action': 'keep' if p.get('owned') else 'skip'}
-                        for p in report['players']}, 'budget': report.get('budget')}
-                    refreshed, _, info = kickbase.refresh(report, seed)
+                    if report.get('players'):
+                        seed = {'selection': [], 'plans': {
+                            str(p['id']): {'action': 'keep' if p.get('owned') else 'skip'}
+                            for p in report['players']}, 'budget': report.get('budget')}
+                        refreshed, _, info = kickbase.refresh(report, seed)
+                    else:
+                        refreshed, _, info = kickbase.bootstrap(os.getenv('KICK_LEAGUE_NAME', ''))
                     snapshot = read_prediction_snapshot(DATA_ROOT / 'prediction_snapshot_1t.json')
                     if snapshot:
                         horizon = refreshed.get('forecastHorizon') or report.get('forecastHorizon')
@@ -175,7 +178,7 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                 except (RuntimeError, requests.RequestException, ValueError, KeyError, TypeError):
                     live_message = 'Live-Kader konnte nicht geladen werden. Angezeigt wird der alte Reportstand.'
                     self.server.log_event('ERROR Live-Kader beim Seitenaufruf nicht geladen')
-            elif not kickbase:
+            else:
                 live_message = 'Livezugriff nicht aktiviert. Angezeigt wird der Reportstand.'
             with self.server.lock:
                 payload = json.dumps(self.server.report, ensure_ascii=True, allow_nan=False).replace('<', '\\u003c')
