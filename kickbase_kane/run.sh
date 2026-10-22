@@ -7,9 +7,11 @@ export KICKBASE_DATA_DIR=/data
 export KICK_USER="$(bashio::config 'kick_user')"
 export KICK_PASS="$(bashio::config 'kick_pass')"
 export KICK_LEAGUE_NAME="$(bashio::config 'league_name')"
+export EMAIL_USER="$(bashio::config 'email_user')"
+export EMAIL_PASS="$(bashio::config 'email_pass')"
 export OPENAI_API_KEY="$(bashio::config 'openai_api_key')"
 export OPENAI_MODEL="$(bashio::config 'openai_model')"
-export KICKBASE_REPORT_TIME="$(bashio::config 'report_time')"
+export KICKBASE_REPORT_TIMES="$(bashio::config 'report_times')"
 
 # A first live snapshot gives the web server a real league/user context before
 # the first scheduled full forecast has run. Later starts reuse the persisted
