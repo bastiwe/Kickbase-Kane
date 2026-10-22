@@ -1,4 +1,4 @@
-"""Local-only host for the planner and its interactive OpenAI adviser."""
+"""Local-only host for the Kickbase trading dashboard and report jobs."""
 
 import argparse
 from html.parser import HTMLParser
@@ -180,17 +180,10 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                 payload = json.dumps(self.server.report, ensure_ascii=True, allow_nan=False).replace('<', '\\u003c')
                 settings = json.dumps({'csrf': self.server.csrf, 'revision': self.server.revision,
                                        'liveMessage': live_message}, ensure_ascii=True).replace('<', '\\u003c')
-            template = (APP_ROOT / 'features/lineup_optimizer.html').read_text(encoding='utf-8')
-            page = template.replace('__PAYLOAD__', payload)
-            # Home Assistant serves Ingress below a per-installation path. Keep
-            # all browser URLs relative to the current document so the proxy
-            # remains inside that path rather than redirecting to Home Assistant.
-            page = page.replace('</head>', '<link rel="stylesheet" href="advisor.css"><script>window.KICKBASE_ADVISOR='
-                                + settings + ';</script></head>')
-            page = page.replace('<header>', '<header><div class="ha-app-status">KICKBASE KANE <span>Home Assistant · lokal</span></div>')
-            page = page.replace('</body>', '<script src="advisor.js"></script></body>')
+            template = (APP_ROOT / 'features/trading_dashboard.html').read_text(encoding='utf-8')
+            page = template.replace('__PAYLOAD__', payload).replace('__SETTINGS__', settings)
             self.reply(200, page, 'text/html; charset=utf-8')
-        elif path in ('/advisor.js', '/advisor.css'):
+        elif path in ('/dashboard.js', '/dashboard.css'):
             name = path.lstrip('/')
             content_type = 'text/javascript; charset=utf-8' if name.endswith('.js') else 'text/css; charset=utf-8'
             self.reply(200, (APP_ROOT / 'features' / name).read_text(encoding='utf-8'), content_type)
