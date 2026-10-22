@@ -18,6 +18,7 @@
   const points = p => number(field(p,'season','l3','average','avgPoints','pointsAverage','points_avg','seasonAverage'));
   const li = p => number(field(p,'li','liPercent','startingProbability'));
   const deadline = p => field(p,'expiresAt','expires_at','expiry','expiration');
+  const lastMarketChange = p => number(field(p,'lastMvChange','last_market_change','latestMarketChange'));
   const image = p => field(p,'image','imageUrl','profileImage') || '';
   const club = p => {
     const value = field(p,'team','club','teamName');
@@ -37,13 +38,19 @@
     const rosterValue=players.reduce((sum,p)=>sum+mv(p),0);
     const availableForecasts=players.map(prediction).filter(value=>value!==null);
     const rosterChange=availableForecasts.reduce((sum,value)=>sum+value,0);
-    const opportunities=market.filter(p=>prediction(p)!==null && prediction(p)>=TRADING_THRESHOLD).length;
+    const realisedChanges=players.map(lastMarketChange).filter(value=>value!==null);
+    const realisedChange=realisedChanges.reduce((sum,value)=>sum+value,0);
+    const buyingPower=number(data.buyingPower);
+    const openBidTotal=number(data.openBidTotal) || 0;
     $('metric-budget').textContent=budget===null?'–':euros(budget);$('metric-budget').className=cls(budget||0);
+    $('metric-budget-note').textContent=buyingPower===null?'Kaufkraft wird geladen':'Kaufkraft nach offenen Geboten: '+signed(buyingPower)+(openBidTotal?' · Gebote '+euros(openBidTotal):'');
+    $('metric-budget-note').className=buyingPower===null?'':' '+cls(buyingPower);
     $('metric-roster-value').textContent=euros(rosterValue);$('metric-roster-count').textContent=players.length+'/16 Spieler';
     $('metric-roster-change').textContent=availableForecasts.length ? signed(rosterChange) : '–';
     $('metric-roster-change').className=availableForecasts.length ? cls(rosterChange) : 'neutral';
-    $('metric-roster-change-note').textContent=availableForecasts.length ? availableForecasts.length+'/'+players.length+' Prognosen verfügbar' : 'Vollreport erforderlich';
-    $('metric-opportunities').textContent=String(opportunities);$('market-count').textContent=market.length+' Angebote';
+    $('metric-roster-change-note').textContent=realisedChanges.length ? 'Letztes MW-Update: '+signed(realisedChange)+' · '+realisedChanges.length+'/'+players.length+' Spieler' : 'Letztes MW-Update wird geladen';
+    $('metric-roster-change-note').className=realisedChanges.length ? cls(realisedChange) : 'neutral';
+    $('market-count').textContent=market.length+' Angebote';
   }
   function renderTopChances(){
     const nextUpdate=nextMarketUpdate();
