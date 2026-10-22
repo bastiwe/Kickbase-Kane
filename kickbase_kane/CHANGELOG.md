@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.21
+
+- „Dein Kader · Wertentwicklung“ zeigt nun alle Kaderspieler statt nur fünf.
+- Jede Zeile ist aufklappbar und lädt die vier letzten tatsächlichen täglichen Marktwertänderungen direkt aus der Kickbase-API.
+
+
 ## 0.2.20
 
 - Kaderwertdiagramm nutzt nun die historische Marktwert-API von Kickbase statt einer vorausgesetzten lokalen SQLite-Historie.
