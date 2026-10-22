@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.23
+
+- Das Dashboard kann „Vollreport“ und „Fast 1T“ direkt als GitHub-Action starten.
+- Der dafür konfigurierte Fine-grained Token benötigt für `bastiwe/Kickbase-Kane` die Berechtigung `Actions: Read and write`; der fertige Snapshot wird danach weiterhin automatisch synchronisiert.
+
+
 ## 0.2.22
 
 - Kacheln unter „Beste Chancen vor MW-Update“ sind nun aufklappbar und zeigen ebenfalls die vier letzten tatsächlichen Tagesänderungen eines Spielers.
