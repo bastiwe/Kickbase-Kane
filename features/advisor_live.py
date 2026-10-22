@@ -59,6 +59,42 @@ def local_player_metadata(player_ids):
     return result
 
 
+def activity_field(value):
+    """Return an id/name from the inconsistent activity-feed value shapes."""
+    if isinstance(value, dict):
+        for key in ('i', 'id', 'ui', 'u', 'n', 'name', 'v', 'value'):
+            if value.get(key) not in (None, ''):
+                return activity_field(value[key])
+        return ''
+    return str(value or '').strip()
+
+
+def activity_party_matches(value, user_id, user_name):
+    if isinstance(value, dict):
+        values = [activity_field(value.get(key)) for key in ('i', 'id', 'ui', 'u', 'n', 'name')]
+    else:
+        values = [activity_field(value)]
+    normalized = {value.casefold() for value in values if value}
+    return str(user_id).casefold() in normalized or str(user_name).casefold() in normalized
+
+
+def activity_player_id(data):
+    for key in ('pi', 'player', 'p', 'playerId', 'player_id', 'id'):
+        value = data.get(key)
+        if isinstance(value, dict):
+            value = value.get('i') or value.get('id') or value.get('pi')
+        if value is not None and str(value).isdigit():
+            return str(value)
+    return None
+
+
+def activity_day(value):
+    try:
+        return datetime.fromisoformat(str(value).replace('Z', '+00:00')).date().isoformat()
+    except (TypeError, ValueError):
+        return ''
+
+
 def normalize_lineup(payload):
     """Normalize the v4 slot-based lineup, including empty starting slots."""
     if not isinstance(payload, dict):
@@ -134,6 +170,91 @@ class LiveKickbase:
 
     def lineup(self, league_id):
         return self.get('/leagues/' + quote(str(league_id), safe='') + '/lineup')
+
+    def squad_value_history(self, league_id, player_ids):
+        """Reconstruct the real squad-value path from own transfer activities."""
+        database = Path(os.getenv('KICKBASE_DATA_DIR', '.')) / 'player_data_total.db'
+        current_ids = {str(player_id) for player_id in player_ids if str(player_id).isdigit()}
+        if not current_ids or not database.exists():
+            return {'series': [], 'note': 'Historische Kaderwerte sind noch nicht verfügbar.'}
+
+        user = self.get('/user/settings').get('u', {})
+        user_id = str(user.get('i') or user.get('id') or user.get('ui') or '')
+        user_name = str(user.get('n') or user.get('name') or '')
+        feed = self.get('/leagues/' + quote(str(league_id), safe='') + '/activitiesFeed?max=5000')
+        own_trades = []
+        all_ids = set(current_ids)
+        for entry in feed.get('af', []):
+            if entry.get('t') != 15:
+                continue
+            data = entry.get('data') or {}
+            day = activity_day(entry.get('dt'))
+            player_id = activity_player_id(data)
+            if not day or not player_id:
+                continue
+            bought = activity_party_matches(data.get('byr') or data.get('buyer'), user_id, user_name)
+            sold = activity_party_matches(data.get('slr') or data.get('seller'), user_id, user_name)
+            if bought == sold:
+                continue
+            own_trades.append((day, player_id, bought))
+            all_ids.add(player_id)
+        if not own_trades:
+            return {'series': [], 'note': 'Eigene Transferhistorie konnte über die Kickbase-API nicht zugeordnet werden.'}
+
+        today = datetime.now(timezone.utc).date()
+        season_year = today.year if today.month >= 7 else today.year - 1
+        season_start = f'{season_year}-08-01'
+        placeholders = ','.join('?' for _ in all_ids)
+        try:
+            with sqlite3.connect(database) as connection:
+                rows = connection.execute(
+                    f"""SELECT substr(date, 1, 10) AS day, player_id, MAX(mv)
+                         FROM player_data_1d
+                         WHERE player_id IN ({placeholders})
+                           AND substr(date, 1, 10) >= ?
+                           AND mv IS NOT NULL
+                         GROUP BY substr(date, 1, 10), player_id
+                         ORDER BY day DESC""",
+                    [*sorted(all_ids), season_start],
+                ).fetchall()
+        except sqlite3.Error:
+            return {'series': [], 'note': 'Historische Marktwerte sind derzeit nicht lesbar.'}
+
+        values = {}
+        for day, player_id, market_value in rows:
+            if day and market_value is not None:
+                values.setdefault(day, {})[str(player_id)] = float(market_value)
+        if len(values) < 2:
+            return {'series': [], 'note': 'Noch nicht genügend historische Marktwerte verfügbar.'}
+
+        reverse_trades = sorted(own_trades, key=lambda item: item[0], reverse=True)
+        roster = set(current_ids)
+        index = 0
+        series = []
+        for day in sorted(values, reverse=True):
+            # Apply all transfers that happened after this day's final value.
+            while index < len(reverse_trades) and reverse_trades[index][0] > day:
+                _, player_id, bought = reverse_trades[index]
+                if bought:
+                    roster.discard(player_id)
+                else:
+                    roster.add(player_id)
+                index += 1
+            day_values = values[day]
+            total = sum(day_values.get(player_id, 0) for player_id in roster)
+            covered = sum(1 for player_id in roster if player_id in day_values)
+            if covered:
+                series.append({'date': day, 'value': round(total), 'players': covered})
+
+        series.reverse()
+        first_trade = min(day for day, _, _ in own_trades)
+        return {
+            'series': series,
+            'note': (
+                'Kaderwert aus deinem Kickbase-Transferverlauf und den historischen Marktwerten rekonstruiert.'
+                + (f' Transferfeed ab {first_trade} verfügbar.' if first_trade > season_start else '')
+            ),
+        }
 
     def apply_lineup(self, league_id, formation, player_ids):
         league_path = '/leagues/' + quote(str(league_id), safe='') + '/lineup'
