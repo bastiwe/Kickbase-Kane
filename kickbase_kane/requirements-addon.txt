@@ -1,0 +1,11 @@
+# Runtime dependencies for the Home Assistant add-on.
+# Keep this in sync with the repository root requirements.txt. It is copied
+# before the source checkout so Docker can cache the expensive Python layer.
+scikit-learn
+scipy>=1.9
+matplotlib
+python-dotenv
+pandas
+numpy
+IPython
+requests
