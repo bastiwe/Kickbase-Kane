@@ -26,14 +26,9 @@ if [ -z "$KICKBASE_REPORT_TIMES" ] || [ "$KICKBASE_REPORT_TIMES" = "null" ]; the
   export KICKBASE_REPORT_TIMES="21:40,22:10"
 fi
 
-# A first live snapshot gives the web server a real league/user context before
-# the first scheduled full forecast has run. Later starts reuse the persisted
-# report and do not repeat this relatively slow request.
+# The dashboard establishes its live context directly from Kickbase on first
+# page load. Forecast snapshots are filled by scheduled or manual reports.
 cd /data
-if [ ! -f /data/startelf_optimizer.html ] && [ -n "$KICK_USER" ] && [ -n "$KICK_PASS" ]; then
-  bashio::log.info "Erzeuge initialen Kickbase-Kaderstand ..."
-  python /app/startelf_optimizer.py || bashio::log.warning "Initialer Kaderstand fehlgeschlagen; Report kann in der Web-Oberflaeche erneut gestartet werden."
-fi
 
 python /app/addon_schedule_reports.py &
 exec python /app/advisor_server.py --port 8099 --no-browser
