@@ -166,7 +166,28 @@
     }
     $('forecast-status').textContent=raw?'Prognose: '+source+' · '+stamp:'Prognose: '+source;
   }
+  async function startGitHubReport(kind, button){
+    const buttons=[...document.querySelectorAll('.report-actions .button')];
+    buttons.forEach(item=>item.disabled=true);
+    $('live-status').textContent=(kind==='full'?'Vollreport':'Fast 1T')+' wird in GitHub gestartet …';
+    try{
+      const response=await fetch(apiPath('/api/github-report'),{
+        method:'POST',
+        headers:{'Content-Type':'application/json','X-Advisor-Token':settings.csrf},
+        body:JSON.stringify({kind}),
+      });
+      const payload=await response.json();
+      if(!response.ok)throw new Error(payload.error||'Start fehlgeschlagen');
+      $('live-status').textContent=(kind==='full'?'Vollreport':'Fast 1T')+' in GitHub gestartet. Der Snapshot wird anschließend automatisch übernommen.';
+    }catch(error){
+      $('live-status').textContent='GitHub-Report nicht gestartet: '+(error.message||'Unbekannter Fehler');
+    }finally{
+      buttons.forEach(item=>item.disabled=false);
+    }
+  }
   $('market-sort').onchange=renderTable;
+  $('run-full-report').onclick=()=>startGitHubReport('full',$('run-full-report'));
+  $('run-fast-report').onclick=()=>startGitHubReport('fast',$('run-fast-report'));
   $('live-status').textContent=settings.liveMessage||data.generated||'Reportstand geladen';
   renderForecastStatus();render();renderValueHistory();
 })();
