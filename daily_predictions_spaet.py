@@ -63,8 +63,12 @@ features = [
 prediction_targets = {
     "predicted_mv_target": "mv_target_clipped",
     "predicted_mv_target_3d": "mv_target_3d_clipped",
-    "predicted_mv_target_7d": "mv_target_7d_clipped",
 }
+# The 7T forecast is optional because the full report otherwise retains a
+# third large model in memory. GitHub keeps the original default; the
+# Home-Assistant add-on disables it for reliable Raspberry Pi runs.
+if os.getenv("FULL_REPORT_INCLUDE_7D", "1").strip().lower() not in ("0", "false", "no"):
+    prediction_targets["predicted_mv_target_7d"] = "mv_target_7d_clipped"
 
 # Set dot as thousands separator for better readability
 pd.options.display.float_format = lambda x: '{:,.0f}'.format(x).replace(',', '.')
@@ -142,6 +146,9 @@ for prediction_column, target in prediction_targets.items():
         f"{prediction_column}: "
         f"Signs correct: {signs_percent:.2f}% | RMSE: {rmse:.2f} | MAE: {mae:.2f} | R2: {r2:.2f}"
     )
+    # Release split arrays before the next target model is trained.
+    del X_train, X_test, y_train, y_test
+
 
 # Make live data predictions
 live_predictions_df = live_data_predictions(today_df, models, features, proc_player_df, league_start_date, report_only=True)
