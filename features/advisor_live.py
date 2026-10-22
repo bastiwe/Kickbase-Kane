@@ -2,8 +2,11 @@
 
 from copy import deepcopy
 from datetime import datetime, timezone
+from pathlib import Path
 from urllib.parse import quote
 
+import os
+import sqlite3
 import requests
 import re
 import time
@@ -12,6 +15,48 @@ from features.player_details import build_details
 
 from kickbase_api.config import BASE_URL
 from features.lineup_optimizer import forecast_horizon_from_matchdays, market_context
+
+
+def local_player_metadata(player_ids):
+    """Fill sparse live market records from the local historical player cache."""
+    ids = [str(player_id) for player_id in player_ids if str(player_id).isdigit()]
+    database = Path(os.getenv('KICKBASE_DATA_DIR', '.')) / 'player_data_total.db'
+    if not ids or not database.exists():
+        return {}
+    try:
+        with sqlite3.connect(database) as connection:
+            columns = {row[1] for row in connection.execute('PRAGMA table_info(player_data_1d)')}
+            if 'player_id' not in columns:
+                return {}
+            select = {
+                'first_name': 'first_name' if 'first_name' in columns else "''",
+                'last_name': 'last_name' if 'last_name' in columns else "''",
+                'team_name': 'team_name' if 'team_name' in columns else "''",
+                'team_id': 'team_id' if 'team_id' in columns else "''",
+                'image_url': 'image_url' if 'image_url' in columns else "''",
+                'date': 'date' if 'date' in columns else "''",
+            }
+            placeholders = ','.join('?' for _ in ids)
+            rows = connection.execute(
+                f"""SELECT player_id, {select['first_name']}, {select['last_name']},
+                           {select['team_name']}, {select['team_id']}, {select['image_url']}
+                    FROM player_data_1d
+                    WHERE player_id IN ({placeholders})
+                    ORDER BY {select['date']} DESC""",
+                ids,
+            ).fetchall()
+    except sqlite3.Error:
+        return {}
+    result = {}
+    for player_id, first_name, last_name, team_name, team_id, image_url in rows:
+        result.setdefault(str(player_id), {
+            'first_name': first_name or '',
+            'last_name': last_name or '',
+            'team_name': team_name or '',
+            'team_id': team_id or '',
+            'image_url': image_url or '',
+        })
+    return result
 
 
 def normalize_lineup(payload):
@@ -145,6 +190,9 @@ class LiveKickbase:
                 forecast_horizon = None
         old = {str(p['id']): p for p in report['players'] + report.get('marketPlayers', [])}
         own_ids = {str(p['i']) for p in squad}
+        cached_metadata = local_player_metadata(
+            [item.get('i') for item in squad] + [item.get('i') for item in market]
+        )
         name_lookups = 0
 
         def convert(items, owned):
@@ -152,7 +200,21 @@ class LiveKickbase:
             enriched = []
             for item in items:
                 item = dict(item)
-                previous = old.get(str(item.get('i')), {})
+                player_id = str(item.get('i'))
+                previous = old.get(player_id, {})
+                stored = cached_metadata.get(player_id, {})
+                # /market and /squad are intentionally lean. The local model
+                # database already knows names and clubs for nearly all players.
+                if not item.get('fn') and stored.get('first_name'):
+                    item['fn'] = stored['first_name']
+                if not item.get('ln') and stored.get('last_name'):
+                    item['ln'] = stored['last_name']
+                if not item.get('tn') and stored.get('team_name'):
+                    item['tn'] = stored['team_name']
+                if not item.get('tid') and stored.get('team_id'):
+                    item['tid'] = stored['team_id']
+                if not item.get('image_url') and stored.get('image_url'):
+                    item['image_url'] = stored['image_url']
                 known_name = previous.get('name', '')
                 if re.fullmatch(r'Spieler\s+\d+', known_name):
                     known_name = ''
@@ -161,7 +223,7 @@ class LiveKickbase:
                     name_lookups += 1
                     try:
                         detail = self.get('/competitions/1/players/' + quote(str(item.get('i')), safe=''))
-                        for field in ('fn', 'ln'):
+                        for field in ('fn', 'ln', 'tn', 'tid', 'pim'):
                             if detail.get(field):
                                 item[field] = detail[field]
                     except requests.RequestException:
@@ -200,8 +262,8 @@ class LiveKickbase:
                               'minutes', 'cards', 'goals', 'assists'):
                     if player.get(field) is None and previous.get(field) is not None:
                         player[field] = previous[field]
-                if player['team'] == 'Unbekannt' and player['teamId'] == previous.get('teamId'):
-                    player['team'] = previous.get('team', 'Unbekannt')
+                if player['team'] == 'Unbekannt' and previous.get('team') not in (None, '', 'Unbekannt'):
+                    player['team'] = previous['team']
                 player['owned'] = owned
                 result.append(player)
             return result
