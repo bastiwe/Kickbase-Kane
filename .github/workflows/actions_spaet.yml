@@ -72,6 +72,14 @@ jobs:
         run: |
           python daily_predictions_spaet.py
 
+      - name: Upload dashboard forecast snapshot
+        if: ${{ success() && hashFiles('prediction_snapshot_1t.json') != '' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: kickbase-forecast-snapshot
+          path: prediction_snapshot_1t.json
+          retention-days: 14
+
       - name: Upload lineup optimizer
         if: steps.berlin-time.outputs.run == 'true' && hashFiles('startelf_optimizer.html') != ''
         uses: actions/upload-artifact@v6
