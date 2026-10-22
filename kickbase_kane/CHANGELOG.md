@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.18
+
+- Live-Dashboard priorisiert Kickbase-Spielerprofile für Position, Status, Gesamtpunkte, Punkteschnitt, Minuten, Bilder, Vereins- und Marktwertdaten.
+- Der GitHub-Snapshot bleibt auf die nicht von Kickbase gelieferten Werte beschränkt: Marktwertprognosen und LigaInsider-Signale.
+
+
 ## 0.2.17
 
 - Dashboard zeigt unter dem verfügbaren Budget die Kaufkraft nach der Kickbase-33%-Regel, abzüglich eigener offener Gebote.
