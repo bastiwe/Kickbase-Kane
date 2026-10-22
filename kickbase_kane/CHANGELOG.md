@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.11
+
+- Schnellreport aktualisiert nun auch Namen, Vereine, Bilder und Marktmetadaten im Dashboard.
+- Handlungsbedarf unterscheidet drohende Kaderverluste, Top-Chancen vor 22 Uhr und Nachtgebote bis 09 Uhr.
+- Kaderwert-Entwicklungsdiagramm seit Saisonstart ergänzt.
+
 ## 0.2.10
 
 - Report-Fortschritt direkt unter dem Dashboard-Kopf und den Report-Buttons platziert.
