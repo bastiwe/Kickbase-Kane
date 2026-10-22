@@ -1,5 +1,11 @@
 from features.fast_notifier import send_fast_mail
 from features.predictions.snapshot import write_prediction_snapshot
+from features.predictions.online_correction import (
+    apply_online_correction,
+    online_correction_status,
+    record_online_forecasts,
+    settle_online_forecasts,
+)
 from features.predictions.data_handler import (
     check_if_data_reload_needed,
     create_player_data_table,
@@ -75,7 +81,10 @@ def generate_fast_report_data(source='Fast 1T'):
     player_df = hydrate_missing_live_players(
         token, competition_ids[0], player_df, live_player_ids, last_mv_values, last_pfm_values
     )
-    print("\nData loaded from database.")
+    settled_online_forecasts = settle_online_forecasts(player_df)
+if settled_online_forecasts:
+    print(f"Online calibration settled {settled_online_forecasts} previous forecasts.")
+print("\nData loaded from database.")
 
     proc_player_df, today_df = preprocess_player_data(player_df)
     print("\nData preprocessed.")
@@ -96,7 +105,11 @@ def generate_fast_report_data(source='Fast 1T'):
         report_only=True,
     )
 
-    forecast_snapshot = write_prediction_snapshot(live_predictions_df, source, competition_ids[0])
+    record_online_forecasts(live_predictions_df)
+live_predictions_df = apply_online_correction(live_predictions_df)
+print(f"Online calibration status: {online_correction_status()}")
+
+forecast_snapshot = write_prediction_snapshot(live_predictions_df, source, competition_ids[0])
 
     market_df = join_current_market(
         token, league_id, live_predictions_df, current_user_id, report_only=True, include_player_id=True
