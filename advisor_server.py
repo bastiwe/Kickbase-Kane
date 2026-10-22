@@ -206,6 +206,21 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                 except (requests.RequestException, RuntimeError, ValueError, KeyError, TypeError) as exc:
                     self.server.log_event('ERROR Spielerdetails: ' + type(exc).__name__)
                     self.reply(502, {'error': 'Kickbase-Spielerdetails derzeit nicht abrufbar. Bitte erneut öffnen.'})
+        elif path.startswith('/api/player-market-history/'):
+            player_id = path.rsplit('/', 1)[-1]
+            with self.server.lock:
+                client = self.server.kickbase
+                owned = {str(p['id']) for p in self.server.report.get('players', []) if p.get('owned')}
+            if not client:
+                self.reply(409, {'error': 'Kickbase-Livezugriff ist nicht aktiviert.'})
+            elif player_id not in owned:
+                self.reply(404, {'error': 'Spieler nicht im aktuellen Kader.'})
+            else:
+                try:
+                    self.reply(200, client.player_daily_market_changes(player_id))
+                except (requests.RequestException, RuntimeError, ValueError, KeyError, TypeError):
+                    self.server.log_event('ERROR Spieler-Marktwerthistorie nicht geladen')
+                    self.reply(502, {'error': 'Marktwerthistorie derzeit nicht abrufbar.'})
         elif path == '/api/squad-value-history':
             with self.server.lock:
                 client = self.server.kickbase
