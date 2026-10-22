@@ -40,6 +40,14 @@ jobs:
         run: |
           python daily_predictions_fast.py
 
+      - name: Upload dashboard forecast snapshot
+        if: ${{ success() && hashFiles('prediction_snapshot_1t.json') != '' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: kickbase-forecast-snapshot
+          path: prediction_snapshot_1t.json
+          retention-days: 14
+
       - name: Save completed 1T forecasts
         if: ${{ !cancelled() && hashFiles('prediction_snapshot_1t.json') != '' }}
         uses: actions/cache/save@v5
