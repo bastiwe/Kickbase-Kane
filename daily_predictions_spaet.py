@@ -14,6 +14,8 @@ from features.lineup_optimizer import write_lineup_optimizer
 from features.predictions.snapshot import write_prediction_snapshot
 from features.predictions.data_handler import (
     create_player_data_table,
+    create_market_snapshot_table,
+    save_market_snapshot,
     check_if_data_reload_needed,
     save_player_data_to_db,
     load_player_data_from_db,
@@ -93,11 +95,14 @@ league_id = os.getenv('REPORT_LEAGUE_ID') or league_id
 
 # Data handling
 create_player_data_table()
+create_market_snapshot_table()
 reload_data = check_if_data_reload_needed()
 save_player_data_to_db(token, competition_ids, last_mv_values, last_pfm_values, reload_data)
 player_df = load_player_data_from_db()
+market_players = get_league_players_on_market(token, league_id, current_user_id)
+save_market_snapshot(league_id, market_players)
 live_player_ids = {
-    item.get("id") for item in get_league_players_on_market(token, league_id, current_user_id)
+    item.get("id") for item in market_players
 }
 live_player_ids.update(
     item.get("i") for item in get_players_in_squad(token, league_id).get("it", [])
