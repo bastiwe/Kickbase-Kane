@@ -38,6 +38,35 @@ def _is_valid_snapshot(payload):
     return isinstance(payload, dict) and isinstance(payload.get("predictions"), dict)
 
 
+def dispatch_workflow(token, repository, workflow_file):
+    """Start one allow-listed workflow on main through GitHub Actions."""
+    if not token:
+        raise RuntimeError('GitHub-Token nicht konfiguriert.')
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository or ""):
+        raise RuntimeError('Ungültiger GitHub-Repositoryname.')
+    if workflow_file not in {'actions_spaet.yml', 'actions_fast.yml'}:
+        raise RuntimeError('Ungültiger Prognose-Workflow.')
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": "Bearer " + token,
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    try:
+        response = requests.post(
+            f"{API_ROOT}/repos/{repository}/actions/workflows/{workflow_file}/dispatches",
+            headers=headers, json={"ref": "main"}, timeout=(5, 20),
+        )
+    except requests.RequestException as exc:
+        raise RuntimeError('GitHub-Workflow konnte nicht gestartet werden.') from exc
+    if response.status_code in (401, 403):
+        raise RuntimeError('GitHub-Token braucht für dieses Repository Actions: Read and write.')
+    if response.status_code == 404:
+        raise RuntimeError('GitHub-Workflow wurde nicht gefunden oder der Token darf ihn nicht ausführen.')
+    if response.status_code not in (200, 201, 202, 204):
+        raise RuntimeError(f'GitHub-Workflow konnte nicht gestartet werden ({response.status_code}).')
+    return {'workflow': workflow_file, 'repository': repository, 'status': 'started'}
+
+
 def sync_latest_forecast(token, repository, data_root):
     """Download a newer forecast snapshot from the private repository artifacts."""
     if not token:
