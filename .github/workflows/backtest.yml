@@ -53,7 +53,7 @@ jobs:
 
       - name: Test backtest logic
         if: steps.berlin-time.outputs.run == 'true'
-        run: python -m unittest tests.test_model_backtest
+        run: python -m unittest tests.test_model_backtest tests.test_online_correction
 
       - name: Run model_backtest.py
         if: steps.berlin-time.outputs.run == 'true'
