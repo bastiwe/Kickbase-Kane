@@ -12,7 +12,7 @@
   const market = (Array.isArray(data.marketPlayers) ? data.marketPlayers : []).filter(p => !p.owned);
   const mv = p => number(field(p,'mv','marketValue','market_value')) || 0;
   const change = p => number(field(p,'change','predicted_mv_target','prediction1T','predictedChange')) || 0;
-  const points = p => number(field(p,'avgPoints','pointsAverage','points_avg','seasonAverage'));
+  const points = p => number(field(p,'season','l3','average','avgPoints','pointsAverage','points_avg','seasonAverage'));
   const li = p => number(field(p,'li','liPercent','startingProbability'));
   const deadline = p => field(p,'expiresAt','expires_at','expiry','expiration');
   const image = p => field(p,'image','imageUrl','profileImage') || '';
@@ -23,7 +23,7 @@
   const avatar = p => image(p) ? '<img class="avatar" src="'+escapeHtml(image(p))+'" alt="" loading="lazy">' : '<span class="avatar"></span>';
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
   const playerLabel = p => '<div class="player">'+avatar(p)+'<div><div class="name">'+escapeHtml(name(p))+'</div><div class="sub">'+escapeHtml(club(p))+' · '+escapeHtml(position(p))+'</div></div></div>';
-  const formatTime = value => {if(!value)return '–';const date=new Date(Number(value)>1e12?Number(value):Number(value)*1000);return Number.isNaN(date.getTime())?String(value):date.toLocaleString('de-DE',{timeZone:'Europe/Berlin',dateStyle:'short',timeStyle:'short'});};
+  const timeValue = value => { if (!value) return Infinity; if (typeof value === 'string' && Number.isNaN(Number(value))) { const parsed = Date.parse(value); return Number.isNaN(parsed) ? Infinity : parsed; } const numeric = Number(value); return numeric > 1e12 ? numeric : numeric * 1000; };\n  const formatTime = value => { const stamp=timeValue(value); if(!Number.isFinite(stamp))return '–'; return new Date(stamp).toLocaleString('de-DE',{timeZone:'Europe/Berlin',dateStyle:'short',timeStyle:'short'});};
 
   function renderMetrics(){
     const budget=number(data.budget) ?? number(data.availableBudget) ?? number(data.cash);
@@ -45,7 +45,7 @@
   }
   function renderRisks(){
     const risky=[...players].filter(p=>change(p)<0).sort((a,b)=>change(a)-change(b)).slice(0,3);
-    const expiring=[...market].filter(p=>deadline(p)).sort((a,b)=>Number(deadline(a))-Number(deadline(b))).slice(0,2);
+    const expiring=[...market].filter(p=>deadline(p)).sort((a,b)=>timeValue(deadline(a))-timeValue(deadline(b))).slice(0,2);
     const rows=[];
     risky.forEach(p=>rows.push('<div class="list-row">'+playerLabel(p)+'<div class="list-value negative"><span class="risk-dot red"></span>'+signed(change(p))+'</div></div>'));
     expiring.forEach(p=>rows.push('<div class="list-row">'+playerLabel(p)+'<div class="list-value neutral"><span class="risk-dot"></span>'+escapeHtml(formatTime(deadline(p)))+'</div></div>'));
@@ -54,7 +54,7 @@
   function sortedMarket(){
     const mode=$('market-sort').value;
     return [...market].sort((a,b)=>{
-      if(mode==='expiry')return (Number(deadline(a))||Infinity)-(Number(deadline(b))||Infinity);
+      if(mode==='expiry')return timeValue(deadline(a))-timeValue(deadline(b));
       if(mode==='mv')return mv(b)-mv(a);
       if(mode==='points')return (points(b)||-Infinity)-(points(a)||-Infinity);
       return change(b)-change(a);
