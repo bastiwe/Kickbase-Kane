@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.22
+
+- Kacheln unter „Beste Chancen vor MW-Update“ sind nun aufklappbar und zeigen ebenfalls die vier letzten tatsächlichen Tagesänderungen eines Spielers.
+
+
 ## 0.2.21
 
 - „Dein Kader · Wertentwicklung“ zeigt nun alle Kaderspieler statt nur fünf.
