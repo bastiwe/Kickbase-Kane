@@ -1,7 +1,7 @@
 """Bounded, read-only Kickbase snapshots for the local adviser."""
 
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote
 
@@ -134,6 +134,8 @@ class LiveKickbase:
         self.profile_lock = threading.Lock()
         self.market_change_cache = {}
         self.market_change_lock = threading.Lock()
+        self.market_history_cache = {}
+        self.market_history_lock = threading.Lock()
 
     def player_profiles(self, player_ids):
         """Read current player facts directly from Kickbase, with a short cache."""
@@ -243,12 +245,46 @@ class LiveKickbase:
     def lineup(self, league_id):
         return self.get('/leagues/' + quote(str(league_id), safe='') + '/lineup')
 
+    def player_market_histories(self, player_ids):
+        """Load historical player market values directly from Kickbase, cached for an hour."""
+        now = time.monotonic()
+        wanted = sorted({str(player_id) for player_id in player_ids if str(player_id).isdigit()})
+        histories = {}
+        missing = []
+        with self.market_history_lock:
+            for player_id in wanted:
+                cached = self.market_history_cache.get(player_id)
+                if cached and now - cached[0] < 3600:
+                    histories[player_id] = cached[1]
+                else:
+                    missing.append(player_id)
+        if missing:
+            def load(player_id):
+                payload = self.get(
+                    '/competitions/1/players/' + quote(player_id, safe='') + '/marketvalue/365'
+                )
+                return player_id, payload.get('it', [])
+            # A history request is intentionally throttled: it runs only for
+            # the chart and must not compete with normal dashboard data.
+            with ThreadPoolExecutor(max_workers=min(4, len(missing))) as executor:
+                futures = [executor.submit(load, player_id) for player_id in missing]
+                for future in as_completed(futures):
+                    try:
+                        player_id, history = future.result()
+                    except (requests.RequestException, RuntimeError, ValueError, KeyError, TypeError):
+                        continue
+                    if not isinstance(history, list):
+                        continue
+                    histories[player_id] = history
+                    with self.market_history_lock:
+                        self.market_history_cache[player_id] = (now, history)
+        return histories
+
     def squad_value_history(self, league_id, player_ids):
-        """Reconstruct the real squad-value path from own transfer activities."""
-        database = Path(os.getenv('KICKBASE_DATA_DIR', '.')) / 'player_data_total.db'
+        """Reconstruct squad value from Kickbase's transfer feed and MV histories."""
         current_ids = {str(player_id) for player_id in player_ids if str(player_id).isdigit()}
-        if not current_ids or not database.exists():
-            return {'series': [], 'note': 'Historische Kaderwerte sind noch nicht verfügbar.'}
+        if not current_ids:
+            return {'series': [], 'note': 'Kein Kader für den historischen Verlauf verfügbar.'}
 
         user = self.get('/user/settings').get('u', {})
         user_id = str(user.get('i') or user.get('id') or user.get('ui') or '')
@@ -257,7 +293,7 @@ class LiveKickbase:
         own_trades = []
         all_ids = set(current_ids)
         for entry in feed.get('af', []):
-            if entry.get('t') != 15:
+            if str(entry.get('t')) != '15':
                 continue
             data = entry.get('data') or {}
             day = activity_day(entry.get('dt'))
@@ -270,41 +306,29 @@ class LiveKickbase:
                 continue
             own_trades.append((day, player_id, bought))
             all_ids.add(player_id)
-        if not own_trades:
-            return {'series': [], 'note': 'Eigene Transferhistorie konnte über die Kickbase-API nicht zugeordnet werden.'}
 
-        today = datetime.now(timezone.utc).date()
-        season_year = today.year if today.month >= 7 else today.year - 1
-        season_start = f'{season_year}-08-01'
-        placeholders = ','.join('?' for _ in all_ids)
-        try:
-            with sqlite3.connect(database) as connection:
-                rows = connection.execute(
-                    f"""SELECT substr(date, 1, 10) AS day, player_id, MAX(mv)
-                         FROM player_data_1d
-                         WHERE player_id IN ({placeholders})
-                           AND substr(date, 1, 10) >= ?
-                           AND mv IS NOT NULL
-                         GROUP BY substr(date, 1, 10), player_id
-                         ORDER BY day DESC""",
-                    [*sorted(all_ids), season_start],
-                ).fetchall()
-        except sqlite3.Error:
-            return {'series': [], 'note': 'Historische Marktwerte sind derzeit nicht lesbar.'}
-
+        raw_histories = self.player_market_histories(all_ids)
         values = {}
-        for day, player_id, market_value in rows:
-            if day and market_value is not None:
-                values.setdefault(day, {})[str(player_id)] = float(market_value)
+        epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+        for player_id, history in raw_histories.items():
+            for entry in history:
+                if not isinstance(entry, dict) or entry.get('dt') is None or entry.get('mv') is None:
+                    continue
+                try:
+                    day = (epoch + timedelta(days=int(entry['dt']))).date().isoformat()
+                    market_value = float(entry['mv'])
+                except (TypeError, ValueError, OverflowError):
+                    continue
+                values.setdefault(day, {})[player_id] = market_value
         if len(values) < 2:
-            return {'series': [], 'note': 'Noch nicht genügend historische Marktwerte verfügbar.'}
+            return {'series': [], 'note': 'Kickbase lieferte noch nicht genügend historische Marktwerte.'}
 
         reverse_trades = sorted(own_trades, key=lambda item: item[0], reverse=True)
         roster = set(current_ids)
         index = 0
         series = []
         for day in sorted(values, reverse=True):
-            # Apply all transfers that happened after this day's final value.
+            # Walk backwards from today's squad through the documented own transfers.
             while index < len(reverse_trades) and reverse_trades[index][0] > day:
                 _, player_id, bought = reverse_trades[index]
                 if bought:
@@ -319,14 +343,20 @@ class LiveKickbase:
                 series.append({'date': day, 'value': round(total), 'players': covered})
 
         series.reverse()
-        first_trade = min(day for day, _, _ in own_trades)
-        return {
-            'series': series,
-            'note': (
-                'Kaderwert aus deinem Kickbase-Transferverlauf und den historischen Marktwerten rekonstruiert.'
-                + (f' Transferfeed ab {first_trade} verfügbar.' if first_trade > season_start else '')
-            ),
-        }
+        if len(series) < 2:
+            return {'series': [], 'note': 'Kickbase lieferte für deinen Kader keine ausreichende Historie.'}
+        if own_trades:
+            first_trade = min(day for day, _, _ in own_trades)
+            note = (
+                'Direkt aus Kickbase: Marktwerthistorie der Spieler und dein Transferfeed.'
+                + (f' Transferfeed ab {first_trade} verfügbar.' if series[0]['date'] < first_trade else '')
+            )
+        else:
+            note = (
+                'Direkt aus Kickbase: Marktwerthistorie des heutigen Kaders. '
+                'Für ältere Zu- und Abgänge enthält der verfügbare Transferfeed keine Zuordnung.'
+            )
+        return {'series': series, 'note': note}
 
     def apply_lineup(self, league_id, formation, player_ids):
         league_path = '/leagues/' + quote(str(league_id), safe='') + '/lineup'
