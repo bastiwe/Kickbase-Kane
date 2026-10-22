@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.9
+
+- Fortschrittsbalken für Vollreport und Schnellreport im Trading-Dashboard ergänzt.
+- Zeigt Anmeldung, Datenabgleich, Modellberechnung, Markt- und Kaderauswertung sowie Abschluss an.
+
 ## 0.2.8
 
 - Fast-Report repariert; er kann wieder Prognosen erzeugen und die E-Mail auslösen.
