@@ -23,6 +23,7 @@ from features.predictions.predictions import (
     live_data_predictions,
 )
 from features.predictions.preprocessing import preprocess_player_data, split_data
+from features.lineup_optimizer import write_lineup_optimizer
 from kickbase_api.league import get_league_id, get_league_players_on_market
 from kickbase_api.user import get_user_id, get_players_in_squad, login
 from dotenv import load_dotenv
@@ -109,6 +110,12 @@ def generate_fast_report_data(source="Fast 1T"):
     )
     market_df, squad_df = hydrate_report_points_from_kickbase(
         token, competition_ids[0], market_df, squad_df
+    )
+    # Keep the dashboard's player names, clubs, images and current market
+    # in sync without running the slower full mail rendering.
+    write_lineup_optimizer(
+        token, league_id, current_user_id, squad_df, predictions_df,
+        history_df=player_df, forecast_snapshot=forecast_snapshot, market_df=market_df,
     )
     return {
         "token": token,
