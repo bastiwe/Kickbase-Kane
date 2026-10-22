@@ -13,6 +13,13 @@ export OPENAI_API_KEY="$(bashio::config 'openai_api_key')"
 export OPENAI_MODEL="$(bashio::config 'openai_model')"
 export KICKBASE_REPORT_TIMES="$(bashio::config 'report_times')"
 
+# The Pi keeps the two useful forecast horizons (1T and 3T) but trains them
+# one CPU worker at a time. This avoids a memory spike when three forests are
+# kept for the full report; GitHub Actions keep their normal defaults.
+export MODEL_N_ESTIMATORS="${MODEL_N_ESTIMATORS:-250}"
+export MODEL_N_JOBS="${MODEL_N_JOBS:-1}"
+export FULL_REPORT_INCLUDE_7D="${FULL_REPORT_INCLUDE_7D:-0}"
+
 # Existing installations may not have the newly introduced report_times setting
 # until their configuration has been saved once after the update.
 if [ -z "$KICKBASE_REPORT_TIMES" ] || [ "$KICKBASE_REPORT_TIMES" = "null" ]; then
