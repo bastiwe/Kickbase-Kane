@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.19
+
+- Kaderwert-Kachel zeigt bei negativem Cash zusätzlich den bereinigten Gesamtwert: Kaderwert minus aktuellem Fehlbetrag.
+
+
 ## 0.2.18
 
 - Live-Dashboard priorisiert Kickbase-Spielerprofile für Position, Status, Gesamtpunkte, Punkteschnitt, Minuten, Bilder, Vereins- und Marktwertdaten.
