@@ -9,6 +9,7 @@ on:
 jobs:
   run-model-backtest:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Check Berlin run time
         id: berlin-time
@@ -57,6 +58,8 @@ jobs:
           KICK_PASS: ${{ secrets.KICK_PASS }}
           BACKTEST_DAYS: '30'
           BACKTEST_MODEL_N_ESTIMATORS: '300'
+          BACKTEST_WALK_FORWARD_WINDOW_DAYS: '180'
+          BACKTEST_WALK_FORWARD_ESTIMATORS: '120'
         run: |
           python model_backtest.py
 
