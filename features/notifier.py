@@ -471,18 +471,43 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
             '</div></td>'
         )
 
-    def build_top_buy_picks():
-        if market_df.empty or "predicted_mv_target" not in market_df:
-            return ""
+    def top_market_candidates(frame, require_pre_update=False):
+        """Keep headline market cards useful, not merely mathematically positive."""
+        if frame.empty or "predicted_mv_target" not in frame:
+            return frame.iloc[0:0].copy()
 
-        candidates = market_df[market_df["predicted_mv_target"] > 0].copy()
+        candidates = frame.copy()
+        candidates = candidates[
+            pd.to_numeric(candidates["predicted_mv_target"], errors="coerce").fillna(0) >= 50_000
+        ]
+        if require_pre_update:
+            if "expires_before_mv_update" in candidates:
+                candidates = candidates[candidates["expires_before_mv_update"].fillna(False).astype(bool)]
+            elif "risk" in candidates:
+                candidates = candidates[candidates["risk"] == "Before MV update"]
+            else:
+                return candidates.iloc[0:0].copy()
         if "player_status" in candidates:
             candidates = candidates[~candidates["player_status"].isin([
                 "Verletzt", "Reha", "Rotgesperrt", "Gelb-Rot-Sperre",
                 "Gelbsperre", "Nicht im Kader", "Nicht in Liga", "Abwesend",
             ])]
+        # A real LigaInsider player-page quote of 0% is strong evidence against
+        # a short-term headline pick. Missing LI data remains eligible.
+        if {"starter_rate", "li_status"}.issubset(candidates.columns):
+            starter_rate = pd.to_numeric(candidates["starter_rate"], errors="coerce")
+            candidates = candidates[
+                ~((candidates["li_status"] == "LI-Spielerseite") & (starter_rate <= 0))
+            ]
         if "team_limit_warning" in candidates:
             candidates = candidates[candidates["team_limit_warning"] != "Vereinslimit voll"]
+        return candidates
+
+    def build_top_buy_picks():
+        if market_df.empty or "predicted_mv_target" not in market_df:
+            return ""
+
+        candidates = top_market_candidates(market_df)
         candidates = candidates.sort_values("predicted_mv_target", ascending=False).head(3)
         if candidates.empty:
             return ""
@@ -511,28 +536,7 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
 
         market_cards = []
         if not market_df.empty and "predicted_mv_target" in market_df:
-            market_candidates = market_df.copy()
-            if "expires_before_mv_update" in market_candidates:
-                market_candidates = market_candidates[market_candidates["expires_before_mv_update"].fillna(False).astype(bool)]
-            elif "risk" in market_candidates:
-                market_candidates = market_candidates[market_candidates["risk"] == "Before MV update"]
-            else:
-                market_candidates = market_candidates.iloc[0:0]
-            market_candidates = market_candidates[
-                market_candidates["predicted_mv_target"].fillna(0) > 0
-            ]
-            if "player_status" in market_candidates:
-                market_candidates = market_candidates[
-                    ~market_candidates["player_status"].isin([
-                        "Verletzt",
-                        "Reha",
-                        "Rotgesperrt",
-                        "Gelb-Rot-Sperre",
-                        "Nicht im Kader",
-                        "Nicht in Liga",
-                        "Abwesend",
-                    ])
-                ]
+            market_candidates = top_market_candidates(market_df, require_pre_update=True)
             market_candidates = market_candidates.sort_values("predicted_mv_target", ascending=False).head(3)
             for _, row in market_candidates.iterrows():
                 market_cards.append(
