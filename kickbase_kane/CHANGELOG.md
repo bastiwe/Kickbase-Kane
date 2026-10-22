@@ -36,8 +36,6 @@
 - Docker-Build in eine langlebige Python-Abhängigkeitsschicht und einen schnellen Anwendungscode-Checkout getrennt.
 - Nach diesem einmaligen Update bleiben reine UI- und Dashboard-Updates deutlich schneller.
 
-# Changelog
-
 ## 0.2.6
 
 - Startelf-Optimierer in der Home-Assistant-Oberfläche durch ein fokussiertes Trading-Dashboard ersetzt.
