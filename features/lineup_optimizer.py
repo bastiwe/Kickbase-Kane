@@ -27,6 +27,14 @@ def text(value):
     return str(value) if value is not None and str(value) not in ('nan', 'None', '<NA>') else ''
 
 
+def player_key(value):
+    """Use the same integer-shaped id that Kickbase sends in live payloads."""
+    parsed = number(value)
+    if parsed is not None and parsed.is_integer():
+        return str(int(parsed))
+    return text(value)
+
+
 def own_bid_amount(item, user_id):
     # Only explicitly owned offers may supply a price; asking prices are not bids.
     for key in ('ownBid', 'ownOffer'):
@@ -71,10 +79,10 @@ def build_lineup_payload(token, league_id, user_id, squad_df, predictions_df,
     """Shared live data for the interactive planner and automatic strategy report."""
     squad = get_players_in_squad(token, league_id).get('it', [])
     market = get_json_with_token(f'{BASE_URL}/leagues/{league_id}/market', token).get('it', [])
-    predictions = {str(row['player_id']): row for row in predictions_df.to_dict('records')}
+    predictions = {player_key(row['player_id']): row for row in predictions_df.to_dict('records')}
     if market_df is not None:
         for row in market_df.to_dict('records'):
-            player_id = str(row['player_id'])
+            player_id = player_key(row['player_id'])
             predictions[player_id] = {**predictions.get(player_id, {}), **row}
     reports = {' '.join((text(row.get('first_name')), text(row.get('last_name')))).strip(): row
                for row in squad_df.to_dict('records')}
@@ -86,14 +94,14 @@ def build_lineup_payload(token, league_id, user_id, squad_df, predictions_df,
     players = []
     seen = set()
     for item, owned in candidates:
-        player_id = str(item.get('i'))
+        player_id = player_key(item.get('i'))
         if player_id in seen:
             continue
         seen.add(player_id)
         row = dict(predictions.get(player_id, {}))
         player_history = history_df
         cached = (history_df is not None and not history_df.empty
-                  and history_df['player_id'].astype(str).eq(player_id).any())
+                  and history_df['player_id'].map(player_key).eq(player_id).any())
         if refresh_missing_history and not cached:
             try:
                 info = get_player_info(token, competition_id, player_id)
@@ -156,7 +164,7 @@ def market_context(market, own_ids, user_id, predictions, history, forecasts):
     seen = set()
     now = datetime.now(ZoneInfo('Europe/Berlin'))
     for item in market:
-        player_id = str(item.get('i'))
+        player_id = player_key(item.get('i'))
         if player_id in own_ids or player_id in seen or is_user_market_listing(item, user_id):
             continue
         seen.add(player_id)
