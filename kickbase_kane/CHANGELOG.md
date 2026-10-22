@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.12
+
+- Trading-Chancen beginnen nun erst ab einer erwarteten 1T-Marktwertsteigerung von +100.000 EUR.
+- Namen, Vereine und Bilder werden für den Live-Kader und den Transfermarkt zusätzlich aus der lokalen Spielerhistorie ergänzt.
+- Kaderwertdiagramm rekonstruiert den Verlauf aus dem eigenen Kickbase-Transferfeed und historischen Marktwerten, statt heutige Spieler rückwirkend anzunehmen.
+- Vollreport im Home-Assistant-Add-on läuft mit begrenzter Parallelität und ohne das dort nicht benötigte 7T-Modell, damit der Raspberry Pi keinen Speicherabbruch bekommt.
+- Fehler aus vom System beendeten Reportprozessen nennen nun den Rückgabecode bzw. das Signal im Dashboard.
+
+
 ## 0.2.11
 
 - Schnellreport aktualisiert nun auch Namen, Vereine, Bilder und Marktmetadaten im Dashboard.
