@@ -13,6 +13,12 @@ export OPENAI_API_KEY="$(bashio::config 'openai_api_key')"
 export OPENAI_MODEL="$(bashio::config 'openai_model')"
 export KICKBASE_REPORT_TIMES="$(bashio::config 'report_times')"
 
+# Existing installations may not have the newly introduced report_times setting
+# until their configuration has been saved once after the update.
+if [ -z "$KICKBASE_REPORT_TIMES" ] || [ "$KICKBASE_REPORT_TIMES" = "null" ]; then
+  export KICKBASE_REPORT_TIMES="21:40,22:10"
+fi
+
 # A first live snapshot gives the web server a real league/user context before
 # the first scheduled full forecast has run. Later starts reuse the persisted
 # report and do not repeat this relatively slow request.
