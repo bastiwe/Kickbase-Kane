@@ -132,6 +132,8 @@ class LiveKickbase:
         self.detail_lock = threading.Lock()
         self.profile_cache = {}
         self.profile_lock = threading.Lock()
+        self.market_change_cache = {}
+        self.market_change_lock = threading.Lock()
 
     def player_profiles(self, player_ids):
         """Read current player facts directly from Kickbase, with a short cache."""
@@ -160,6 +162,44 @@ class LiveKickbase:
                     with self.profile_lock:
                         self.profile_cache[player_id] = (now, profile)
         return profiles
+
+    def player_market_changes(self, player_ids):
+        """Read the last completed market-value movement for owned players."""
+        now = time.monotonic()
+        wanted = [str(player_id) for player_id in player_ids if str(player_id).isdigit()]
+        changes = {}
+        missing = []
+        with self.market_change_lock:
+            for player_id in wanted:
+                cached = self.market_change_cache.get(player_id)
+                if cached and now - cached[0] < 600:
+                    changes[player_id] = cached[1]
+                else:
+                    missing.append(player_id)
+        if missing:
+            def load(player_id):
+                payload = self.get(
+                    '/competitions/1/players/' + quote(player_id, safe='') + '/marketvalue/92'
+                )
+                values = [
+                    entry.get('mv') for entry in payload.get('it', [])
+                    if isinstance(entry, dict) and entry.get('mv') is not None
+                ]
+                change = None
+                if len(values) >= 2:
+                    change = float(values[-1]) - float(values[-2])
+                return player_id, change
+            with ThreadPoolExecutor(max_workers=min(6, len(missing))) as executor:
+                futures = [executor.submit(load, player_id) for player_id in missing]
+                for future in as_completed(futures):
+                    try:
+                        player_id, change = future.result()
+                    except (requests.RequestException, RuntimeError, ValueError, KeyError, TypeError):
+                        continue
+                    changes[player_id] = change
+                    with self.market_change_lock:
+                        self.market_change_cache[player_id] = (now, change)
+        return changes
 
     def player_details(self, player_id):
         with self.detail_lock:
@@ -353,6 +393,7 @@ class LiveKickbase:
             raise RuntimeError('Kickbase lieferte unvollständige Kader-/Marktdaten.')
         profile_ids = [item.get('i') for item in squad] + [item.get('i') for item in market]
         live_profiles = self.player_profiles(profile_ids)
+        live_market_changes = self.player_market_changes([item.get('i') for item in squad])
         forecast_horizon = None
         if squad:
             first_profile = live_profiles.get(str(squad[0].get('i')), {})
@@ -407,11 +448,13 @@ class LiveKickbase:
                     player['image'] = previous.get('image', '')
                 if not raw[player['id']].get('ln') and previous.get('name') and not re.fullmatch(r'Spieler\s+\d+', previous['name']):
                     player['name'] = previous['name']
-                for field in ('l3', 'season', 'average', 'li', 'change', 'opponent',
+                for field in ('l3', 'season', 'average', 'li', 'change', 'lastMvChange', 'opponent',
                               'matchdayChange', 'recent', 'previous', 'history', 'fixtures',
                               'minutes', 'cards', 'goals', 'assists'):
                     if player.get(field) is None and previous.get(field) is not None:
                         player[field] = previous[field]
+                if owned and player['id'] in live_market_changes:
+                    player['lastMvChange'] = live_market_changes[player['id']]
                 if player['team'] == 'Unbekannt' and previous.get('team') not in (None, '', 'Unbekannt'):
                     player['team'] = previous['team']
                 player['owned'] = owned
@@ -444,8 +487,16 @@ class LiveKickbase:
         state['selection'] = [p if p in ids else None for p in state['selection']]
         state['plans'] = plans
         state['budget'] = budget
+        roster_value = sum((p.get('mv') or 0) for p in owned)
+        # Official rule: the permitted debt equals 33% of the effective team
+        # value (team value plus an already negative cash balance).
+        debt_base = max(0, roster_value + min(float(budget), 0))
+        max_negative = -debt_base * 0.33
+        open_bid_total = sum(float(p.get('bid') or 0) for p in available if p.get('bid') is not None)
+        buying_power = float(budget) - max_negative - open_bid_total
         current = {**report, 'players': current_players, 'marketPlayers': available, 'budget': budget,
-                   'maxNegative': -sum((p.get('mv') or 0) for p in owned) * 0.33,
+                   'maxNegative': max_negative, 'openBidTotal': open_bid_total,
+                   'buyingPower': buying_power,
                    'forecastHorizon': forecast_horizon or report.get('forecastHorizon')}
         changes = {'addedOwnedIds': sorted(own_ids - {p['id'] for p in report['players'] if p['owned']}),
                    'removedPlanIds': sorted(set(previous_plans) - ids),
