@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.39
+
+- „Beste 11“ bewertet innerhalb der zulässigen Budgetgrenze künftig Saison-Punkteschnitt, L3-Form, Startelfquote und ersten verfügbaren Gegner.
+- Die 1T-Marktwertprognose wirkt nur als kleiner Tiebreaker und kann sportliche Punktedaten nicht überstimmen.
+- Restbudget oberhalb der gewählten Grenze beeinflusst die Rangfolge nicht.
+
 ## 0.2.38
 
 - Desktop-Ansicht des Startelfplaners erhält an Bankspielern sichtbare Schalter für „Verkauf“ und „Halten“.
