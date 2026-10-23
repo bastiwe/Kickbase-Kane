@@ -128,11 +128,16 @@
     const risky=[...players].filter(p=>prediction(p)!==null && change(p)<0).sort((a,b)=>change(a)-change(b)).slice(0,3);
     const beforeUpdate=[...market].filter(p=>prediction(p)!==null && change(p)>=TRADING_THRESHOLD && timeValue(deadline(p))<=update).sort((a,b)=>change(b)-change(a)).slice(0,2);
     const overnight=[...market].filter(p=>prediction(p)!==null && change(p)>=TRADING_THRESHOLD && timeValue(deadline(p))>update && timeValue(deadline(p))<=nightEnd).sort((a,b)=>change(b)-change(a)).slice(0,2);
+    const riskRow=(player, tone, label, dot) =>
+      '<details class="risk-player market-history-player" data-player-id="'+escapeHtml(player.id)+'"><summary><div class="list-row">'
+      +playerLabel(player)+'<div class="list-value '+tone+'"><span class="risk-dot '+dot+'"></span>'+label+' '+forecastText(player)+'</div></div></summary>'
+      +'<div class="player-history"><p class="empty">Aufklappen lädt die Tagesänderungen.</p></div></details>';
     const rows=[];
-    risky.forEach(p=>rows.push('<div class="list-row">'+playerLabel(p)+'<div class="list-value negative"><span class="risk-dot red"></span>Drohender MW-Verlust '+forecastText(p)+'</div></div>'));
-    beforeUpdate.forEach(p=>rows.push('<div class="list-row">'+playerLabel(p)+'<div class="list-value positive"><span class="risk-dot green"></span>Top-Chance vor 22 Uhr '+forecastText(p)+'</div></div>'));
-    overnight.forEach(p=>rows.push('<div class="list-row">'+playerLabel(p)+'<div class="list-value neutral"><span class="risk-dot"></span>Nachtgebot 22–09 Uhr '+forecastText(p)+'</div></div>'));
+    risky.forEach(p=>rows.push(riskRow(p,'negative','Drohender MW-Verlust','red')));
+    beforeUpdate.forEach(p=>rows.push(riskRow(p,'positive','Top-Chance vor 22 Uhr','green')));
+    overnight.forEach(p=>rows.push(riskRow(p,'neutral','Nachtgebot 22–09 Uhr','')));
     $('timing-risks').innerHTML=rows.length?rows.join(''):'<p class="empty">Kein unmittelbarer Handlungsbedarf erkannt.</p>';
+    document.querySelectorAll('.risk-player').forEach(details=>details.addEventListener('toggle',()=>{if(details.open)loadPlayerHistory(details);}));
   }
   async function renderValueHistory(){
     try{
@@ -165,7 +170,23 @@
     });
   }
   function renderTable(){
-    $('market-table').innerHTML=sortedMarket().slice(0,50).map(p=>'<tr><td><div class="table-player">'+avatar(p)+'<div><div class="name">'+escapeHtml(name(p))+'</div><div class="sub">'+escapeHtml(club(p))+'</div></div></div></td><td>'+escapeHtml(position(p))+'</td><td>'+euros(mv(p))+'</td><td class="'+cls(change(p))+'">'+signed(change(p))+'</td><td>'+((li(p)===null)?'–':Math.round(li(p))+' %')+'</td><td>'+escapeHtml(formatTime(deadline(p)))+'</td></tr>').join('')||'<tr><td colspan="6" class="empty">Keine Marktangebote im aktuellen Stand.</td></tr>';
+    const rows=sortedMarket().slice(0,50);
+    $('market-table').innerHTML=rows.map(p=>
+      '<tr class="market-row" data-player-id="'+escapeHtml(p.id)+'" aria-expanded="false" tabindex="0">'
+      +'<td><div class="table-player">'+avatar(p)+'<div><div class="name">'+escapeHtml(name(p))+'</div><div class="sub">'+escapeHtml(club(p))+'</div></div></div></td><td>'+escapeHtml(position(p))+'</td><td>'+euros(mv(p))+'</td><td class="'+cls(change(p))+'">'+signed(change(p))+'</td><td>'+((li(p)===null)?'–':Math.round(li(p))+' %')+'</td><td>'+escapeHtml(formatTime(deadline(p)))+'</td></tr>'
+      +'<tr class="market-history-row" hidden><td colspan="6"><div class="player-history"><p class="empty">Aufklappen lädt die Tagesänderungen.</p></div></td></tr>'
+    ).join('')||'<tr><td colspan="6" class="empty">Keine Marktangebote im aktuellen Stand.</td></tr>';
+    document.querySelectorAll('.market-row').forEach(row=>{
+      const toggle=()=> {
+        const historyRow=row.nextElementSibling;
+        const isOpening=historyRow.hidden;
+        historyRow.hidden=!isOpening;
+        row.setAttribute('aria-expanded',String(isOpening));
+        if(isOpening) loadPlayerHistory({dataset:{playerId:row.dataset.playerId},querySelector:selector=>historyRow.querySelector(selector)});
+      };
+      row.addEventListener('click',toggle);
+      row.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();toggle();}});
+    });
   }
   function render(){renderMetrics();renderTopChances();renderRoster();renderRisks();renderTable();}
   function renderForecastStatus(){
