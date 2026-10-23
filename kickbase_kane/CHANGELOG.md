@@ -2,6 +2,10 @@
 
 ## 0.2.41
 
+- Transfermarkt und Handlungsbedarf lassen sich nun aufklappen und zeigen die letzten vier tatsächlichen täglichen Marktwertänderungen direkt aus der Kickbase-API.
+
+## 0.2.41
+
 - Die Prüfung nach „In Kickbase übernehmen“ versteht nun das aktuelle Kickbase-v4-Slotformat. Erfolgreich gespeicherte Aufstellungen werden nicht mehr fälschlich als Fehler gemeldet.
 
 ## 0.2.40
