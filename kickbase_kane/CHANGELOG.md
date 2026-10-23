@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.29
+
+- Mobile Risikozeilen sind zweizeilig und überlagern Status und Betrag nicht mehr.
+- Der Transfermarkt wird auf Smartphones als kompakte, mehrzeilige Kartenliste ohne horizontales Scrollen angezeigt.
+- Rechtswisch funktioniert nun auch in der Startelf: Spieler werden auf die Bank verschoben und als Verkauf markiert.
+- „Beste 11“ vergleicht alle gültigen Formationen und wählt die Kombination mit dem höchsten aktuellen Punkteschnitt.
+
 ## 0.2.28
 
 - Mobiler Startelfplaner ergänzt: Startelf und Bank lassen sich per Drag-and-Drop oder Antippen planen.
