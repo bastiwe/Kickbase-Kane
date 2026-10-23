@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.25
+
+- Kaufkraft berücksichtigt nun auch eigene offene Gebote aus dem aktuellen Kickbase-Feld `uop` korrekt.
+- Dadurch werden mehrere parallele Gebote, etwa auf Gruda, vollständig vom verfügbaren Maximalgebot abgezogen.
+
+
 ## 0.2.24
 
 - Jede Kaderzeile zeigt nun direkt G/V seit dem eigenen Kauf, Kickbase-Gesamtpunkte und den aktuellen Kickbase-Punkteschnitt.
