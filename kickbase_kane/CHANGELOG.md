@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.28
+
+- Mobiler Startelfplaner ergänzt: Startelf und Bank lassen sich per Drag-and-Drop oder Antippen planen.
+- Rechtswisch auf einem Bankspieler markiert ihn als Verkauf; die Budget-Kachel zeigt Verkaufserlös, Restbudget und verbleibende Kadergröße.
+- Die Kachel prüft sofort, ob nach Verkäufen noch eine gültige Kickbase-Formation möglich ist und nennt fehlende Positionen.
+
 ## 0.2.27
 
 - Die Kaderwertgrafik beginnt nun am konfigurierten Ligastartdatum statt am frühesten verfügbaren Marktwert.
