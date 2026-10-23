@@ -7,6 +7,7 @@ export KICKBASE_DATA_DIR=/data
 export KICK_USER="$(bashio::config 'kick_user')"
 export KICK_PASS="$(bashio::config 'kick_pass')"
 export KICK_LEAGUE_NAME="$(bashio::config 'league_name')"
+export KICK_LEAGUE_START_DATE="$(bashio::config 'league_start_date')"
 export EMAIL_USER="$(bashio::config 'email_user')"
 export EMAIL_PASS="$(bashio::config 'email_pass')"
 export OPENAI_API_KEY="$(bashio::config 'openai_api_key')"
@@ -25,6 +26,9 @@ export FULL_REPORT_INCLUDE_7D="${FULL_REPORT_INCLUDE_7D:-0}"
 
 # Existing installations may not have the newly introduced report_times setting
 # until their configuration has been saved once after the update.
+if [ -z "$KICK_LEAGUE_START_DATE" ] || [ "$KICK_LEAGUE_START_DATE" = "null" ]; then
+  export KICK_LEAGUE_START_DATE="2026-08-15"
+fi
 if [ -z "$KICKBASE_REPORT_TIMES" ] || [ "$KICKBASE_REPORT_TIMES" = "null" ]; then
   export KICKBASE_REPORT_TIMES="21:40,22:10"
 fi
