@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.35
+
+- Linkswisch markiert Spieler im mobilen Startelfplaner als unverkäuflich; ein weiterer Linkswisch entfernt die Halte-Markierung.
+- Geschützte Spieler werden in „Beste 11“ und der Budgetrechnung nicht als Bankverkauf eingeplant.
+- Geschützte Spieler erhalten eine grüne „HALTEN“-Kennzeichnung.
+
 ## 0.2.34
 
 - Die Transfermarkt-Auswahl unter „Kauf simulieren“ ist nach Angebotsablauf sortiert; ablaufende Angebote stehen zuerst.
