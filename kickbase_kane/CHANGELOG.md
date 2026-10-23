@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.26
+
+- Die 1T-Kaderwert-Kachel zeigt die feste Kadergrenze `16` statt der Zahl verfügbarer Marktwertänderungen.
+- Der Kaderzähler ist grün bei freiem Platz, gelb bei `16/16` und rot bei einer Überschreitung.
+
+
 ## 0.2.25
 
 - Kaufkraft berücksichtigt nun auch eigene offene Gebote aus dem aktuellen Kickbase-Feld `uop` korrekt.
