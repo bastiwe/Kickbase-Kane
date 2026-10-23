@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.30
+
+- „Beste 11“ berücksichtigt nun das Budget: Alle nicht aufgestellten Kaderspieler werden als Verkauf mit ihrem Marktwert gerechnet.
+- Es werden nur punktstarke Kombinationen gewählt, die nach den geplanten Bankverkäufen mindestens -5 Mio. EUR Restbudget erreichen.
+- Ist das selbst mit vollständigem Bankverkauf nicht möglich, zeigt der Planer einen klaren Hinweis statt eine irreführende Auswahl.
+
 ## 0.2.29
 
 - Mobile Risikozeilen sind zweizeilig und überlagern Status und Betrag nicht mehr.
