@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.31
+
+- Der mobile Startelfplaner hat nun einen Schalter für die Budgetvorgabe: am Spieltag mindestens 0 EUR oder bis zu 5 Mio. EUR Defizit.
+- „Beste 11“ optimiert seine Auswahl jeweils gegen die aktiv gewählte Budgetgrenze.
+
 ## 0.2.30
 
 - „Beste 11“ berücksichtigt nun das Budget: Alle nicht aufgestellten Kaderspieler werden als Verkauf mit ihrem Marktwert gerechnet.
