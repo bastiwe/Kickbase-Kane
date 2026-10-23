@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.27
+
+- Die Kaderwertgrafik beginnt nun am konfigurierten Ligastartdatum statt am frühesten verfügbaren Marktwert.
+- `league_start_date` ist als Add-on-Einstellung verfügbar und wird auch von Voll- und Schnellreport verwendet.
+
+
 ## 0.2.26
 
 - Die 1T-Kaderwert-Kachel zeigt die feste Kadergrenze `16` statt der Zahl verfügbarer Marktwertänderungen.
