@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.34
+
+- Die Transfermarkt-Auswahl unter „Kauf simulieren“ ist nach Angebotsablauf sortiert; ablaufende Angebote stehen zuerst.
+
 ## 0.2.33
 
 - Die feststehende Budget-Kachel im mobilen Startelfplaner berücksichtigt dynamisch die tatsächliche Höhe des Kopfbereichs.
