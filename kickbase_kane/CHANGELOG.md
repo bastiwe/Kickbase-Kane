@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.38
+
+- Desktop-Ansicht des Startelfplaners erhält an Bankspielern sichtbare Schalter für „Verkauf“ und „Halten“.
+- Die Restbudget-Kachel beobachtet die reale Kopfhöhe per ResizeObserver und bleibt beim Scrollen mit zusätzlichem Abstand vollständig unter dem Kopfbereich.
+
 ## 0.2.37
 
 - „Beste 11“ ordnet die gefundene optimale Spielerkombination nun korrekt den Positionsplätzen der gewählten Formation zu.
