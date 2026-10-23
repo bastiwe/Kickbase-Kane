@@ -49,8 +49,12 @@
     $('metric-roster-value').textContent=euros(rosterValue);$('metric-roster-count').textContent=(budget!==null && budget<0?'Bereinigt: '+euros(adjustedRosterValue)+' · ':'')+players.length+'/16 Spieler';
     $('metric-roster-change').textContent=availableForecasts.length ? signed(rosterChange) : '–';
     $('metric-roster-change').className=availableForecasts.length ? cls(rosterChange) : 'neutral';
-    $('metric-roster-change-note').textContent=realisedChanges.length ? 'Letztes MW-Update: '+signed(realisedChange)+' · '+realisedChanges.length+'/'+players.length+' Spieler' : 'Letztes MW-Update wird geladen';
-    $('metric-roster-change-note').className=realisedChanges.length ? cls(realisedChange) : 'neutral';
+    const rosterLimit=16;
+    const rosterCountClass=players.length<rosterLimit?'positive':players.length===rosterLimit?'neutral':'negative';
+    $('metric-roster-change-note').innerHTML=realisedChanges.length
+      ? 'Letztes MW-Update: '+signed(realisedChange)+' · <span class="'+rosterCountClass+'">'+players.length+'/'+rosterLimit+' Spieler</span>'
+      : '<span class="'+rosterCountClass+'">'+players.length+'/'+rosterLimit+' Spieler</span> · Letztes MW-Update wird geladen';
+    $('metric-roster-change-note').className='';
     $('market-count').textContent=market.length+' Angebote';
   }
   function renderTopChances(){
