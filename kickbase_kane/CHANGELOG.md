@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.40
+
+- Der mobile Startelfplaner lädt beim Öffnen die aktuelle Kickbase-Aufstellung und bietet nun „In Kickbase übernehmen“.
+- Eine vollständige, positionsgerechte Elf aus dem echten Kader wird direkt über die Kickbase-API gespeichert.
+- Simulierte Käufe werden vor der Übertragung erkannt und können nicht versehentlich in Kickbase gespeichert werden.
+
 ## 0.2.39
 
 - „Beste 11“ bewertet innerhalb der zulässigen Budgetgrenze künftig Saison-Punkteschnitt, L3-Form, Startelfquote und ersten verfügbaren Gegner.
