@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.37
+
+- „Beste 11“ ordnet die gefundene optimale Spielerkombination nun korrekt den Positionsplätzen der gewählten Formation zu.
+
 ## 0.2.36
 
 - Die Kader-/Bankliste des mobilen Startelfplaners ist nach TW, ABW, MIT und ANG gruppiert.
