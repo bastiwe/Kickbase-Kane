@@ -30,3 +30,6 @@
   .table-wrap td:nth-child(5)::before{content:'LI ';color:var(--muted)}
   .table-wrap td:nth-child(6)::before{content:'Ablauf ';color:var(--muted)}
 }
+
+.market-row{cursor:pointer}.market-row:hover{background:rgba(96,165,250,.06)}.market-row:focus{outline:2px solid var(--blue);outline-offset:-2px}.market-history-row td{padding:0;border:0}.market-history-row .player-history{margin:0 10px 10px}.risk-player{border-bottom:1px solid var(--line)}.risk-player:last-child{border-bottom:0}.risk-player summary{list-style:none;cursor:pointer}.risk-player summary::-webkit-details-marker{display:none}.risk-player summary::after{content:'+';float:right;color:var(--muted);font-size:20px;line-height:20px;margin:-35px 2px 0 10px}.risk-player[open] summary::after{content:'−'}.risk-player .list-row{padding-right:30px;border:0}
+@media(max-width:480px){.table-wrap tr.market-history-row{display:block;padding:0;border:0}.market-history-row td{display:block!important;padding:0!important}.market-history-row .player-history{margin:0 0 10px}.risk-player .list-row{padding-right:30px}}
