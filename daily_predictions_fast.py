@@ -36,7 +36,7 @@ load_dotenv()
 
 competition_ids = [1]
 league_name = os.getenv("KICK_LEAGUE_NAME", "Die Spätzünder")
-league_start_date = "2026-08-15"
+league_start_date = os.getenv("KICK_LEAGUE_START_DATE", "2026-08-15")
 last_mv_values = 365
 last_pfm_values = 50
 email = os.getenv("EMAIL_USER")
