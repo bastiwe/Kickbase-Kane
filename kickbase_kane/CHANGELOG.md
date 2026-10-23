@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.41
+
+- Die Prüfung nach „In Kickbase übernehmen“ versteht nun das aktuelle Kickbase-v4-Slotformat. Erfolgreich gespeicherte Aufstellungen werden nicht mehr fälschlich als Fehler gemeldet.
+
 ## 0.2.40
 
 - Der mobile Startelfplaner lädt beim Öffnen die aktuelle Kickbase-Aufstellung und bietet nun „In Kickbase übernehmen“.
