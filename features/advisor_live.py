@@ -399,6 +399,11 @@ class LiveKickbase:
         if len(values) < 2:
             return {'series': [], 'note': 'Kickbase lieferte noch nicht genügend historische Marktwerte.'}
 
+        configured_start = os.getenv('KICK_LEAGUE_START_DATE', '2026-08-15')
+        try:
+            league_start = datetime.fromisoformat(configured_start).date().isoformat()
+        except (TypeError, ValueError):
+            league_start = min(values)
         reverse_trades = sorted(own_trades, key=lambda item: item[0], reverse=True)
         roster = set(current_ids)
         index = 0
@@ -415,7 +420,7 @@ class LiveKickbase:
             day_values = values[day]
             total = sum(day_values.get(player_id, 0) for player_id in roster)
             covered = sum(1 for player_id in roster if player_id in day_values)
-            if covered:
+            if covered and day >= league_start:
                 series.append({'date': day, 'value': round(total), 'players': covered})
 
         series.reverse()
@@ -424,12 +429,12 @@ class LiveKickbase:
         if own_trades:
             first_trade = min(day for day, _, _ in own_trades)
             note = (
-                'Direkt aus Kickbase: Marktwerthistorie der Spieler und dein Transferfeed.'
+                f'Direkt aus Kickbase ab Ligastart {league_start}: Marktwerthistorie der Spieler und dein Transferfeed.'
                 + (f' Transferfeed ab {first_trade} verfügbar.' if series[0]['date'] < first_trade else '')
             )
         else:
             note = (
-                'Direkt aus Kickbase: Marktwerthistorie des heutigen Kaders. '
+                f'Direkt aus Kickbase ab Ligastart {league_start}: Marktwerthistorie des heutigen Kaders. '
                 'Für ältere Zu- und Abgänge enthält der verfügbare Transferfeed keine Zuordnung.'
             )
         return {'series': series, 'note': note}
