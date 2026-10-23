@@ -188,6 +188,15 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             template = (APP_ROOT / 'features/trading_dashboard.html').read_text(encoding='utf-8')
             page = template.replace('__PAYLOAD__', payload).replace('__SETTINGS__', settings)
             self.reply(200, page, 'text/html; charset=utf-8')
+        elif path == '/planner':
+            with self.server.lock:
+                payload = json.dumps(self.server.report, ensure_ascii=True, allow_nan=False).replace('<', '\\u003c')
+                settings = json.dumps({'csrf': self.server.csrf, 'revision': self.server.revision,
+                                       'liveMessage': 'Kader, Budget und Aufstellung stammen aus dem letzten Live-Abruf.'},
+                                      ensure_ascii=True).replace('<', '\\u003c')
+            template = (APP_ROOT / 'features/mobile_lineup_planner.html').read_text(encoding='utf-8')
+            page = template.replace('__PAYLOAD__', payload).replace('__SETTINGS__', settings)
+            self.reply(200, page, 'text/html; charset=utf-8')
         elif path in ('/dashboard.js', '/dashboard.css'):
             name = path.lstrip('/')
             content_type = 'text/javascript; charset=utf-8' if name.endswith('.js') else 'text/css; charset=utf-8'
