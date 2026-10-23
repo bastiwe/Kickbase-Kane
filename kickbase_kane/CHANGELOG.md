@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.33
+
+- Die feststehende Budget-Kachel im mobilen Startelfplaner berücksichtigt dynamisch die tatsächliche Höhe des Kopfbereichs.
+- Restbudget und Budgetvorgabe bleiben dadurch beim Scrollen vollständig sichtbar.
+
 ## 0.2.32
 
 - Im mobilen Startelfplaner lassen sich Transfermarktspieler mit frei eingetragenem Overpay als Kauf simulieren.
