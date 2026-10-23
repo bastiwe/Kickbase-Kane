@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.41
+## 0.2.42
 
 - Transfermarkt und Handlungsbedarf lassen sich nun aufklappen und zeigen die letzten vier tatsächlichen täglichen Marktwertänderungen direkt aus der Kickbase-API.
 
