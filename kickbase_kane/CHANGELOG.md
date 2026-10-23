@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.36
+
+- Die Kader-/Bankliste des mobilen Startelfplaners ist nach TW, ABW, MIT und ANG gruppiert.
+- Dezente Positionsüberschriften und Trennlinien erleichtern das schnelle Scannen der Bank.
+
 ## 0.2.35
 
 - Linkswisch markiert Spieler im mobilen Startelfplaner als unverkäuflich; ein weiterer Linkswisch entfernt die Halte-Markierung.
