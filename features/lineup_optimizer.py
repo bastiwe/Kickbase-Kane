@@ -37,7 +37,9 @@ def player_key(value):
 
 def own_bid_amount(item, user_id):
     # Only explicitly owned offers may supply a price; asking prices are not bids.
-    for key in ('ownBid', 'ownOffer'):
+    # uop is the current user's offer price in the live market payload.
+    # Older payload variants expose the same value under ownBid/ownOffer.
+    for key in ('uop', 'ownBid', 'ownOffer'):
         offer = item.get(key)
         if isinstance(offer, dict):
             for field in ('prc', 'price', 'amount', 'v'):
