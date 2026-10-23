@@ -1,5 +1,5 @@
 name: Kickbase Kane
-version: "0.2.26"
+version: "0.2.27"
 slug: kickbase_kane
 description: Privates Kickbase-Trading-Dashboard mit taeglichen Marktwertprognosen.
 url: https://github.com/bastiwe/Kickbase-Kane
@@ -20,6 +20,7 @@ options:
   kick_user: ""
   kick_pass: ""
   league_name: "Die Spätzünder"
+  league_start_date: "2026-08-15"
   email_user: ""
   email_pass: ""
   openai_api_key: ""
@@ -32,6 +33,7 @@ schema:
   kick_user: str
   kick_pass: password
   league_name: str
+  league_start_date: str
   email_user: str?
   email_pass: password?
   openai_api_key: password?
