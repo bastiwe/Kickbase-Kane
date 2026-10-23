@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.32
+
+- Im mobilen Startelfplaner lassen sich Transfermarktspieler mit frei eingetragenem Overpay als Kauf simulieren.
+- Der Kaufpreis wird als Marktwert plus Overpay berechnet und fließt in Aufstellung, Bankverkäufe und Budgetgrenze ein.
+- Simulierte Käufe können jederzeit einzeln entfernt werden.
+
 ## 0.2.31
 
 - Der mobile Startelfplaner hat nun einen Schalter für die Budgetvorgabe: am Spieltag mindestens 0 EUR oder bis zu 5 Mio. EUR Defizit.
