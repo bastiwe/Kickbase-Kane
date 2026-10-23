@@ -449,14 +449,14 @@ class LiveKickbase:
         # Kickbase can return an empty 200 response. Read the resource again so
         # the UI only reports success when the server actually stored the XI.
         stored = self.get(league_path)
-        stored_type = str(stored.get('type') or stored.get('t') or '')
-        stored_players = stored.get('players') or stored.get('p')
-        if isinstance(stored_players, list):
-            stored_players = [str(
-                item.get('i') or item.get('id') if isinstance(item, dict) else item
-            ) for item in stored_players]
-        if not isinstance(stored_players, list) or set(stored_players) != set(expected):
+        # The current v4 API replies with `it` entries and their lineup slots
+        # (`lo`), while older versions returned `players`/`type`. Normalize
+        # both formats before confirming the saved XI.
+        verified = normalize_lineup(stored)
+        stored_players = verified.get('players', [])
+        if set(stored_players) != set(expected) or len(stored_players) != len(expected):
             raise RuntimeError('Kickbase hat die Aufstellung nicht wie angefordert gespeichert. Bitte Formation und Spieler prüfen.')
+        stored_type = verified.get('formation', '')
         verification_warning = None if stored_type in ('', str(formation)) else (
             f'Kickbase meldete die Formation als {stored_type}; die elf Spieler wurden korrekt gespeichert.'
         )
