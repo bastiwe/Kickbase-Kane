@@ -9,6 +9,7 @@ import smtplib
 import os
 import pandas as pd
 from features.predictions.predictions import REMOVED_REPORT_COLUMNS
+from features.player_upgrades import player_upgrades
 from features.manager_history import render_audit
 
 COLUMN_LABELS = {
@@ -646,6 +647,7 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 "current_season_points": "aktuelle Saison",
                 "last_season_avg_points": "Vorsaison Ø",
                 "last_season_points": "Vorsaison gesamt",
+                "kickbase_average_points": "Saison-Punkteschnitt je Einsatz",
                 "lineup_score": "beste verfügbare Punktebasis",
             }.get(column, "Punktebasis")
 
@@ -654,6 +656,11 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 return None
 
             pool = squad_df.copy()
+            if "player_status" in pool:
+                pool = pool[~pool["player_status"].isin([
+                    "Verletzt", "Reha", "Rotgesperrt", "Gelb-Rot-Sperre",
+                    "Nicht im Kader", "Nicht in Liga", "Abwesend",
+                ])].copy()
             pool["_lineup_score"] = pool[score_column].apply(lambda value: numeric_or_none(value))
             for fallback_column in ["last_season_avg_points", "mv"]:
                 if fallback_column not in pool:
@@ -704,56 +711,6 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 )
             return "".join(rows)
 
-        def weakest_position_from_lineup(selected):
-            if selected is None or selected.empty:
-                return None
-            position_scores = (
-                selected.groupby(selected["position"].map(canonical_position))["_lineup_score"]
-                .mean()
-                .sort_values()
-            )
-            if position_scores.empty:
-                return None
-            return position_scores.index[0]
-
-        def market_fit_for_position(position):
-            if position is None or market_df.empty or "position" not in market_df:
-                return ""
-            position_key = canonical_position(position)
-            candidates = market_df[market_df["position"].map(canonical_position) == position_key].copy()
-            if candidates.empty:
-                return ""
-            if "player_status" in candidates:
-                healthy_candidates = candidates[
-                    ~candidates["player_status"].isin([
-                        "Verletzt",
-                        "Reha",
-                        "Rotgesperrt",
-                        "Gelb-Rot-Sperre",
-                        "Nicht im Kader",
-                        "Nicht in Liga",
-                        "Abwesend",
-                    ])
-                ]
-                if not healthy_candidates.empty:
-                    candidates = healthy_candidates
-            if "team_limit_warning" in candidates:
-                limit_candidates = candidates[candidates["team_limit_warning"] != "Vereinslimit voll"]
-                if not limit_candidates.empty:
-                    candidates = limit_candidates
-            sort_columns = [col for col in ["lineup_score", "last_season_avg_points", "predicted_mv_target"] if col in candidates]
-            candidate = candidates.sort_values(sort_columns, ascending=False, na_position="last").iloc[0] if sort_columns else candidates.iloc[0]
-            name = escape(player_name(candidate))
-            url = player_url(candidate)
-            name_html = (
-                f'<a href="{escape(url, quote=True)}" target="_blank" style="color:#111827;text-decoration:none;font-weight:800;">{name}</a>'
-                if url else f'<b>{name}</b>'
-            )
-            return (
-                f'{name_html} ({position_label(candidate.get("position"))}, {escape(str(candidate.get("team_name", "-")))}) '
-                f'Erw. 1T {colored_number(candidate.get("predicted_mv_target"), format_number(candidate.get("predicted_mv_target")))}'
-            )
-
         squad_positions = squad_df["position"].map(canonical_position)
         counts = {pos: int((squad_positions == pos).sum()) for pos in [1, 2, 3, 4]}
         possible = []
@@ -772,10 +729,10 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
         usable_score_columns = [
             column
             for column in [
+                "kickbase_average_points",
                 "last_3_points",
                 "current_season_points",
                 "last_season_avg_points",
-                "kickbase_average_points",
                 "last_season_points",
                 "lineup_score",
             ]
@@ -812,7 +769,6 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
 
         if primary:
             primary_formation, primary_total, primary_selected = primary
-            weakest_position = weakest_position_from_lineup(primary_selected)
             primary_html = (
                 '<div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;padding:11px 12px;margin:10px 0;">'
                 '<div style="font-size:12px;color:#6b7280;font-weight:800;text-transform:uppercase;">Beste Elf</div>'
@@ -822,7 +778,6 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 '</div>'
             )
         else:
-            weakest_position = None
             primary_html = (
                 '<div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;padding:11px 12px;margin:10px 0;">'
                 '<b>Beste Elf:</b> Noch keine vollständige Formation mit verwertbaren Punktdaten berechenbar.'
@@ -875,57 +830,45 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
             if pos in needs:
                 needed_positions.append(pos)
 
-        need_position = needed_positions[0] if needed_positions else weakest_position
-        need_label = position_label(need_position) if need_position is not None else "-"
-        if needed_positions:
-            need_reason = "Für die nächstliegende vollständige Formation fehlt dort am ehesten Tiefe."
-        elif need_position is not None:
-            need_reason = "Deine beste Elf ist vollständig; diese Position hat in der berechneten Startelf den niedrigsten Punkteschnitt."
-        else:
-            need_reason = "Aktuell fehlen verwertbare Punktdaten für eine klare Positionsdiagnose."
-
+        upgrades = player_upgrades(
+            primary[2], market_df, canonical_position,
+            squad_df.get("player_id", pd.Series(dtype=object)),
+        ) if primary else []
         market_rows = []
-        if not market_df.empty and "position" in market_df:
-            candidates = market_df.copy()
-            if "top_player_tag" not in candidates:
-                candidates["top_player_tag"] = ""
-            if needed_positions:
-                position_match = candidates["position"].map(canonical_position).isin(needed_positions)
-                top_player_match = candidates["top_player_tag"].astype(str).ne("")
-                candidates = candidates[position_match | top_player_match]
-            candidates["top_player_rank"] = candidates["top_player_tag"].astype(str).eq("").map({True: 1, False: 0})
-            candidates = candidates.sort_values(["top_player_rank", "predicted_mv_target"], ascending=[True, False]).head(4)
-            for _, row in candidates.iterrows():
-                top_label = f' {badge(row.get("top_player_tag"))}' if row.get("top_player_tag") else ""
-                market_rows.append(
-                    f'<li><b>{escape(player_name(row))}</b> ({position_label(row.get("position"))}, {escape(str(row.get("team_name", "-")))}) '
-                    f'- {top_label} '
-                    f'erwartet {colored_number(row.get("predicted_mv_target"), format_number(row.get("predicted_mv_target")))}'
-                    '</li>'
-                )
-
-        option_rows = []
-        for name, missing_total, missing in best_options:
-            if missing_total == 0:
-                status = '<span style="color:#166534;font-weight:700;">vollständig möglich</span>'
-            else:
-                missing_text = ", ".join(f"{amount} {POSITION_LABELS[pos]}" for pos, amount in missing.items() if amount)
-                status = f'<span style="color:#92400e;font-weight:700;">es fehlen {missing_text}</span>'
-            option_rows.append(f"<li><b>{name}</b>: {status}</li>")
-
-        market_fit_html = market_fit_for_position(need_position)
-        strengthen_html = (
-            f'<p style="font-size:13px;color:#374151;margin:8px 0 0 0;"><b>Passender Marktspieler:</b> {market_fit_html}</p>'
-            if market_fit_html else
-            '<p style="font-size:13px;color:#6b7280;margin:8px 0 0 0;">Aktuell kein klar passender Marktspieler für diese Position im Report.</p>'
-        )
-
+        for duel in upgrades[:3]:
+            candidate, starter = duel["candidate"], duel["starter"]
+            price = numeric_or_none(candidate.get("mv"))
+            sale_value = numeric_or_none(starter.get("mv"))
+            cost = (
+                f' Marktwertdifferenz: {format_number(price - sale_value)} € vor Overpay.'
+                if price is not None and sale_value is not None else ""
+            )
+            market_rows.append(
+                f'<li><b>{escape(player_name(candidate))}</b> statt '
+                f'<b>{escape(player_name(starter))}</b> '
+                f'({position_label(duel["position"])}): '
+                f'{duel["target"]:.1f} statt {duel["current"]:.1f} Punkte je Einsatz '
+                f'(<b>+{duel["gain"]:.1f}</b>, {escape(duel["basis"])}).{cost}</li>'
+            )
+        if primary:
+            need_label = "Spielervergleich"
+            need_reason = (
+                "Positionsgleiche Alternativen zur unten gezeigten rechnerischen Elf. "
+                "Verglichen werden einzelne Spieler auf derselben Saisonbasis. "
+                "Historische Punkteschnitte sind keine Prognose; Budget und geplante Verkäufe "
+                "sind in dieser Elf nicht berücksichtigt."
+            )
+        else:
+            need_label = "Startelf unvollständig"
+            need_reason = "Ohne vollständige berechenbare Elf ist kein konkreter Tauschvergleich möglich."
+        strengthen_html = primary_html
         market_html = (
             '<ul style="margin:8px 0 0 18px;padding:0;font-size:13px;color:#374151;">'
-            + "".join(market_rows)
-            + "</ul>"
+            + "".join(market_rows) + "</ul>"
             if market_rows else
-            '<p style="font-size:13px;color:#6b7280;margin:8px 0 0 0;">Keine direkte Ergänzung unter den aktuellen Kaufempfehlungen.</p>'
+            '<p style="font-size:13px;color:#6b7280;margin:8px 0 0 0;">'
+            'Kein positionsgleicher Marktspieler im Report mit höherem vergleichbarem '
+            'Punkteschnitt je Einsatz.</p>'
         )
 
         return f"""
@@ -933,7 +876,7 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
                 <h3 style="color:#1f2933;margin:0 0 10px 0;font-size:16px;">Kaderanalyse</h3>
                 <p style="font-size:13px;color:#374151;margin:0 0 4px 0;"><b>Verstärkungspotenzial:</b> {need_label}. {need_reason}</p>
                 {strengthen_html}
-                <p style="font-size:13px;color:#374151;margin:0 0 4px 0;"><b>Sinnvolle Markt-Ergänzungen:</b></p>
+                <p style="font-size:13px;color:#374151;margin:0 0 4px 0;"><b>Mögliche Tausche:</b></p>
                 {market_html}
             </div>
         """
@@ -1140,9 +1083,11 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
 
             <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
                 <b>Kaderanalyse:</b>
-                Wählt je Formation die punktstärksten passenden Spieler. Priorität der Punktebasis:
-                letzte 3 aktuelle Spiele, aktuelle Saison, danach Vorsaison-Ø bzw. Vorsaison-Gesamtpunkte, falls es noch keine aktuellen Saisonpunkte gibt.
-                Der Verstärkungshinweis nutzt fehlende Formationsteile oder die schwächste Position deiner berechneten besten Elf.
+                Zeigt die rechnerische Elf, bevorzugt nach aktuellem Saison-Punkteschnitt je Einsatz;
+                bei fehlender Datenbasis folgen letzte 3 Spiele, Saisonpunkte und Vorsaisonwerte.
+                Tauschvorschläge vergleichen einzelne positionsgleiche Spieler auf derselben Saisonbasis
+                anhand von Punkten je Einsatz, nicht anhand von Positionsgruppen oder Punktesummen.
+                Die Tauschhinweise vergleichen nur positionsgleiche Spieler und schließen Verletzte sowie bereits eigene Spieler aus.
             </p>
 
 
