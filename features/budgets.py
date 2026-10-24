@@ -232,8 +232,8 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget, incl
     budget_df["Budget"] = budget_df["Budget"].astype(float)
 
     # The activities endpoint retains only a limited history. If its first
-    # transfer post-dates the league reset, use each dashboard's season-wide
-    # transfer profit instead of pretending the partial ledger is complete.
+    # transfer post-dates the league reset, the partial ledger cannot establish
+    # another manager's current cash balance.
     activity_dates = pd.to_datetime(activities_df.get("dt", pd.Series(dtype=str)), errors="coerce", utc=True)
     feed_covers_league_start = bool(
         not activity_dates.dropna().empty
@@ -248,38 +248,19 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget, incl
     except Exception as e:
         print(f"Warning: Could not sync own budget: {e}")
 
-    has_profile_profit = budget_df["Transfer Profit"].notna().all()
-    use_profile_balance = not feed_covers_league_start and has_profile_profit and own_budget is not None and own_username
-    if use_profile_balance:
-        own_rows = budget_df[budget_df["User"] == own_username]
-        if own_rows.empty:
-            use_profile_balance = False
-        else:
-            own_row = own_rows.iloc[0]
-            opening_equity = (
-                float(own_budget)
-                + float(own_row["Team Value"] or 0)
-                - float(own_row["Transfer Profit"] or 0)
-                - float(own_row["Known Bonus"] or 0)
-            )
-            budget_df["Budget"] = (
-                opening_equity
-                + budget_df["Transfer Profit"].fillna(0)
-                + budget_df["Known Bonus"].fillna(0)
-                - budget_df["Team Value"].fillna(0)
-            )
-            budget_df["Cash Basis"] = "Profilbilanz (kalibriert)"
-            print(
-                "Cash estimate uses dashboard transfer profit because the activity feed starts "
-                f"on {activity_dates.min().date()} after league start {league_start_date}."
-            )
-
-    if not use_profile_balance:
-        budget_df["Cash Basis"] = "Aktivitätenfeed"
+    # A shared offset derived from our account cannot reconstruct another
+    # manager's missing transfers or individual bonuses. Dashboard profit and
+    # current squad value are not a verified cash ledger.
+    budget_df["Cash Basis"] = "Aktivitätenfeed (Schätzung)"
+    if not feed_covers_league_start:
+        budget_df["Budget"] = float("nan")
+        budget_df["Cash Basis"] = "Unbekannt (Historie unvollständig)"
 
     # An API fact always wins over an estimate for the report owner's cash.
     if own_budget is not None and own_username:
-        budget_df.loc[budget_df["User"] == own_username, "Budget"] = own_budget
+        own_mask = budget_df["User"] == own_username
+        budget_df.loc[own_mask, "Budget"] = own_budget
+        budget_df.loc[own_mask, "Cash Basis"] = "API (eigener Kontostand)"
 
     # Kickbase buying power is cash plus the amount a manager may go into debt.
     budget_df["Max Negative"] = budget_df["Team Value"].fillna(0) * -0.33
@@ -298,7 +279,7 @@ def calc_manager_budgets(token, league_id, league_start_date, start_budget, incl
         "login_bonus_per_manager": total_login_bonus,
         "achievement_bonus_for_opponents": "reconstructable subset",
         "points_reward_per_point": 1000,
-        "cash_method": "dashboard transfer-profit profile" if use_profile_balance else "activity ledger",
+        "cash_method": "activity ledger estimate" if feed_covers_league_start else "unknown (incomplete history)",
         "feed_covers_league_start": feed_covers_league_start,
     }
     budget_df.attrs["achievement_breakdown"] = achievement_breakdown

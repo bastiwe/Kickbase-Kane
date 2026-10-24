@@ -27,7 +27,8 @@ from features.predictions.data_handler import (
     load_player_data_from_db,
     hydrate_missing_live_players,
 )
-from features.budgets import calc_manager_budgets
+from features.manager_history import audit_managers
+from kickbase_api.config import BASE_URL, get_json_with_token
 from features.ligainsider_signals import enrich_reports_with_ligainsider_signals
 from kickbase_api.league import get_league_players_on_market
 from kickbase_api.user import get_players_in_squad
@@ -127,7 +128,12 @@ if settled_online_forecasts:
 print("\nData loaded from database.")
 
 # Calculate (estimated) budgets of all managers in the league
-manager_budgets_df = calc_manager_budgets(token, league_id, league_start_date, start_budget, include_overpay=False)
+manager_budgets_df = audit_managers(
+    lambda path: get_json_with_token(BASE_URL + path, token),
+    league_id, league_start_date, start_cash=start_budget,
+    initial_squad_value=100_000_000,
+    history_path=os.getenv('MANAGER_HISTORY_PATH', 'manager_history.sqlite3'),
+)
 print("\n=== Manager Budgets ===")
 display(manager_budgets_df)
 

@@ -9,6 +9,7 @@ import smtplib
 import os
 import pandas as pd
 from features.predictions.predictions import REMOVED_REPORT_COLUMNS
+from features.manager_history import render_audit
 
 COLUMN_LABELS = {
     "recommendation": "Action",
@@ -44,7 +45,7 @@ COLUMN_LABELS = {
     "expires_at": "Ablauf",
     "risk": "Risiko",
     "User": "Manager",
-    "Budget": "Cash",
+    "Budget": "Cash / Schätzung",
     "Avg Overpay": "Ø Overpay",
     "Team Value": "Kaderwert",
     "Max Negative": "Minuslimit",
@@ -220,7 +221,19 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
     msg["From"] = EMAIL_ADDRESS
     msg["To"] = email
 
-    top_budget = budget_df.iloc[0]["User"] if not budget_df.empty and "User" in budget_df else "-"
+    comparable_budgets = (
+        not budget_df.empty and "User" in budget_df and "Available Budget" in budget_df
+        and budget_df["Available Budget"].notna().all()
+        and not budget_df.attrs.get("manager_audit")
+    )
+    top_budget = (
+        budget_df.loc[budget_df["Available Budget"].idxmax(), "User"]
+        if comparable_budgets else "Nicht bestimmbar"
+    )
+    manager_audit_html = (
+        render_audit(budget_df.attrs["manager_audit"])
+        if budget_df.attrs.get("manager_audit") else ""
+    )
 
     backtest_summary = load_backtest_summary()
 
@@ -1201,8 +1214,9 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
         {lineup_advice}
 
         <h3 style="color: #2c3e50; margin-top: 30px;">Manager-Budgets</h3>
-        <p style="font-size: 14px; color: #333;">Cash und Kaufkraft basieren auf der verfügbaren Kickbase-Historie. Bei abgeschnittener Historie wird die Profilbilanz anhand deines echten Cash-Werts kalibriert.</p>
+        <p style="font-size: 14px; color: #333;">Nur dein eigener Kontostand stammt direkt aus der API. Fremde Kontostände werden aus 80 Mio. Startcash, 100 Mio. Startkader, Transferhistorie, Profilgewinn und nachvollziehbaren Bonusannahmen geschätzt. Belegte, geschätzte und offene Erfolge werden darunter getrennt ausgewiesen.</p>
         {style_df(budget_df)}
+        {manager_audit_html}
 
         <h3 style="color: #2c3e50; margin-top: 30px;">Aktuelle Markt-Empfehlungen</h3>
         <p style="font-size: 14px; color: #333;">Fremde Marktangebote, sortiert nach Ablauf. Erw. 1T zeigt die erwartete nächste Marktwertänderung.</p>

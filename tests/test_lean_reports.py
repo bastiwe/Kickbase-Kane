@@ -142,7 +142,7 @@ class LeanReportTests(unittest.TestCase):
         self.assertNotIn('Avg Overpay', result)
         self.assertEqual(result.iloc[0]['Available Budget'], 113_000_000)
 
-    def test_budget_uses_dashboard_profit_when_activity_feed_is_incomplete(self):
+    def test_budget_does_not_infer_opponent_cash_from_own_profile(self):
         prefix = 'features.budgets.'
         activities = [{'dt': '2026-09-01T12:00:00Z', 'byr': 'Me', 'slr': None,
                        'pi': '1', 'trp': 10_000_000}]
@@ -160,10 +160,12 @@ class LeanReportTests(unittest.TestCase):
              patch(prefix + 'get_username', return_value='Me'):
             result = calc_manager_budgets('token', 'league', '2026-08-15', 80_000_000, include_overpay=False)
         other = result.set_index('User').loc['Other']
-        # Same profit but 16m less team value means 16m more cash. A partial
-        # feed must not fabricate a large cash surplus from missing transfers.
-        self.assertEqual(other['Budget'], 25_000_000)
-        self.assertEqual(other['Cash Basis'], 'Profilbilanz (kalibriert)')
+        self.assertTrue(pd.isna(other['Budget']))
+        self.assertTrue(pd.isna(other['Available Budget']))
+        self.assertEqual(other['Cash Basis'], 'Unbekannt (Historie unvollständig)')
+        own = result.set_index('User').loc['Me']
+        self.assertEqual(own['Budget'], 9_000_000)
+        self.assertEqual(own['Cash Basis'], 'API (eigener Kontostand)')
 
     def test_empty_market(self):
         with patch('features.predictions.predictions.get_league_players_on_market', return_value=[]), patch('features.predictions.predictions.get_players_in_squad', return_value={'it': []}):
@@ -177,12 +179,17 @@ class LeanReportTests(unittest.TestCase):
         market = market.drop(columns=hidden + ['purchase_price', 'squad_profit_loss', 'is_listed_for_sale'])
         squad = squad.drop(columns=hidden + ['expires_at', 'risk', 'has_open_bid'])
         budget = pd.DataFrame([{'User': 'Testmanager', 'Budget': 1000000, 'Team Value': 120000000, 'Max Negative': -39600000, 'Available Budget': 40600000}])
+        budget.loc[1] = {'User': 'Sebastian', 'Budget': float('nan'),
+                         'Team Value': 257589532, 'Max Negative': -85004546,
+                         'Available Budget': float('nan')}
         with patch.dict(os.environ, {'EMAIL_USER': 'test@example.com', 'EMAIL_PASS': 'fake'}), patch('features.notifier.smtplib.SMTP') as smtp:
             send_mail(budget, market, squad, 'test@example.com')
         message = smtp.return_value.__enter__.return_value.send_message.call_args.args[0]
         html = message.get_body(preferencelist=('html',)).get_content()
         for label in ['Kaufart', 'Vertrauen', 'Gegnerdruck', 'Max. Gebot', 'MW-Tendenz', 'Pkt. Vors.', 'Erw. %', 'Sieggebot', 'Overpay', 'Kaufpriorität']:
             self.assertFalse(label in html, f'Removed label still visible: {label}')
+        self.assertIn('Nicht bestimmbar', html)
+        self.assertIn('80 Mio. Startcash', html)
         self.assertIn('LI %', html)
         for label in ['>Action<', 'Verkaufsampel', '>Limit<', 'Action-Legende', 'Verkaufschecks']:
             self.assertNotIn(label, html)

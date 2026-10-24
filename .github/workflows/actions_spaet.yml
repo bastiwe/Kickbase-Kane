@@ -8,6 +8,14 @@ on:
     - cron: '10 21 * * *'  # 22:10 in Germany during standard time
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: kickbase-manager-history
+  cancel-in-progress: false
+
 jobs:
   run-daily-predictions:
     runs-on: ubuntu-latest
@@ -62,6 +70,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Restore cumulative manager history
+        if: steps.berlin-time.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python .github/scripts/restore_manager_history.py
+
       - name: Run daily_predictions_spaet.py
         if: steps.berlin-time.outputs.run == 'true'
         env:
@@ -86,6 +100,22 @@ jobs:
         with:
           name: startelf-optimizer
           path: startelf_optimizer.html
+
+      - name: Save cumulative manager history
+        if: ${{ !cancelled() && steps.berlin-time.outputs.run == 'true' && hashFiles('manager_history.sqlite3') != '' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: manager-history
+          path: manager_history.sqlite3
+          retention-days: 90
+
+      - name: Save manager audit
+        if: ${{ !cancelled() && steps.berlin-time.outputs.run == 'true' && hashFiles('manager-history-output/latest.json') != '' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: manager-audit
+          path: manager-history-output/
+          retention-days: 90
 
       - name: Save completed 1T forecasts
         if: ${{ !cancelled() && steps.berlin-time.outputs.run == 'true' && hashFiles('prediction_snapshot_1t.json') != '' }}

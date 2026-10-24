@@ -17,3 +17,5 @@ prediction_snapshot_1t.json
 .advisor-report.tmp
 s11_strategy_report.html
 s11_strategy_report.json
+manager_history.sqlite3
+manager-history-output/

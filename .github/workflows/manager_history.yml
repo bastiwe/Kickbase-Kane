@@ -1,0 +1,46 @@
+name: Capture locked manager matchday squads
+
+on:
+  schedule:
+    - cron: '15,45 12-20 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: kickbase-manager-history
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Restore cumulative manager history
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python .github/scripts/restore_manager_history.py
+      - name: Capture locked squads after kickoff
+        id: capture
+        env:
+          KICK_USER: ${{ secrets.KICK_USER }}
+          KICK_PASS: ${{ secrets.KICK_PASS }}
+          KICK_LEAGUE_NAME: ${{ secrets.KICK_LEAGUE_NAME }}
+          LEAGUE_START_DATE: '2026-08-15'
+        run: python manager_history.py --capture-only --after-kickoff-only
+      - name: Save cumulative manager history
+        if: ${{ !cancelled() && steps.capture.outputs.capture_due == 'true' && hashFiles('manager_history.sqlite3') != '' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: manager-history
+          path: manager_history.sqlite3
+          retention-days: 90
