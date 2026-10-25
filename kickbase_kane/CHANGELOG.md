@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.48
+
+- Ordnet die Managerbudget-Kacheln untereinander an und zeigt Cash, Kaderwert und Kaufkraft je Manager in getrennten Spalten.
+
 ## 0.2.47
 
 - Behebt den Import des Manager-Audits, wenn GitHub Actions `latest.json` auf der Wurzelebene des Artefakts ablegt.
