@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.43
+
+- Das Kaderwertdiagramm wird aus der vollständigen eigenen Transferhistorie rekonstruiert und am aktuellen, direkt von Kickbase gelieferten Kaderwert verankert.
+- Historische Tage mit unvollständigen Marktwertdaten werden nicht mehr als zu niedrige Kaderwerte dargestellt.
+
 ## 0.2.42
 
 - Transfermarkt und Handlungsbedarf lassen sich nun aufklappen und zeigen die letzten vier tatsächlichen täglichen Marktwertänderungen direkt aus der Kickbase-API.
