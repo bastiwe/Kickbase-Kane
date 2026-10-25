@@ -51,8 +51,10 @@ class ManagerBudgetTests(unittest.TestCase):
         }
         archive = BytesIO()
         with ZipFile(archive, 'w') as zipped:
-            zipped.writestr('manager-history-output/latest.json', json.dumps(payload))
-            zipped.writestr('manager-history-output/latest.html', '<html></html>')
+            # upload-artifact stores the contents of an uploaded directory at
+            # archive root rather than retaining that directory's own name.
+            zipped.writestr('latest.json', json.dumps(payload))
+            zipped.writestr('latest.html', '<html></html>')
         listing = Response(payload={'artifacts': [{
             'id': 7, 'name': 'manager-audit', 'expired': False,
             'archive_download_url': 'https://example.invalid/audit.zip',

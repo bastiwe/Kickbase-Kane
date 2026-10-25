@@ -166,7 +166,11 @@ def sync_latest_manager_audit(token, repository, data_root):
         )
         archive.raise_for_status()
         with ZipFile(BytesIO(archive.content)) as zipped:
-            matches = [name for name in zipped.namelist() if name.replace('\\', '/').endswith(MANAGER_SUMMARY_NAME)]
+            matches = [name for name in zipped.namelist() if (
+                name.replace('\\', '/') == 'latest.json'
+                or name.replace('\\', '/').endswith('/' + MANAGER_SUMMARY_NAME)
+                or name.replace('\\', '/') == MANAGER_SUMMARY_NAME
+            )]
             if len(matches) != 1:
                 return {"status": "error", "message": "GitHub-Artifact enthält keinen eindeutigen Manager-Audit."}
             payload = json.loads(zipped.read(matches[0]).decode("utf-8"))

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.47
+
+- Behebt den Import des Manager-Audits, wenn GitHub Actions `latest.json` auf der Wurzelebene des Artefakts ablegt.
+
 ## 0.2.46
 
 - Ein Klick auf einen freien Startelfplatz öffnet passende Kandidaten für genau diese Position.
