@@ -30,6 +30,12 @@ class MobileLineupPlannerTests(unittest.TestCase):
         self.assertIn('function projectedBudget(p)', self.template)
         self.assertIn("if(s&&!sel[+s.dataset.slot]){openCandidates(+s.dataset.slot);return}", self.template)
 
+    def test_formations_show_budget_status_and_selected_outline(self):
+        self.assertIn("budget>=0?'form-green':'form-yellow'", self.template)
+        self.assertIn("return{kind:'form-red'", self.template)
+        self.assertIn('.forms button.active{outline:3px solid var(--form-color)', self.template)
+        self.assertIn("if(f){selectFormation(f.dataset.form);return}", self.template)
+
 
 if __name__ == '__main__':
     unittest.main()

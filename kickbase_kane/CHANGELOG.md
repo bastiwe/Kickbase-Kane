@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.49
+
+- Markiert Formationen mit nichtnegativem Endbudget grün, mit negativem Endbudget gelb und nicht vollständig besetzbare Formationen rot.
+- Hebt die aktive Formation zusätzlich mit einer Umrandung in ihrer jeweiligen Statusfarbe hervor.
+
 ## 0.2.48
 
 - Ordnet die Managerbudget-Kacheln untereinander an und zeigt Cash, Kaderwert und Kaufkraft je Manager in getrennten Spalten.
