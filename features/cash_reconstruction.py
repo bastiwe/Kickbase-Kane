@@ -9,6 +9,13 @@ from features.budgets import (
 BERLIN = ZoneInfo('Europe/Berlin')
 LUCKY_HAND_THRESHOLD = 1_000_000
 LUCKY_HAND_REWARD = 100_000
+MATCHDAY_WIN_MILESTONES = ((3, 500_000), (5, 1_000_000), (10, 1_500_000), (25, 2_000_000))
+SEASON_POINT_MILESTONES = ((1_000, 100_000), (5_000, 250_000), (15_000, 500_000),
+                           (30_000, 1_000_000), (40_000, 2_000_000))
+TRANSFER_COUNT_MILESTONES = ((1, 100_000), (50, 250_000), (250, 500_000),
+                             (500, 1_000_000), (1_000, 2_000_000))
+LONG_BENCH_SIZE = 25
+LONG_BENCH_REWARD = 100_000
 
 
 def timestamp(value):
@@ -81,6 +88,64 @@ def reconstruct_lucky_hand(transfers, *, start_date, as_of):
                      'mindestens 1 Mio. Gewinn; keine Managertransfers')}
 
 
+def reconstruct_season_milestones(transfers, matchdays, squad, *, start_date):
+    """Reconstruct cumulative season achievements from complete API histories."""
+    events = []
+    wins = 0
+    points = 0
+    for matchday in sorted(matchdays, key=lambda item: timestamp(item['md'])):
+        previous_wins = wins
+        wins += int(matchday.get('tw') is True)
+        points += matchday['mdp']
+        for threshold, reward in MATCHDAY_WIN_MILESTONES:
+            if previous_wins < threshold <= wins:
+                events.append({'code': f'matchday_wins_{threshold}', 'kind': 'Sieg-Meilenstein',
+                               'threshold': threshold, 'value': wins, 'date': matchday['md'],
+                               'day': matchday.get('day'), 'bonus': reward})
+        for threshold, reward in SEASON_POINT_MILESTONES:
+            previous = points - matchday['mdp']
+            if previous < threshold <= points:
+                events.append({'code': f'season_points_{threshold}', 'kind': 'Saisonpunkte',
+                               'threshold': threshold, 'value': points, 'date': matchday['md'],
+                               'day': matchday.get('day'), 'bonus': reward})
+
+    for threshold, reward in TRANSFER_COUNT_MILESTONES:
+        if len(transfers) >= threshold:
+            row = transfers[threshold - 1]
+            events.append({'code': f'transfers_{threshold}', 'kind': 'Transferanzahl',
+                           'threshold': threshold, 'value': len(transfers),
+                           'date': row['dt'], 'bonus': reward})
+
+    current = {str(player.get('pi') or player.get('i')) for player in squad.get('it', [])
+               if player.get('pi') is not None or player.get('i') is not None}
+    initial = set(current)
+    for row in reversed(transfers):
+        player_id = str(row.get('pi'))
+        if row.get('tty') == 1:
+            initial.discard(player_id)
+        elif row.get('tty') == 2:
+            initial.add(player_id)
+    roster = set(initial)
+    long_bench_date = start_date if len(roster) >= LONG_BENCH_SIZE else None
+    max_roster_size = len(roster)
+    for row in transfers:
+        player_id = str(row.get('pi'))
+        if row.get('tty') == 1:
+            roster.add(player_id)
+        elif row.get('tty') == 2:
+            roster.discard(player_id)
+        max_roster_size = max(max_roster_size, len(roster))
+        if long_bench_date is None and len(roster) >= LONG_BENCH_SIZE:
+            long_bench_date = row['dt']
+    if long_bench_date is not None:
+        events.append({'code': 'long_bench_25', 'kind': 'Lange Bank',
+                       'threshold': LONG_BENCH_SIZE, 'value': max_roster_size,
+                       'date': long_bench_date, 'bonus': LONG_BENCH_REWARD})
+    return {'bonus': sum(event['bonus'] for event in events), 'events': events,
+            'wins': wins, 'season_points': points, 'transfer_count': len(transfers),
+            'max_roster_size': max_roster_size}
+
+
 def reconstruct_cash(transfers, performance, squad, profile_profit, *,
                      start_date, as_of, start_cash=80_000_000,
                      points_reward=1000, achievements_enabled=True,
@@ -132,9 +197,13 @@ def reconstruct_cash(transfers, performance, squad, profile_profit, *,
     wins = sum(m.get('tw') is True for m in matchdays) * 1_000_000 if achievements_enabled else 0
     matchday_bonus = sum(b for m in matchdays for t, b in MATCHDAY_POINT_BONUSES
                          if m['mdp'] >= t) if achievements_enabled else 0
+    milestones = (reconstruct_season_milestones(rows, matchdays, squad, start_date=start_date)
+                  if achievements_enabled else {'bonus': 0, 'events': [], 'wins': 0,
+                                                'season_points': 0, 'transfer_count': len(rows),
+                                                'max_roster_size': len(squad.get('it', []))})
     login = daily_login_bonus_total(start_date, end)
     estimate = (start_cash + sales - buys + login + points + wins
-                + matchday_bonus + transfer_bonus + lucky_hand['bonus'])
+                + matchday_bonus + transfer_bonus + lucky_hand['bonus'] + milestones['bonus'])
 
     current = {str(p['pi']): p for p in squad.get('it', [])}
     missing = sorted(set(purchases) - set(current))
@@ -150,7 +219,8 @@ def reconstruct_cash(transfers, performance, squad, profile_profit, *,
     # If prft is realized profit, subtract current acquisition cost, NOT current
     # market value. Unrealized market changes are not cash movements.
     current_acquisition_cost = sum(p['mv'] - p['mvgl'] for p in current.values())
-    bonus_total = login + points + wins + matchday_bonus + transfer_bonus + lucky_hand['bonus']
+    bonus_total = (login + points + wins + matchday_bonus + transfer_bonus
+                   + lucky_hand['bonus'] + milestones['bonus'])
     profile_estimate = (start_cash + initial_squad_value + profile_profit
                         - current_acquisition_cost + bonus_total)
     return {
@@ -160,6 +230,9 @@ def reconstruct_cash(transfers, performance, squad, profile_profit, *,
         'settled_points_reward': points, 'matchday_wins': wins,
         'matchday_thresholds': matchday_bonus, 'transfer_bonuses': transfer_bonus,
         'lucky_hand_bonus': lucky_hand['bonus'], 'lucky_hand_event': lucky_hand,
+        'season_milestone_bonus': milestones['bonus'], 'season_milestone_events': milestones['events'],
+        'season_milestone_state': {key: value for key, value in milestones.items()
+                                   if key not in ('bonus', 'events')},
         'cash_partial_estimate': estimate, 'transfer_bonus_events': bonus_events,
         'profile_transfer_profit': profile_profit, 'realized_profit_known_buys': realized,
         'inferred_initial_squad_cost': inferred_initial_cost,
@@ -169,6 +242,7 @@ def reconstruct_cash(transfers, performance, squad, profile_profit, *,
         'profile_vs_ledger_difference': profile_estimate - estimate,
         'current_squad_unrealized_gain': sum(p['mvgl'] for p in current.values()),
         'missing_current_players': missing, 'purchase_price_mismatches': mismatches,
-        'omitted': ['MVP', 'individual player point awards',
-                    'other once-only achievements', 'admin adjustments', 'initial cash adjustment'],
+        'omitted': ['MVP', 'individual player point awards', 'team-value achievements',
+                    'league/profile achievements', 'season placement',
+                    'admin adjustments', 'initial cash adjustment'],
     }

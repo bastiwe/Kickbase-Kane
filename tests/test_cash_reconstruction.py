@@ -17,7 +17,7 @@ class CashReconstructionTests(unittest.TestCase):
             self.trade('2026-08-14T21:59:59Z', 1, 99_000_000),
             self.trade('2026-08-14T22:00:00Z', 2, 10_000_000),
         ])
-        self.assertEqual(result['cash_partial_estimate'], 96_650_000)
+        self.assertEqual(result['cash_partial_estimate'], 96_750_000)
         self.assertEqual(result['transfer_bonuses'], 0)
         self.assertEqual(result['transfer_count'], 1)
 
@@ -51,7 +51,7 @@ class CashReconstructionTests(unittest.TestCase):
         result = self.calculate(rows)
         self.assertEqual(result['lucky_hand_bonus'], 200_000)
         self.assertEqual(result['lucky_hand_event']['count'], 2)
-        self.assertEqual(result['cash_partial_estimate'], 91_100_000)
+        self.assertEqual(result['cash_partial_estimate'], 91_200_000)
 
     def test_lucky_hand_ignores_manager_to_manager_transfer(self):
         rows = [
@@ -73,6 +73,29 @@ class CashReconstructionTests(unittest.TestCase):
         self.assertEqual(result['settled_points_reward'], 1_600_000)
         self.assertEqual(result['matchday_wins'], 1_000_000)
         self.assertEqual(result['matchday_thresholds'], 750_000)
+        self.assertEqual(result['season_milestone_bonus'], 100_000)
+
+    def test_cumulative_win_and_season_point_milestones_stack(self):
+        matchdays = [{'md': f'2026-09-{day:02d}', 'day': day, 'mdp': 1000,
+                      'cur': False, 'tw': True} for day in range(1, 6)]
+        matchdays.append({'md': '2026-09-06', 'day': 6, 'mdp': 100,
+                          'cur': False, 'tw': False})
+        result = self.calculate([], {'it': [{'sid': '2', 'it': matchdays}]})
+        self.assertEqual(result['season_milestone_bonus'], 1_850_000)
+        self.assertEqual([event['code'] for event in result['season_milestone_events']],
+                         ['season_points_1000', 'matchday_wins_3',
+                          'matchday_wins_5', 'season_points_5000'])
+
+    def test_transfer_count_milestones_and_long_bench_are_reconstructed(self):
+        rows = []
+        for index in range(25):
+            rows.extend([self.trade(f'2026-09-{index + 1:02d}T10:00:00', 1, 100, str(index)),
+                         self.trade(f'2026-09-{index + 1:02d}T11:00:00', 2, 100, str(index))])
+        squad = {'it': [{'pi': str(index + 100), 'mv': 100, 'mvgl': 0} for index in range(24)]}
+        result = self.calculate(rows, squad=squad)
+        self.assertEqual(result['season_milestone_bonus'], 450_000)
+        self.assertEqual(result['season_milestone_state']['transfer_count'], 50)
+        self.assertEqual(result['season_milestone_state']['max_roster_size'], 25)
 
     def test_pages_are_loaded_until_reset_is_crossed(self):
         page = [self.trade('2026-08-18T10:00:00Z', 1, i, str(i)) for i in range(25)]
@@ -90,7 +113,7 @@ class CashReconstructionTests(unittest.TestCase):
         result = self.calculate([self.trade('2026-08-18', 1, 123)],
                                 squad={'it': [{'pi': '1', 'mv': 150, 'mvgl': 27, 'prc': 124}]})
         self.assertEqual(result['purchase_price_mismatches'], ['1'])
-        self.assertEqual(result['cash_partial_estimate'], 86_649_877)
+        self.assertEqual(result['cash_partial_estimate'], 86_749_877)
 
     def test_initial_squad_assumption_changes_only_profile_scenario(self):
         args = dict(transfers=[], performance={'it': []},

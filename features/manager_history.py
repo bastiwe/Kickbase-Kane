@@ -19,7 +19,8 @@ from features.cash_reconstruction import BERLIN, fetch_manager_transfers, recons
 
 PLAYER_TIERS = [(200, 100_000), (300, 500_000), (400, 1_000_000), (500, 2_000_000)]
 UNRESOLVED = [
-    'Teamwert-Erfolge', 'Saisonplatzierung', 'Admin-Gutschriften und Strafen',
+    'Teamwert-Erfolge', 'Liga- und Profil-Erfolge',
+    'Saisonplatzierung', 'Admin-Gutschriften und Strafen',
 ]
 
 
@@ -61,6 +62,10 @@ class HistoryStore:
                         (scope, key, now.isoformat(), json.dumps(payload, ensure_ascii=False)))
 
     def replace_events(self, scope, events, now):
+        keys = [event['key'] for event in events]
+        duplicates = sorted({key for key in keys if keys.count(key) > 1})
+        if duplicates:
+            raise ValueError('Doppelte Ereignisschlüssel: ' + ', '.join(duplicates))
         self.db.execute('DELETE FROM events WHERE scope=?', (scope,))
         for event in events:
             self.db.execute('INSERT INTO events VALUES (?,?,?,?,?,?,?,?,?)',
@@ -282,6 +287,11 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
                     events.append({'key': f"{name}:transfer:{event['date']}:{event['player']}",
                                    'manager': name, 'kind': 'Transfergewinn', 'status': 'geschätzt',
                                    'amount': event['bonus'], 'amount_max': event['bonus'], 'evidence': event})
+                for event in audit['season_milestone_events']:
+                    events.append({'key': f"{name}:milestone:{event['code']}",
+                                   'manager': name, 'kind': event['kind'], 'status': 'geschätzt',
+                                   'amount': event['bonus'], 'amount_max': event['bonus'],
+                                   'evidence': event})
                 for md in current_season(data['performance']).get('it', []):
                     if not md.get('md') or timestamp(md['md']) < timestamp(start_date):
                         continue
@@ -409,6 +419,7 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
                    'assumptions': ['Täglicher Login', '1.000 € je abgeschlossenem Punkt',
                                    f'Erfolgsereignisse erst ab {start_date}',
                                    'Erfolgsboni aktiv', 'Profilgewinn = realisierter Gewinn seit Reset',
+                                   'Sieg-, Saisonpunkt-, Transferanzahl- und Kadergrößen-Meilensteine',
                                    'MVP innerhalb der Liga; Aufstellungen rekonstruiert',
                                    'Tormaschine aus fixiertem Kader, Torcodes und Managerpunkten',
                                    'Fehlende Spielerpunkte als null; Formation nicht geprüft'],
@@ -444,6 +455,7 @@ def render_audit(summary):
     columns = ['Manager', 'Transfernetto (Verkäufe − Käufe)', 'Profil-Transfergewinn',
                'Anschaffungskosten aktueller Kader', 'Login', 'Punkteprämie',
                'Siege / Punkte-Erfolge', 'Transferboni inkl. Glückliches Händchen',
+               'Saison-Meilensteine',
                'Spielerboni + MVP + Tormaschine (Modellspanne)',
                'Kontostand aus Transferledger + Boni', 'Kontostand aus Profilmodell', 'API-Abweichung']
     table = '<table style="border-collapse:collapse;font-size:12px"><thead><tr>' + ''.join('<th style="padding:6px">'+c+'</th>' for c in columns) + '</tr></thead><tbody>'
@@ -452,6 +464,7 @@ def render_audit(summary):
                   money(a['current_acquisition_cost']), money(a['login_assumption']), money(a['settled_points_reward']),
                   money(a['matchday_wins'] + a['matchday_thresholds']),
                   money(a['transfer_bonuses'] + a.get('lucky_hand_bonus', 0)),
+                  money(a.get('season_milestone_bonus', 0)),
                   money(a['additional_bonus_min']) + ' – ' + money(a['additional_bonus_max']),
                   money(a['ledger_cash_with_bonuses']), money(a['estimated_cash']), money(a.get('unexplained_difference'))]
         table += '<tr>' + ''.join('<td style="padding:6px;border-bottom:1px solid #ddd">'+v+'</td>' for v in values) + '</tr>'
