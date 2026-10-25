@@ -23,6 +23,13 @@ class MobileLineupPlannerTests(unittest.TestCase):
                       self.template)
         self.assertIn('sel=Array(11).fill(null);syncBenchSales();render()', self.template)
 
+    def test_empty_slot_offers_position_candidates_with_projected_budget(self):
+        self.assertIn('id="candidate-dialog"', self.template)
+        self.assertIn("P.filter(p=>p.position===position&&!sel.includes(p.id))", self.template)
+        self.assertIn('Budget danach<strong', self.template)
+        self.assertIn('function projectedBudget(p)', self.template)
+        self.assertIn("if(s&&!sel[+s.dataset.slot]){openCandidates(+s.dataset.slot);return}", self.template)
+
 
 if __name__ == '__main__':
     unittest.main()

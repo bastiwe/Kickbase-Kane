@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.46
+
+- Ein Klick auf einen freien Startelfplatz öffnet passende Kandidaten für genau diese Position.
+- Für jeden Kandidaten wird das verbleibende Budget nach seiner Auswahl direkt angezeigt.
+
 ## 0.2.45
 
 - Zeigt Namen, Cash, Kaderwert und Kaufkraft aller Manager als eigene Dashboard-Kachel.
