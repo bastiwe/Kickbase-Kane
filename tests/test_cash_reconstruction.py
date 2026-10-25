@@ -30,6 +30,36 @@ class CashReconstructionTests(unittest.TestCase):
         self.assertEqual(result['transfer_net'], 10_000_000)
         self.assertEqual(result['transfer_bonuses'], 750_000)
 
+    def test_lucky_hand_ignores_qualifying_sales_before_season_start(self):
+        rows = [
+            self.trade('2025-08-01', 1, 1_000_000),
+            self.trade('2025-08-02', 2, 2_000_000),
+            self.trade('2026-08-16', 1, 1_000_000, '2'),
+            self.trade('2026-08-17', 2, 3_000_000, '2'),
+        ]
+        result = self.calculate(rows)
+        self.assertEqual(result['lucky_hand_bonus'], 100_000)
+        self.assertEqual(result['lucky_hand_event']['evidence']['sale_date'], '2026-08-17')
+
+    def test_lucky_hand_is_awarded_for_every_qualifying_sale(self):
+        rows = [
+            self.trade('2026-08-16', 1, 1_000_000),
+            self.trade('2026-08-17', 2, 2_000_000),
+            self.trade('2026-08-18', 1, 1_000_000, '2'),
+            self.trade('2026-08-19', 2, 4_000_000, '2'),
+        ]
+        result = self.calculate(rows)
+        self.assertEqual(result['lucky_hand_bonus'], 200_000)
+        self.assertEqual(result['lucky_hand_event']['count'], 2)
+        self.assertEqual(result['cash_partial_estimate'], 91_100_000)
+
+    def test_lucky_hand_ignores_manager_to_manager_transfer(self):
+        rows = [
+            self.trade('2026-08-16', 1, 1_000_000, othnm='Other'),
+            self.trade('2026-08-17', 2, 5_000_000),
+        ]
+        self.assertEqual(self.calculate(rows)['lucky_hand_bonus'], 0)
+
     def test_live_and_previous_season_points_are_excluded(self):
         performance = {'it': [
             {'sid': '1', 'it': [{'md': '2025-09-01', 'mdp': 5000, 'cur': False, 'tw': True}]},

@@ -5,7 +5,10 @@ import tempfile
 import unittest
 
 from features.cash_reconstruction import BERLIN
-from features.manager_history import HistoryStore, audit_managers, historical_roster, lineup_estimate, mvp_events
+from features.manager_history import (
+    HistoryStore, audit_managers, goal_machine_events, historical_roster,
+    lineup_estimate, mvp_events,
+)
 from manager_history import kickoff_due
 
 
@@ -45,6 +48,29 @@ class ManagerHistoryTests(unittest.TestCase):
         events = {event['manager']: event for event in mvp_events(1, entries)}
         self.assertEqual(events['A']['amount'], 1_000_000)
         self.assertEqual(events['B']['amount'], 0)
+
+    def test_goal_machine_uses_squad_goals_and_manager_points_as_tiebreaker(self):
+        base = {'roster': {'issues': []}, 'fetch_errors': []}
+        entries = {
+            'A': {**base, 'goals': {'one': 2}, 'md': {'mdp': 1_000}},
+            'B': {**base, 'goals': {'two': 1, 'three': 1}, 'md': {'mdp': 1_200}},
+            'C': {**base, 'goals': {'four': 1}, 'md': {'mdp': 1_500}},
+        }
+        events = {event['manager']: event for event in goal_machine_events(3, entries)}
+        self.assertEqual(events['B']['amount'], 250_000)
+        self.assertEqual(events['A']['amount'], 0)
+        self.assertEqual(events['C']['amount'], 0)
+
+    def test_goal_machine_keeps_equal_goals_and_points_open(self):
+        base = {'roster': {'issues': []}, 'fetch_errors': [], 'md': {'mdp': 1_000}}
+        entries = {
+            'A': {**base, 'goals': {'one': 1}},
+            'B': {**base, 'goals': {'two': 1}},
+        }
+        events = {event['manager']: event for event in goal_machine_events(3, entries)}
+        self.assertEqual(events['A']['status'], 'offen')
+        self.assertEqual(events['A']['amount'], 0)
+        self.assertEqual(events['A']['amount_max'], 250_000)
 
     def test_observations_are_append_only_between_runs(self):
         with tempfile.TemporaryDirectory() as folder:

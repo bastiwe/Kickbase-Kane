@@ -7,6 +7,8 @@ from features.budgets import (
 )
 
 BERLIN = ZoneInfo('Europe/Berlin')
+LUCKY_HAND_THRESHOLD = 1_000_000
+LUCKY_HAND_REWARD = 100_000
 
 
 def timestamp(value):
@@ -46,6 +48,39 @@ def fetch_manager_transfers(get, league_id, manager_id, start_date, max_pages=10
     raise ValueError('Transferhistorie überschreitet das Seitenlimit')
 
 
+def reconstruct_lucky_hand(transfers, *, start_date, as_of):
+    """Evaluate every qualifying sale within the configured season."""
+    cutoff, end = timestamp(start_date), timestamp(as_of)
+    purchases, qualifying = {}, []
+    rows = sorted((row for row in transfers if cutoff <= timestamp(row['dt']) <= end),
+                  key=lambda row: timestamp(row['dt']))
+    for row in rows:
+        kind, player_id, price = row.get('tty'), str(row.get('pi')), row.get('trp')
+        if kind not in (1, 2) or not isinstance(price, (int, float)) or price < 0:
+            continue
+        market_transfer = not bool(row.get('othnm'))
+        if kind == 1:
+            # A reset can remove an unsold player. A later purchase is the new
+            # relevant acquisition for the next completed sale.
+            purchases[player_id] = (price, market_transfer, row.get('dt'))
+            continue
+        purchase = purchases.pop(player_id, None)
+        if not purchase or not purchase[1] or not market_transfer:
+            continue
+        gain = price - purchase[0]
+        if gain >= LUCKY_HAND_THRESHOLD:
+            qualifying.append({'player': row.get('pn', player_id), 'player_id': player_id,
+                               'purchase_date': purchase[2], 'sale_date': row.get('dt'),
+                               'gain': gain})
+    events = [dict(event, bonus=LUCKY_HAND_REWARD) for event in qualifying]
+    return {'bonus': len(events) * LUCKY_HAND_REWARD,
+            'count': len(events), 'qualified_in_season': bool(events),
+            'events': events, 'evidence': events[0] if events else None,
+            'reason': None,
+            'rule': ('Nur Transfers ab Saisonstart; beliebig wiederholbar; '
+                     'mindestens 1 Mio. Gewinn; keine Managertransfers')}
+
+
 def reconstruct_cash(transfers, performance, squad, profile_profit, *,
                      start_date, as_of, start_cash=80_000_000,
                      points_reward=1000, achievements_enabled=True,
@@ -58,6 +93,7 @@ def reconstruct_cash(transfers, performance, squad, profile_profit, *,
     Missing MVP/lineup/once-only rewards are not filled using another account.
     """
     cutoff, end = timestamp(start_date), timestamp(as_of)
+    lucky_hand = reconstruct_lucky_hand(transfers, start_date=start_date, as_of=as_of)
     rows = sorted((r for r in transfers if cutoff <= timestamp(r['dt']) <= end),
                   key=lambda r: timestamp(r['dt']))
     purchases, sold_initial = {}, []
@@ -97,7 +133,8 @@ def reconstruct_cash(transfers, performance, squad, profile_profit, *,
     matchday_bonus = sum(b for m in matchdays for t, b in MATCHDAY_POINT_BONUSES
                          if m['mdp'] >= t) if achievements_enabled else 0
     login = daily_login_bonus_total(start_date, end)
-    estimate = start_cash + sales - buys + login + points + wins + matchday_bonus + transfer_bonus
+    estimate = (start_cash + sales - buys + login + points + wins
+                + matchday_bonus + transfer_bonus + lucky_hand['bonus'])
 
     current = {str(p['pi']): p for p in squad.get('it', [])}
     missing = sorted(set(purchases) - set(current))
@@ -113,7 +150,7 @@ def reconstruct_cash(transfers, performance, squad, profile_profit, *,
     # If prft is realized profit, subtract current acquisition cost, NOT current
     # market value. Unrealized market changes are not cash movements.
     current_acquisition_cost = sum(p['mv'] - p['mvgl'] for p in current.values())
-    bonus_total = login + points + wins + matchday_bonus + transfer_bonus
+    bonus_total = login + points + wins + matchday_bonus + transfer_bonus + lucky_hand['bonus']
     profile_estimate = (start_cash + initial_squad_value + profile_profit
                         - current_acquisition_cost + bonus_total)
     return {
@@ -122,6 +159,7 @@ def reconstruct_cash(transfers, performance, squad, profile_profit, *,
         'login_assumption': login, 'points_reward_assumption': points_reward,
         'settled_points_reward': points, 'matchday_wins': wins,
         'matchday_thresholds': matchday_bonus, 'transfer_bonuses': transfer_bonus,
+        'lucky_hand_bonus': lucky_hand['bonus'], 'lucky_hand_event': lucky_hand,
         'cash_partial_estimate': estimate, 'transfer_bonus_events': bonus_events,
         'profile_transfer_profit': profile_profit, 'realized_profit_known_buys': realized,
         'inferred_initial_squad_cost': inferred_initial_cost,
@@ -131,6 +169,6 @@ def reconstruct_cash(transfers, performance, squad, profile_profit, *,
         'profile_vs_ledger_difference': profile_estimate - estimate,
         'current_squad_unrealized_gain': sum(p['mvgl'] for p in current.values()),
         'missing_current_players': missing, 'purchase_price_mismatches': mismatches,
-        'omitted': ['MVP', 'individual player point awards', 'goal machine',
-                    'once-only achievements', 'admin adjustments', 'initial cash adjustment'],
+        'omitted': ['MVP', 'individual player point awards',
+                    'other once-only achievements', 'admin adjustments', 'initial cash adjustment'],
     }

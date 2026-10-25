@@ -19,8 +19,7 @@ from features.cash_reconstruction import BERLIN, fetch_manager_transfers, recons
 
 PLAYER_TIERS = [(200, 100_000), (300, 500_000), (400, 1_000_000), (500, 2_000_000)]
 UNRESOLVED = [
-    'Tormaschine', 'Glückliches Händchen', 'Teamwert-Erfolge',
-    'Saisonplatzierung', 'Admin-Gutschriften und Strafen',
+    'Teamwert-Erfolge', 'Saisonplatzierung', 'Admin-Gutschriften und Strafen',
 ]
 
 
@@ -166,6 +165,38 @@ def mvp_events(day, entries):
     return events
 
 
+def goal_machine_events(day, entries):
+    """Award most squad goals; manager points break a goals tie."""
+    usable = bool(entries) and all(
+        not entry['roster']['issues'] and not entry.get('fetch_errors')
+        and finite(entry.get('md', {}).get('mdp'))
+        and all(finite(value) for value in entry.get('goals', {}).values())
+        for entry in entries.values()
+    )
+    totals = {name: sum(entry.get('goals', {}).values()) for name, entry in entries.items()} if usable else {}
+    finalists = []
+    if usable and max(totals.values(), default=0) > 0:
+        most_goals = max(totals.values())
+        leaders = [name for name, total in totals.items() if total == most_goals]
+        most_points = max(entries[name]['md']['mdp'] for name in leaders)
+        finalists = [name for name in leaders if entries[name]['md']['mdp'] == most_points]
+    winner = finalists[0] if len(finalists) == 1 else None
+    result = []
+    for name in entries:
+        unresolved_tie = len(finalists) > 1 and name in finalists
+        amount = None if not usable else (250_000 if name == winner else 0)
+        amount_max = 250_000 if unresolved_tie else amount
+        result.append({
+            'key': f'{name}:md:{day}:goal_machine', 'manager': name,
+            'kind': 'Tormaschine', 'day': day,
+            'status': 'offen' if not usable or unresolved_tie else 'geschätzt',
+            'amount': amount, 'amount_max': amount_max,
+            'goals_by_manager': totals, 'winner': winner,
+            'rule': 'meiste Tore im Kader zum Anpfiff; bei Torgleichstand mehr Managerpunkte',
+        })
+    return result
+
+
 def capture(get, league_id, start_date, store, now, run):
     scope = f'{league_id}:{start_date}'
     managers = get(f'/leagues/{league_id}/ranking')['us']
@@ -239,6 +270,14 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
                                          as_of=now.isoformat(), start_cash=start_cash,
                                          initial_squad_value=initial_squad_value)
                 audits[name] = audit
+                lucky = audit['lucky_hand_event']
+                for index, evidence in enumerate(lucky['events'], 1):
+                    events.append({
+                        'key': f'{name}:lucky_hand:{evidence["sale_date"]}:{evidence["player_id"]}:{index}',
+                        'manager': name, 'kind': 'Glückliches Händchen', 'status': 'geschätzt',
+                        'amount': evidence['bonus'], 'amount_max': evidence['bonus'],
+                        'evidence': evidence,
+                    })
                 for event in audit['transfer_bonus_events']:
                     events.append({'key': f"{name}:transfer:{event['date']}:{event['player']}",
                                    'manager': name, 'kind': 'Transfergewinn', 'status': 'geschätzt',
@@ -298,6 +337,17 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
                                and timestamp(m['md']) >= timestamp(start_date) and timestamp(m['md']) <= now]
                     points[pid] = sum(m['p'] for m in matches) if matches and all(finite(m.get('p')) for m in matches) else None
                 entry['points'] = points
+                entry['goals'] = {
+                    pid: (None if pid in player_errors else sum(
+                        1 for season in performance.get(pid, [])
+                        for match in season.get('ph', [])
+                        if match.get('day') == day and match.get('md')
+                        and timestamp(match['md']) >= timestamp(start_date)
+                        and timestamp(match['md']) <= now
+                        for code in (match.get('k') or []) if str(code) == '1'
+                    ))
+                    for pid in entry['roster']['players']
+                }
                 entry['fetch_errors'] = [pid for pid in points if pid in player_errors]
                 candidates = (entry['roster'].get('locked_lineup')
                               if len(entry['roster'].get('locked_lineup', [])) == 11
@@ -316,10 +366,12 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
                                'evidence': estimate})
             if set(entries) == set(managers):
                 events.extend(mvp_events(day, entries))
+                events.extend(goal_machine_events(day, entries))
             else:
                 for name in managers:
-                    events.append({'key': f'{name}:md:{day}:mvp', 'manager': name, 'kind': 'MVP',
-                                   'day': day, 'status': 'offen', 'reason': 'Managerdaten fehlen'})
+                    for kind in ['MVP', 'Tormaschine']:
+                        events.append({'key': f'{name}:md:{day}:{kind}', 'manager': name, 'kind': kind,
+                                       'day': day, 'status': 'offen', 'reason': 'Managerdaten fehlen'})
 
         for name, data in managers.items():
             for kind in UNRESOLVED:
@@ -329,7 +381,8 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
             budget = float('nan')
             basis = 'Unbekannt (Datenabruf unvollständig)'
             if audit:
-                additional = [e for e in events if e['manager'] == name and e['kind'] in ['MVP', 'Spieler-Punkteerfolge']]
+                additional = [e for e in events if e['manager'] == name and e['kind'] in
+                              ['MVP', 'Spieler-Punkteerfolge', 'Tormaschine']]
                 low = sum(e.get('amount') or 0 for e in additional)
                 high = sum(e.get('amount_max') or 0 for e in additional)
                 audit.update(additional_bonus_min=low, additional_bonus_max=high,
@@ -354,8 +407,10 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
         summary = {'generated_at': now.isoformat(), 'league_id': str(league_id), 'start_date': start_date,
                    'start_cash': start_cash, 'initial_squad_value': initial_squad_value,
                    'assumptions': ['Täglicher Login', '1.000 € je abgeschlossenem Punkt',
+                                   f'Erfolgsereignisse erst ab {start_date}',
                                    'Erfolgsboni aktiv', 'Profilgewinn = realisierter Gewinn seit Reset',
                                    'MVP innerhalb der Liga; Aufstellungen rekonstruiert',
+                                   'Tormaschine aus fixiertem Kader, Torcodes und Managerpunkten',
                                    'Fehlende Spielerpunkte als null; Formation nicht geprüft'],
                    'errors': dict(errors, player_performance=player_errors), 'managers': audits,
                    'events': events, 'unresolved_categories': UNRESOLVED}
@@ -388,13 +443,15 @@ def render_audit(summary):
              '<p>Annahmen: ' + escape('; '.join(summary['assumptions'])) + '.</p>')
     columns = ['Manager', 'Transfernetto (Verkäufe − Käufe)', 'Profil-Transfergewinn',
                'Anschaffungskosten aktueller Kader', 'Login', 'Punkteprämie',
-               'Siege / Punkte-Erfolge', 'Transferboni', 'Spielerboni + MVP (Modellspanne)',
+               'Siege / Punkte-Erfolge', 'Transferboni inkl. Glückliches Händchen',
+               'Spielerboni + MVP + Tormaschine (Modellspanne)',
                'Kontostand aus Transferledger + Boni', 'Kontostand aus Profilmodell', 'API-Abweichung']
     table = '<table style="border-collapse:collapse;font-size:12px"><thead><tr>' + ''.join('<th style="padding:6px">'+c+'</th>' for c in columns) + '</tr></thead><tbody>'
     for name, a in summary['managers'].items():
         values = [escape(name), money(a['transfer_net']), money(a['profile_transfer_profit']),
                   money(a['current_acquisition_cost']), money(a['login_assumption']), money(a['settled_points_reward']),
-                  money(a['matchday_wins'] + a['matchday_thresholds']), money(a['transfer_bonuses']),
+                  money(a['matchday_wins'] + a['matchday_thresholds']),
+                  money(a['transfer_bonuses'] + a.get('lucky_hand_bonus', 0)),
                   money(a['additional_bonus_min']) + ' – ' + money(a['additional_bonus_max']),
                   money(a['ledger_cash_with_bonuses']), money(a['estimated_cash']), money(a.get('unexplained_difference'))]
         table += '<tr>' + ''.join('<td style="padding:6px;border-bottom:1px solid #ddd">'+v+'</td>' for v in values) + '</tr>'
