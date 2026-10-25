@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.44
+
+- Der Startelfplaner ordnet die Spielerkacheln auf Desktop-Bildschirmen formationsgerecht auf einem Fußballfeld an; mobil bleibt die kompakte Liste erhalten.
+- Bankspieler sind initial und nach dem Verschieben auf die Bank automatisch als Verkauf markiert. Beim Einsetzen in die Startelf wird die Markierung entfernt.
+
 ## 0.2.43
 
 - Das Kaderwertdiagramm wird aus der vollständigen eigenen Transferhistorie rekonstruiert und am aktuellen, direkt von Kickbase gelieferten Kaderwert verankert.

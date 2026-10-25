@@ -1,0 +1,28 @@
+from pathlib import Path
+import unittest
+
+
+class MobileLineupPlannerTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.template = (Path(__file__).parents[1] / 'features' / 'mobile_lineup_planner.html').read_text(
+            encoding='utf-8')
+
+    def test_desktop_pitch_keeps_mobile_lines_flat(self):
+        self.assertIn('.formation-line{display:contents}', self.template)
+        self.assertIn('@media(min-width:900px)', self.template)
+        self.assertIn('.formation-4{order:1}', self.template)
+        self.assertIn('.formation-1{order:4}', self.template)
+        self.assertIn('class="formation-line formation-', self.template)
+
+    def test_bank_players_default_to_sale_and_lineup_removes_sale(self):
+        self.assertIn('function syncBenchSales()', self.template)
+        self.assertIn('!sel.includes(p.id)&&!locked.has(p.id)&&!purchases.has(p.id)', self.template)
+        self.assertIn('sel[i]=id;sell.delete(id);pick=null;render()', self.template)
+        self.assertIn('sel[sel.indexOf(id)]=null;if(!locked.has(id)&&!purchases.has(id))sell.add(id)',
+                      self.template)
+        self.assertIn('sel=Array(11).fill(null);syncBenchSales();render()', self.template)
+
+
+if __name__ == '__main__':
+    unittest.main()
