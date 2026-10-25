@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.45
+
+- Zeigt Namen, Cash, Kaderwert und Kaufkraft aller Manager als eigene Dashboard-Kachel.
+- Synchronisiert den Manager-Audit des letzten Vollreports aus den geschützten GitHub-Actions-Artefakten.
+- Kennzeichnet den eigenen API-Cashwert und die geschätzten Cashwerte der Mitmanager transparent.
+
 ## 0.2.44
 
 - Der Startelfplaner ordnet die Spielerkacheln auf Desktop-Bildschirmen formationsgerecht auf einem Fußballfeld an; mobil bleibt die kompakte Liste erhalten.

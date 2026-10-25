@@ -30,6 +30,35 @@ DATA_ROOT = Path(os.getenv('KICKBASE_DATA_DIR', APP_ROOT)).resolve()
 MAX_BODY = 2_000_000
 
 
+def read_manager_budgets(path):
+    """Return the display-safe budget summary produced by the full report."""
+    try:
+        payload = json.loads(Path(path).read_text(encoding='utf-8'))
+    except (OSError, ValueError, TypeError):
+        return {'managers': [], 'note': 'Noch kein Managerbudget aus einem Vollreport verfügbar.'}
+    rows = []
+    for item in payload.get('manager_budgets', []):
+        if not isinstance(item, dict):
+            continue
+        try:
+            values = {key: float(item[key]) for key in ('cash', 'squadValue', 'buyingPower')}
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not all(value == value and abs(value) != float('inf') for value in values.values()):
+            continue
+        rows.append({
+            'name': str(item.get('name') or 'Unbekannt'),
+            **values,
+            'basis': str(item.get('basis') or 'Schätzung'),
+        })
+    return {
+        'generatedAt': payload.get('generated_at'),
+        'managers': rows,
+        'note': ('Eigener Cashwert aus der API; Cash der Mitmanager geschätzt. '
+                 'Kaderwerte und Kaufkraft stammen aus dem letzten Vollreport.'),
+    }
+
+
 class ReportParser(HTMLParser):
     def __init__(self):
         super().__init__()
@@ -248,6 +277,8 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                 except (requests.RequestException, RuntimeError, ValueError, KeyError, TypeError):
                     self.server.log_event('ERROR Kaderwertverlauf nicht geladen')
                     self.reply(502, {'series': [], 'note': 'Kaderwertverlauf aus Kickbase derzeit nicht abrufbar.'})
+        elif path == '/api/manager-budgets':
+            self.reply(200, read_manager_budgets(DATA_ROOT / 'manager-history-output' / 'latest.json'))
         elif path == '/api/report-job':
             self.reply(200, self.server.report_jobs.read())
         elif path == '/api/status':

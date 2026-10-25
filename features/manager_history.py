@@ -414,6 +414,15 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
                          'Cash Basis': basis, 'Max Negative': -0.33 * team_value,
                          'Available Budget': budget + 0.33 * team_value})
 
+        manager_budgets = [{
+            'name': row['User'],
+            'cash': row['Budget'],
+            'squadValue': row['Team Value'],
+            'buyingPower': row['Available Budget'],
+            'basis': row['Cash Basis'],
+        } for row in sorted(rows, key=lambda row: (
+            row['Available Budget'] if finite(row['Available Budget']) else float('-inf')
+        ), reverse=True)]
         summary = {'generated_at': now.isoformat(), 'league_id': str(league_id), 'start_date': start_date,
                    'start_cash': start_cash, 'initial_squad_value': initial_squad_value,
                    'assumptions': ['Täglicher Login', '1.000 € je abgeschlossenem Punkt',
@@ -424,6 +433,7 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
                                    'Tormaschine aus fixiertem Kader, Torcodes und Managerpunkten',
                                    'Fehlende Spielerpunkte als null; Formation nicht geprüft'],
                    'errors': dict(errors, player_performance=player_errors), 'managers': audits,
+                   'manager_budgets': manager_budgets,
                    'events': events, 'unresolved_categories': UNRESOLVED}
         store.observe(scope, run, 'audit', 'league', now, summary)
         # Keep observed events from expired feeds in the current event index.

@@ -17,6 +17,8 @@ import requests
 API_ROOT = "https://api.github.com"
 ARTIFACT_NAME = "kickbase-forecast-snapshot"
 SNAPSHOT_NAME = "prediction_snapshot_1t.json"
+MANAGER_ARTIFACT_NAME = "manager-audit"
+MANAGER_SUMMARY_NAME = "manager-history-output/latest.json"
 
 
 def _timestamp(value):
@@ -36,6 +38,32 @@ def _read_snapshot(path):
 
 def _is_valid_snapshot(payload):
     return isinstance(payload, dict) and isinstance(payload.get("predictions"), dict)
+
+
+def _is_valid_manager_summary(payload):
+    return isinstance(payload, dict) and isinstance(payload.get("manager_budgets"), list)
+
+
+def _headers(token):
+    return {
+        "Accept": "application/vnd.github+json",
+        "Authorization": "Bearer " + token,
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+
+def _latest_artifact(headers, repository, name):
+    response = requests.get(
+        f"{API_ROOT}/repos/{repository}/actions/artifacts",
+        headers=headers, params={"per_page": 100}, timeout=(5, 20),
+    )
+    response.raise_for_status()
+    candidates = [
+        artifact for artifact in response.json().get("artifacts", [])
+        if artifact.get("name") == name and not artifact.get("expired")
+        and artifact.get("archive_download_url")
+    ]
+    return max(candidates, key=lambda item: (item.get("updated_at") or "", item.get("id") or 0)) if candidates else None
 
 
 def dispatch_workflow(token, repository, workflow_file):
@@ -74,26 +102,11 @@ def sync_latest_forecast(token, repository, data_root):
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository or ""):
         return {"status": "error", "message": "Ungültiger GitHub-Repositoryname."}
 
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "Authorization": "Bearer " + token,
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
+    headers = _headers(token)
     try:
-        response = requests.get(
-            f"{API_ROOT}/repos/{repository}/actions/artifacts",
-            headers=headers, params={"per_page": 100}, timeout=(5, 20),
-        )
-        response.raise_for_status()
-        artifacts = response.json().get("artifacts", [])
-        candidates = [
-            artifact for artifact in artifacts
-            if artifact.get("name") == ARTIFACT_NAME and not artifact.get("expired")
-            and artifact.get("archive_download_url")
-        ]
-        if not candidates:
+        artifact = _latest_artifact(headers, repository, ARTIFACT_NAME)
+        if not artifact:
             return {"status": "waiting", "message": "Noch kein GitHub-Prognose-Artifact gefunden."}
-        artifact = max(candidates, key=lambda item: (item.get("updated_at") or "", item.get("id") or 0))
 
         root = Path(data_root)
         root.mkdir(parents=True, exist_ok=True)
@@ -128,6 +141,50 @@ def sync_latest_forecast(token, repository, data_root):
         return {"status": "error", "message": f"GitHub-Prognose konnte nicht geladen werden: {type(exc).__name__}."}
 
 
+def sync_latest_manager_audit(token, repository, data_root):
+    """Download the budget summary from the newest protected manager-audit artifact."""
+    if not token:
+        return {"status": "disabled", "message": "GitHub-Token nicht konfiguriert."}
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository or ""):
+        return {"status": "error", "message": "Ungültiger GitHub-Repositoryname."}
+    headers = _headers(token)
+    try:
+        artifact = _latest_artifact(headers, repository, MANAGER_ARTIFACT_NAME)
+        if not artifact:
+            return {"status": "waiting", "message": "Noch kein Manager-Audit-Artifact gefunden."}
+
+        destination = Path(data_root) / MANAGER_SUMMARY_NAME
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        local = _read_snapshot(destination)
+        remote_time = _timestamp(artifact.get("updated_at"))
+        local_time = _timestamp(local.get("generated_at")) if local else None
+        if local_time and remote_time and local_time >= remote_time:
+            return {"status": "current", "message": "Lokaler Manager-Audit ist bereits aktuell."}
+
+        archive = requests.get(
+            artifact["archive_download_url"], headers=headers, timeout=(5, 30), allow_redirects=True,
+        )
+        archive.raise_for_status()
+        with ZipFile(BytesIO(archive.content)) as zipped:
+            matches = [name for name in zipped.namelist() if name.replace('\\', '/').endswith(MANAGER_SUMMARY_NAME)]
+            if len(matches) != 1:
+                return {"status": "error", "message": "GitHub-Artifact enthält keinen eindeutigen Manager-Audit."}
+            payload = json.loads(zipped.read(matches[0]).decode("utf-8"))
+        if not _is_valid_manager_summary(payload):
+            return {"status": "waiting", "message": "Manager-Audit stammt noch aus einer älteren Reportversion."}
+
+        temporary = destination.with_suffix(".tmp")
+        temporary.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        temporary.replace(destination)
+        return {
+            "status": "updated", "message": "Managerbudgets übernommen.",
+            "generatedAt": payload.get("generated_at"),
+            "artifactUpdatedAt": artifact.get("updated_at"),
+        }
+    except (requests.RequestException, BadZipFile, OSError, ValueError, KeyError) as exc:
+        return {"status": "error", "message": f"Manager-Audit konnte nicht geladen werden: {type(exc).__name__}."}
+
+
 def write_status(data_root, result):
     path = Path(data_root) / ".github-forecast-sync.json"
     temporary = path.with_suffix(".tmp")
@@ -143,12 +200,15 @@ def main():
 
     while True:
         result = sync_latest_forecast(token, repository, data_root)
+        manager_result = sync_latest_manager_audit(token, repository, data_root)
+        result["managerAudit"] = manager_result
         result["checkedAt"] = datetime.now().astimezone().isoformat()
         try:
             write_status(data_root, result)
         except OSError:
             pass
-        print("GitHub-Prognose-Sync: " + result["status"] + " - " + result["message"], flush=True)
+        print("GitHub-Prognose-Sync: " + result["status"] + " - " + result["message"]
+              + " Manager-Audit: " + manager_result["status"] + " - " + manager_result["message"], flush=True)
         time.sleep(interval)
 
 
