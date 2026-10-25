@@ -1,5 +1,6 @@
 import json
 import unittest
+from datetime import date
 from unittest.mock import Mock, patch
 
 import requests
@@ -104,6 +105,46 @@ class LiveTests(unittest.TestCase):
         self.assertEqual(swap['replaceId'], '1')
         self.assertEqual(swap['endBudget'], -120)
         self.assertEqual(swap['rosterSize'], 13)
+
+    def test_squad_value_history_uses_complete_manager_transfers_and_live_anchor(self):
+        client = LiveKickbase('PRIVATE_EMAIL', 'PRIVATE_PASSWORD')
+        transfers = [
+            {'pi': '2', 'tty': 1, 'trp': 200, 'dt': '2026-08-17T08:00:00Z'},
+            {'pi': '3', 'tty': 2, 'trp': 300, 'dt': '2026-08-16T08:00:00Z'},
+        ]
+        responses = {
+            '/leagues/league/squad': {'it': [
+                {'i': '1', 'mv': 140}, {'i': '2', 'mv': 220},
+            ]},
+            '/user/settings': {'u': {'i': 'me', 'unm': 'Manager'}},
+            '/leagues/league/managers/me/transfer?start=0': {'it': transfers},
+        }
+        client.get = Mock(side_effect=lambda path: responses[path])
+
+        epoch = date(1970, 1, 1)
+        def entry(day, value):
+            return {'dt': (date.fromisoformat(day) - epoch).days, 'mv': value}
+        client.player_market_histories = Mock(return_value={
+            '1': [entry('2026-08-15', 100), entry('2026-08-16', 110),
+                  entry('2026-08-17', 120), entry('2026-08-18', 130)],
+            '2': [entry('2026-08-15', 190), entry('2026-08-16', 200),
+                  entry('2026-08-17', 210), entry('2026-08-18', 215)],
+            '3': [entry('2026-08-15', 300), entry('2026-08-16', 310),
+                  entry('2026-08-17', 320), entry('2026-08-18', 330)],
+        })
+
+        with patch.dict('os.environ', {'KICK_LEAGUE_START_DATE': '2026-08-15'}):
+            result = client.squad_value_history('league', ['stale-id'])
+
+        by_day = {point['date']: point['value'] for point in result['series']}
+        self.assertEqual(by_day['2026-08-15'], 400)
+        self.assertEqual(by_day['2026-08-16'], 110)
+        self.assertEqual(by_day['2026-08-17'], 330)
+        self.assertEqual(result['series'][-1]['value'], 360)
+        self.assertIn('360 €', result['note'])
+        requested = [call.args[0] for call in client.get.call_args_list]
+        self.assertNotIn('/leagues/league/activitiesFeed?max=5000', requested)
+        self.assertIn('/leagues/league/managers/me/transfer?start=0', requested)
 
     @patch('features.ai_advisor.requests.post')
     def test_web_search_enabled_and_citations_returned(self, post):

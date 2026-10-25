@@ -4,6 +4,7 @@ from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 import os
 import sqlite3
@@ -16,7 +17,11 @@ import threading
 from features.player_details import build_details
 
 from kickbase_api.config import BASE_URL
+from features.cash_reconstruction import fetch_manager_transfers
 from features.lineup_optimizer import forecast_horizon_from_matchdays, market_context
+
+
+BERLIN = ZoneInfo('Europe/Berlin')
 
 
 def local_player_metadata(player_ids):
@@ -357,31 +362,36 @@ class LiveKickbase:
         return {'changes': list(reversed(changes[-max(1, limit):]))}
 
     def squad_value_history(self, league_id, player_ids):
-        """Reconstruct squad value from Kickbase's transfer feed and MV histories."""
-        current_ids = {str(player_id) for player_id in player_ids if str(player_id).isdigit()}
+        """Reconstruct the app's daily squad value from complete manager trades.
+
+        The current value is anchored to the live squad response. Historical
+        values use the manager-specific, paginated transfer endpoint rather
+        than the truncated league activity feed.
+        """
+        league = quote(str(league_id), safe='')
+        squad = self.get(f'/leagues/{league}/squad')
+        squad_items = [item for item in squad.get('it', []) if isinstance(item, dict)]
+        current_ids = {
+            str(item.get('i') or item.get('pi')) for item in squad_items
+            if str(item.get('i') or item.get('pi') or '').isdigit()
+        }
+        if not current_ids:
+            current_ids = {str(player_id) for player_id in player_ids if str(player_id).isdigit()}
         if not current_ids:
             return {'series': [], 'note': 'Kein Kader für den historischen Verlauf verfügbar.'}
+        live_value = sum(float(item.get('mv') or 0) for item in squad_items)
 
         user = self.get('/user/settings').get('u', {})
         user_id = str(user.get('i') or user.get('id') or user.get('ui') or '')
-        user_name = str(user.get('n') or user.get('name') or '')
-        feed = self.get('/leagues/' + quote(str(league_id), safe='') + '/activitiesFeed?max=5000')
-        own_trades = []
-        all_ids = set(current_ids)
-        for entry in feed.get('af', []):
-            if str(entry.get('t')) != '15':
-                continue
-            data = entry.get('data') or {}
-            day = activity_day(entry.get('dt'))
-            player_id = activity_player_id(data)
-            if not day or not player_id:
-                continue
-            bought = activity_party_matches(data.get('byr') or data.get('buyer'), user_id, user_name)
-            sold = activity_party_matches(data.get('slr') or data.get('seller'), user_id, user_name)
-            if bought == sold:
-                continue
-            own_trades.append((day, player_id, bought))
-            all_ids.add(player_id)
+        configured_start = os.getenv('KICK_LEAGUE_START_DATE', '2026-08-15')
+        transfers = fetch_manager_transfers(self.get, str(league_id), user_id, configured_start)
+        own_trades = [
+            (activity_day(entry.get('dt')), str(entry.get('pi')), entry.get('tty') == 1)
+            for entry in transfers
+            if activity_day(entry.get('dt')) and str(entry.get('pi') or '').isdigit()
+            and entry.get('tty') in (1, 2)
+        ]
+        all_ids = current_ids | {player_id for _, player_id, _ in own_trades}
 
         raw_histories = self.player_market_histories(all_ids)
         values = {}
@@ -399,7 +409,6 @@ class LiveKickbase:
         if len(values) < 2:
             return {'series': [], 'note': 'Kickbase lieferte noch nicht genügend historische Marktwerte.'}
 
-        configured_start = os.getenv('KICK_LEAGUE_START_DATE', '2026-08-15')
         try:
             league_start = datetime.fromisoformat(configured_start).date().isoformat()
         except (TypeError, ValueError):
@@ -420,23 +429,25 @@ class LiveKickbase:
             day_values = values[day]
             total = sum(day_values.get(player_id, 0) for player_id in roster)
             covered = sum(1 for player_id in roster if player_id in day_values)
-            if covered and day >= league_start:
+            # A partial squad sum looks plausible but is materially wrong.
+            # Only publish fully covered historical days.
+            if roster and covered == len(roster) and day >= league_start:
                 series.append({'date': day, 'value': round(total), 'players': covered})
 
         series.reverse()
+        today = datetime.now(BERLIN).date().isoformat()
+        current_point = {'date': today, 'value': round(live_value), 'players': len(current_ids)}
+        if series and series[-1]['date'] == today:
+            series[-1] = current_point
+        else:
+            series.append(current_point)
         if len(series) < 2:
             return {'series': [], 'note': 'Kickbase lieferte für deinen Kader keine ausreichende Historie.'}
-        if own_trades:
-            first_trade = min(day for day, _, _ in own_trades)
-            note = (
-                f'Direkt aus Kickbase ab Ligastart {league_start}: Marktwerthistorie der Spieler und dein Transferfeed.'
-                + (f' Transferfeed ab {first_trade} verfügbar.' if series[0]['date'] < first_trade else '')
-            )
-        else:
-            note = (
-                f'Direkt aus Kickbase ab Ligastart {league_start}: Marktwerthistorie des heutigen Kaders. '
-                'Für ältere Zu- und Abgänge enthält der verfügbare Transferfeed keine Zuordnung.'
-            )
+        note = (
+            f'Aktueller Kaderwert direkt aus Kickbase: {round(live_value):,} €. '
+            f'Tagesverlauf ab {league_start} aus vollständiger Manager-Transferhistorie '
+            'und den Kickbase-Marktwertverläufen rekonstruiert.'
+        ).replace(',', '.')
         return {'series': series, 'note': note}
 
     def apply_lineup(self, league_id, formation, player_ids):
