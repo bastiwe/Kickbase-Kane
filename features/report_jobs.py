@@ -38,6 +38,7 @@ class ReportJobs:
         temporary = path.with_suffix('.tmp')
         temporary.write_text(json.dumps(report, allow_nan=False), encoding='utf-8')
         temporary.replace(path)
+        self.server.persist_mtime_ns = path.stat().st_mtime_ns
 
     def _progress_from_log(self, kind):
         """Translate stable report milestones into UI-safe progress information."""

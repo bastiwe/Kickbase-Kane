@@ -100,6 +100,7 @@ jobs:
         with:
           name: startelf-optimizer
           path: startelf_optimizer.html
+          retention-days: 14
 
       - name: Save cumulative manager history
         if: ${{ !cancelled() && steps.berlin-time.outputs.run == 'true' && hashFiles('manager_history.sqlite3') != '' }}

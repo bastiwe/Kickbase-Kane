@@ -111,6 +111,7 @@ class AdvisorServer(ThreadingHTTPServer):
         self.api_key = api_key or ''
         self.model = model
         self.persist_path = persist_path
+        self.persist_mtime_ns = self._persist_mtime_ns()
         self.memory_path = memory_path or DATA_ROOT / '.advisor-memory.json'
         self.log_path = DATA_ROOT / '.advisor.log'
         self.memory = self._load_memory()
@@ -118,6 +119,30 @@ class AdvisorServer(ThreadingHTTPServer):
         self.request_lock = threading.Lock()
         self.kickbase = None
         self.report_jobs = ReportJobs(self, APP_ROOT, DATA_ROOT)
+
+    def _persist_mtime_ns(self):
+        try:
+            return Path(self.persist_path).stat().st_mtime_ns if self.persist_path else None
+        except OSError:
+            return None
+
+    def reload_persisted_report(self):
+        """Hot-load a dashboard report written by the GitHub artifact sync."""
+        current_mtime = self._persist_mtime_ns()
+        if current_mtime is None or current_mtime == self.persist_mtime_ns:
+            return False
+        try:
+            report = validate_report(json.loads(Path(self.persist_path).read_text(encoding='utf-8')))
+        except (OSError, ValueError, TypeError, KeyError):
+            return False
+        with self.lock:
+            latest_mtime = self._persist_mtime_ns()
+            if latest_mtime is None or latest_mtime == self.persist_mtime_ns:
+                return False
+            self.report = report
+            self.persist_mtime_ns = latest_mtime
+            self.revision += 1
+        return True
 
     def log_event(self, message):
         try:
@@ -184,6 +209,8 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             self.reply(403, {'error': 'Nur lokaler Zugriff erlaubt.'})
             return
         path = urlsplit(self.path).path
+        if path in ('/', '/planner'):
+            self.server.reload_persisted_report()
         if path == '/':
             live_message = ''
             with self.server.lock:
@@ -406,6 +433,7 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                         temporary = self.server.persist_path.with_suffix('.tmp')
                         temporary.write_text(json.dumps(report, allow_nan=False), encoding='utf-8')
                         temporary.replace(self.server.persist_path)
+                        self.server.persist_mtime_ns = self.server._persist_mtime_ns()
                     self.server.report = report
                     self.server.revision += 1
                 self.reply(200, {'loaded': True})

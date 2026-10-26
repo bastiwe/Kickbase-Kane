@@ -1,4 +1,6 @@
 import json
+from pathlib import Path
+import tempfile
 import threading
 import unittest
 from unittest.mock import Mock, patch
@@ -145,6 +147,21 @@ class LocalServerTests(unittest.TestCase):
         self.assertEqual(requests.post(self.server.origin+'/api/key', json={'key': 'sk-other'}).status_code, 403)
         foreign = {**self.headers, 'Origin': 'https://example.com'}
         self.assertEqual(requests.post(self.server.origin+'/api/key', headers=foreign, json={'key': 'sk-other'}).status_code, 403)
+
+    def test_external_dashboard_report_is_hot_loaded(self):
+        with tempfile.TemporaryDirectory() as folder:
+            persisted = Path(folder, '.advisor-report.json')
+            persisted.write_text(json.dumps(self.report), encoding='utf-8')
+            self.server.persist_path = persisted
+            self.server.persist_mtime_ns = 0
+            updated = {**self.report, 'budget': 987, 'players': [
+                {**self.report['players'][0], 'li': 99}, *self.report['players'][1:]
+            ]}
+            persisted.write_text(json.dumps(updated), encoding='utf-8')
+            response = requests.get(self.server.origin + '/planner')
+        loaded = read_report(response.text)
+        self.assertEqual(loaded['budget'], 987)
+        self.assertEqual(loaded['players'][0]['li'], 99)
 
     def test_page_load_refreshes_roster_and_enables_startup_lineup(self):
         fresh = {**self.report, 'players': self.report['players'][1:], 'budget': 123}

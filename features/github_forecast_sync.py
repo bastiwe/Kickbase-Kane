@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from html.parser import HTMLParser
 from io import BytesIO
 import json
 import os
@@ -19,6 +20,29 @@ ARTIFACT_NAME = "kickbase-forecast-snapshot"
 SNAPSHOT_NAME = "prediction_snapshot_1t.json"
 MANAGER_ARTIFACT_NAME = "manager-audit"
 MANAGER_SUMMARY_NAME = "manager-history-output/latest.json"
+DASHBOARD_ARTIFACT_NAME = "startelf-optimizer"
+DASHBOARD_HTML_NAME = "startelf_optimizer.html"
+DASHBOARD_REPORT_NAME = ".advisor-report.json"
+DASHBOARD_MARKER_NAME = ".github-dashboard-sync.json"
+
+
+class _ReportParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.capture = False
+        self.parts = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "script" and dict(attrs).get("id") == "data":
+            self.capture = True
+
+    def handle_data(self, data):
+        if self.capture:
+            self.parts.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "script":
+            self.capture = False
 
 
 def _timestamp(value):
@@ -42,6 +66,22 @@ def _is_valid_snapshot(payload):
 
 def _is_valid_manager_summary(payload):
     return isinstance(payload, dict) and isinstance(payload.get("manager_budgets"), list)
+
+
+def _dashboard_report(html):
+    parser = _ReportParser()
+    parser.feed(html)
+    try:
+        payload = json.loads("".join(parser.parts))
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(payload, dict) or not isinstance(payload.get("players"), list):
+        return None
+    if not isinstance(payload.get("marketPlayers", []), list):
+        return None
+    if payload.get("user") in (None, "") or payload.get("league") in (None, ""):
+        return None
+    return payload
 
 
 def _headers(token):
@@ -189,6 +229,60 @@ def sync_latest_manager_audit(token, repository, data_root):
         return {"status": "error", "message": f"Manager-Audit konnte nicht geladen werden: {type(exc).__name__}."}
 
 
+def sync_latest_dashboard_report(token, repository, data_root):
+    """Download the complete dashboard payload produced by the newest full report."""
+    if not token:
+        return {"status": "disabled", "message": "GitHub-Token nicht konfiguriert."}
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository or ""):
+        return {"status": "error", "message": "Ungültiger GitHub-Repositoryname."}
+    headers = _headers(token)
+    try:
+        artifact = _latest_artifact(headers, repository, DASHBOARD_ARTIFACT_NAME)
+        if not artifact:
+            return {"status": "waiting", "message": "Noch kein Dashboard-Report-Artifact gefunden."}
+
+        root = Path(data_root)
+        root.mkdir(parents=True, exist_ok=True)
+        marker_path = root / DASHBOARD_MARKER_NAME
+        marker = _read_snapshot(marker_path) or {}
+        destination = root / DASHBOARD_REPORT_NAME
+        if marker.get("artifactId") == artifact.get("id") and destination.is_file():
+            return {"status": "current", "message": "Lokaler Dashboard-Report ist bereits aktuell."}
+
+        archive = requests.get(
+            artifact["archive_download_url"], headers=headers, timeout=(5, 30), allow_redirects=True,
+        )
+        archive.raise_for_status()
+        with ZipFile(BytesIO(archive.content)) as zipped:
+            matches = [
+                name for name in zipped.namelist()
+                if name.replace("\\", "/").split("/")[-1] == DASHBOARD_HTML_NAME
+            ]
+            if len(matches) != 1:
+                return {"status": "error", "message": "Dashboard-Artifact enthält keinen eindeutigen Report."}
+            payload = _dashboard_report(zipped.read(matches[0]).decode("utf-8"))
+        if payload is None:
+            return {"status": "error", "message": "Dashboard-Artifact enthält keine gültigen Spielerdaten."}
+
+        temporary = destination.with_suffix(".tmp")
+        temporary.write_text(json.dumps(payload, ensure_ascii=False, allow_nan=False), encoding="utf-8")
+        temporary.replace(destination)
+        marker_temporary = marker_path.with_suffix(".tmp")
+        marker_temporary.write_text(json.dumps({
+            "artifactId": artifact.get("id"),
+            "artifactUpdatedAt": artifact.get("updated_at"),
+            "playerCount": len(payload["players"]),
+            "marketCount": len(payload.get("marketPlayers", [])),
+        }, ensure_ascii=False), encoding="utf-8")
+        marker_temporary.replace(marker_path)
+        return {
+            "status": "updated", "message": "GitHub-Dashboard-Report übernommen.",
+            "artifactUpdatedAt": artifact.get("updated_at"),
+        }
+    except (requests.RequestException, BadZipFile, OSError, ValueError, KeyError, UnicodeError) as exc:
+        return {"status": "error", "message": f"Dashboard-Report konnte nicht geladen werden: {type(exc).__name__}."}
+
+
 def write_status(data_root, result):
     path = Path(data_root) / ".github-forecast-sync.json"
     temporary = path.with_suffix(".tmp")
@@ -205,14 +299,17 @@ def main():
     while True:
         result = sync_latest_forecast(token, repository, data_root)
         manager_result = sync_latest_manager_audit(token, repository, data_root)
+        dashboard_result = sync_latest_dashboard_report(token, repository, data_root)
         result["managerAudit"] = manager_result
+        result["dashboardReport"] = dashboard_result
         result["checkedAt"] = datetime.now().astimezone().isoformat()
         try:
             write_status(data_root, result)
         except OSError:
             pass
         print("GitHub-Prognose-Sync: " + result["status"] + " - " + result["message"]
-              + " Manager-Audit: " + manager_result["status"] + " - " + manager_result["message"], flush=True)
+              + " Manager-Audit: " + manager_result["status"] + " - " + manager_result["message"]
+              + " Dashboard-Report: " + dashboard_result["status"] + " - " + dashboard_result["message"], flush=True)
         time.sleep(interval)
 
 

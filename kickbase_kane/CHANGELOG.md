@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.54
+
+- Synchronisiert neben der MW-Prognose nun auch den vollständigen Dashboard-Report aus dem GitHub-Vollreport ins Add-on.
+- Übernimmt dadurch LI-Startelfwahrscheinlichkeiten aus demselben Datenstand, der bereits im Mailreport angezeigt wird.
+- Lädt einen neu synchronisierten Dashboard-Report beim nächsten Seitenaufruf ohne Add-on-Neustart.
+
 ## 0.2.53
 
 - Reicht die LigaInsider-Startelfwahrscheinlichkeiten des Transfermarkts bis in Dashboard und Startelfplaner durch.
