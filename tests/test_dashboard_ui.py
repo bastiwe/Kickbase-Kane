@@ -59,6 +59,11 @@ class DashboardUiTests(unittest.TestCase):
         self.assertIn('.club-crest{position:absolute;inset:0;width:100%;height:100%', self.styles)
         self.assertIn('opacity:.18', self.styles)
         self.assertIn('.player-cutout{position:relative;z-index:1', self.styles)
+        self.assertIn('.chance .player-art,.list-row .player-art,.recent-transfer-card .player-art,.table-player .player-art{position:absolute', self.styles)
+        self.assertIn('width:min(54%,190px);height:100%', self.styles)
+        self.assertIn('left:9%;bottom:0;height:50%', self.styles)
+        self.assertIn('opacity:.28', self.styles)
+        self.assertIn('background:rgba(7,16,29,.64)', self.styles)
 
 
 if __name__ == '__main__':

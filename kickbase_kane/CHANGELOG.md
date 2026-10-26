@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.58
+
+- Skaliert das Vereinswappen über die vollständige Höhe der jeweiligen Spielerkachel.
+- Verankert das freigestellte Spielerbild am unteren Kachelrand und begrenzt es auf ungefähr die halbe Kachelhöhe.
+- Legt Spielerinformationen auf leicht transparente, weichgezeichnete Flächen über die Grafik, damit alle Werte lesbar bleiben.
+
 ## 0.2.57
 
 - Sichert das bisherige Spielerkachellayout als Git-Tag `backup/player-card-layout-0.2.56`.

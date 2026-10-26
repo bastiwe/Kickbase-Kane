@@ -76,6 +76,14 @@ class MobileLineupPlannerTests(unittest.TestCase):
         self.assertIn('.player-cutout{position:relative;z-index:1', self.template)
         self.assertIn('height:67%', self.template)
         self.assertIn('border:0;border-radius:0;background:transparent', self.template)
+        self.assertIn('.card .player-art,.candidate-option .player-art{position:absolute', self.template)
+        self.assertIn('inset:0 auto 0 0;width:58%;height:100%', self.template)
+        self.assertIn('.card .player-cutout,.candidate-option .player-cutout{position:absolute', self.template)
+        self.assertIn('left:10%;bottom:0;height:50%', self.template)
+        self.assertIn('.card-copy,.candidate-copy,.card .money,.candidate-budget{position:relative',
+                      self.template)
+        self.assertIn('opacity:.28', self.template)
+        self.assertIn('background:#07101ea8', self.template)
 
 
 if __name__ == '__main__':
