@@ -67,6 +67,16 @@ class MobileLineupPlannerTests(unittest.TestCase):
         self.assertIn('aria-label="Zurück zum Trading Dashboard"', self.template)
         self.assertIn('← Trading Dashboard</a>', self.template)
 
+    def test_player_cards_layer_cutout_over_transparent_club_crest(self):
+        self.assertIn('function playerArt(p,position=true)', self.template)
+        self.assertIn('class="club-crest"', self.template)
+        self.assertIn('class="player-cutout"', self.template)
+        self.assertIn('.club-crest{position:absolute;inset:0;width:100%;height:100%', self.template)
+        self.assertIn('opacity:.18', self.template)
+        self.assertIn('.player-cutout{position:relative;z-index:1', self.template)
+        self.assertIn('height:67%', self.template)
+        self.assertIn('border:0;border-radius:0;background:transparent', self.template)
+
 
 if __name__ == '__main__':
     unittest.main()

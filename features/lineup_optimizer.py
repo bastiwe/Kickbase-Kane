@@ -124,6 +124,7 @@ def build_lineup_payload(token, league_id, user_id, squad_df, predictions_df,
             'team': text(row.get('team_name') or item.get('tn')) or 'Unbekannt',
             'teamId': text(item.get('tid') or row.get('team_id') or row.get('team_name')),
             'image': text(row.get('image_url')) or (get_cdn_url(item['pim']) if item.get('pim') else ''),
+            'teamImage': text(row.get('team_image_url')) or get_cdn_url(item.get('tim')) or '',
             'mv': number(item.get('mv')) if number(item.get('mv')) is not None else number(row.get('mv')),
             'bid': None if owned else own_bid_amount(item, user_id),
             'status': (normalize_player_status(player_status_value(item))
@@ -184,6 +185,7 @@ def market_context(market, own_ids, user_id, predictions, history, forecasts):
             'mv': number(item.get('mv')) if number(item.get('mv')) is not None else number(row.get('mv')),
             'askingPrice': number(item.get('prc')), 'bid': own_bid_amount(item, user_id),
             'image': get_cdn_url(item.get('pim')) or text(item.get('image_url')) or text(row.get('image_url')),
+            'teamImage': get_cdn_url(item.get('tim')) or text(item.get('team_image_url')) or text(row.get('team_image_url')),
             'expiresAt': (now + timedelta(seconds=expiry)).isoformat()
             if expiry is not None and 0 <= expiry <= 365 * 86400 else None,
             'status': normalize_player_status(player_status_value(item))

@@ -166,7 +166,7 @@ class LiveTests(unittest.TestCase):
             }},
         ]})
         client.player_profiles = Mock(return_value={
-            '7': {'pim': 'players/7.png'},
+            '7': {'pim': 'players/7.png', 'tim': 'teams/7.png'},
             '8': {'fn': 'Fallback', 'ln': 'Name', 'pim': 'players/8.png'},
         })
         epoch = date(1970, 1, 1)
@@ -184,6 +184,7 @@ class LiveTests(unittest.TestCase):
         self.assertEqual(second['marketValue'], 8_000_000)
         self.assertEqual(second['overpay'], 500_000)
         self.assertTrue(first['image'].startswith('https://'))
+        self.assertTrue(first['teamImage'].endswith('/teams/7.png'))
         client.get.assert_called_once_with('/leagues/league/activitiesFeed?max=100')
 
     @patch('features.ai_advisor.requests.post')

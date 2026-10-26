@@ -172,7 +172,7 @@ class ReportJobs:
                         if generated_player:
                             p.update({
                                 key: generated_player[key] for key in (
-                                    'name', 'team', 'teamId', 'position', 'image', 'status',
+                                    'name', 'team', 'teamId', 'position', 'image', 'teamImage', 'status',
                                     'l3', 'season', 'average', 'li', 'expiresAt'
                                 ) if generated_player.get(key) not in (None, '', 'Unbekannt')
                             })

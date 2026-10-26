@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.57
+
+- Sichert das bisherige Spielerkachellayout als Git-Tag `backup/player-card-layout-0.2.56`.
+- Nutzt das Vereinswappen groß und dezent transparent als Hintergrund der Spielerabbildung.
+- Zeigt das freigestellte Spielerbild rahmenlos davor und skaliert es auf ungefähr zwei Drittel der Wappenhöhe.
+- Reicht Vereinswappen aus Kickbase-Livedaten und dem Spieler-Cache bis in Startelfplaner, Dashboard und Transferhistorie durch.
+
 ## 0.2.56
 
 - Stellt den Transfermarkt auf Mobilgeräten als kompakte Karten statt als breite Desktop-Tabelle dar.

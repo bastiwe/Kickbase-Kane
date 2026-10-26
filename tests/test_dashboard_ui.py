@@ -52,6 +52,14 @@ class DashboardUiTests(unittest.TestCase):
         self.assertIn('.table-wrap tr.market-history-row[hidden]{display:none!important}', self.styles)
         self.assertIn('html,body{max-width:100%;overflow-x:hidden}', self.styles)
 
+    def test_player_art_layers_cutout_over_club_crest(self):
+        self.assertIn("const teamImage = p =>", self.javascript)
+        self.assertIn('class="club-crest"', self.javascript)
+        self.assertIn('class="player-cutout"', self.javascript)
+        self.assertIn('.club-crest{position:absolute;inset:0;width:100%;height:100%', self.styles)
+        self.assertIn('opacity:.18', self.styles)
+        self.assertIn('.player-cutout{position:relative;z-index:1', self.styles)
+
 
 if __name__ == '__main__':
     unittest.main()

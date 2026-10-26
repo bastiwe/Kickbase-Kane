@@ -41,12 +41,14 @@ def local_player_metadata(player_ids):
                 'team_name': 'team_name' if 'team_name' in columns else "''",
                 'team_id': 'team_id' if 'team_id' in columns else "''",
                 'image_url': 'image_url' if 'image_url' in columns else "''",
+                'team_image_url': 'team_image_url' if 'team_image_url' in columns else "''",
                 'date': 'date' if 'date' in columns else "''",
             }
             placeholders = ','.join('?' for _ in ids)
             rows = connection.execute(
                 f"""SELECT player_id, {select['first_name']}, {select['last_name']},
-                           {select['team_name']}, {select['team_id']}, {select['image_url']}
+                           {select['team_name']}, {select['team_id']}, {select['image_url']},
+                           {select['team_image_url']}
                     FROM player_data_1d
                     WHERE player_id IN ({placeholders})
                     ORDER BY {select['date']} DESC""",
@@ -55,13 +57,14 @@ def local_player_metadata(player_ids):
     except sqlite3.Error:
         return {}
     result = {}
-    for player_id, first_name, last_name, team_name, team_id, image_url in rows:
+    for player_id, first_name, last_name, team_name, team_id, image_url, team_image_url in rows:
         result.setdefault(str(player_id), {
             'first_name': first_name or '',
             'last_name': last_name or '',
             'team_name': team_name or '',
             'team_id': team_id or '',
             'image_url': image_url or '',
+            'team_image_url': team_image_url or '',
         })
     return result
 
@@ -421,6 +424,8 @@ class LiveKickbase:
                     data, 'pn', 'playerName', 'player_name', 'name', 'n', 'player')),
                 'image': activity_field(value(
                     data, 'pim', 'image', 'imageUrl', 'image_url')),
+                'teamImage': activity_field(value(
+                    data, 'tim', 'teamImage', 'teamImageUrl', 'team_image_url')),
                 'from': activity_field(value(
                     data, 'slr', 'seller', 'sellerName', 'seller_name', 'su')) or 'Kickbase',
                 'to': activity_field(value(
@@ -451,6 +456,10 @@ class LiveKickbase:
                 ))).strip() or ('Spieler ' + player_id if player_id else 'Unbekannter Spieler')
             image_path = item['image'] or profile.get('pim') or stored.get('image_url') or ''
             item['image'] = get_cdn_url(image_path) or ''
+            team_image_path = (
+                item['teamImage'] or profile.get('tim') or stored.get('team_image_url') or ''
+            )
+            item['teamImage'] = get_cdn_url(team_image_path) or ''
             if item['marketValue'] is None and player_id in histories:
                 transfer_day = activity_day(item['transferredAt'])
                 candidates = []
@@ -655,7 +664,7 @@ class LiveKickbase:
                 profile = live_profiles.get(player_id, {})
                 # Market and squad payloads are sparse. Current profile values
                 # are authoritative; the local cache is only a last fallback.
-                for field in ('fn', 'ln', 'tn', 'tid', 'pim', 'pos', 'st', 'prob', 'tp', 'sec', 'mv', 'ap', 'ph'):
+                for field in ('fn', 'ln', 'tn', 'tid', 'pim', 'tim', 'pos', 'st', 'prob', 'tp', 'sec', 'mv', 'ap', 'ph'):
                     if profile.get(field) not in (None, ''):
                         item[field] = profile[field]
                 stored = cached_metadata.get(player_id, {})
@@ -669,6 +678,8 @@ class LiveKickbase:
                     item['tid'] = stored['team_id']
                 if not item.get('image_url') and stored.get('image_url'):
                     item['image_url'] = stored['image_url']
+                if not item.get('team_image_url') and stored.get('team_image_url'):
+                    item['team_image_url'] = stored['team_image_url']
                 enriched.append(item)
             parsed = market_context(enriched, set(), user_id if not owned else None, {}, None, None)
             raw = {str(item.get('i')): item for item in enriched}
@@ -697,11 +708,17 @@ class LiveKickbase:
                     player['image'] = get_cdn_url(live_profile['pim'])
                 if not player.get('image'):
                     player['image'] = previous.get('image', '')
+                team_image = live_profile.get('tim') or live_item.get('team_image_url')
+                if team_image:
+                    player['teamImage'] = get_cdn_url(team_image)
+                if not player.get('teamImage'):
+                    player['teamImage'] = previous.get('teamImage', '')
                 if not raw[player['id']].get('ln') and previous.get('name') and not re.fullmatch(r'Spieler\s+\d+', previous['name']):
                     player['name'] = previous['name']
                 for field in ('l3', 'season', 'average', 'li', 'change', 'lastMvChange', 'opponent',
                               'matchdayChange', 'recent', 'previous', 'history', 'fixtures',
-                              'minutes', 'cards', 'goals', 'assists', 'purchasePrice', 'profitLoss'):
+                              'minutes', 'cards', 'goals', 'assists', 'purchasePrice', 'profitLoss',
+                              'teamImage'):
                     if player.get(field) is None and previous.get(field) is not None:
                         player[field] = previous[field]
                 if player['id'] in live_market_changes:

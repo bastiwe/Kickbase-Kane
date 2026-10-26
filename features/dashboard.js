@@ -21,6 +21,7 @@
   const deadline = p => field(p,'expiresAt','expires_at','expiry','expiration');
   const lastMarketChange = p => number(field(p,'lastMvChange','last_market_change','latestMarketChange'));
   const image = p => field(p,'image','imageUrl','profileImage') || '';
+  const teamImage = p => field(p,'teamImage','teamImageUrl','team_image_url','teamLogo') || '';
   const club = p => {
     const value = field(p,'team','club','teamName');
     return value && value !== 'Unbekannt' ? value : 'Verein nicht geladen';
@@ -28,8 +29,11 @@
   const position = p => ({1:'TW',2:'ABW',3:'MIT',4:'ANG'}[Number(field(p,'position','pos'))] || '–');
   const name = p => field(p,'name','playerName') || 'Unbekannt';
   const cls = value => value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral';
-  const avatar = p => image(p) ? '<img class="avatar" src="'+escapeHtml(image(p))+'" alt="" loading="lazy">' : '<span class="avatar"></span>';
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
+  const avatar = p => '<span class="player-art" aria-hidden="true">'
+    +(teamImage(p)?'<img class="club-crest" src="'+escapeHtml(teamImage(p))+'" alt="" loading="lazy">':'')
+    +(image(p)?'<img class="player-cutout" src="'+escapeHtml(image(p))+'" alt="" loading="lazy">':'<span class="player-cutout placeholder"></span>')
+    +'</span>';
   const liBadge = (p,label='LI') => {
     const value=li(p);
     const tone=value===null?'unknown':value>=85?'high':value>=45?'medium':'low';
@@ -227,7 +231,7 @@
       container.innerHTML=transfers.length?transfers.map(transfer=>{
         const overpay=number(transfer.overpay);
         const marketValue=number(transfer.marketValue);
-        return '<article class="recent-transfer-card"><div class="recent-transfer-player">'+avatar({image:transfer.image})
+        return '<article class="recent-transfer-card"><div class="recent-transfer-player">'+avatar({image:transfer.image,teamImage:transfer.teamImage})
           +'<div class="recent-transfer-identity"><div class="name">'+escapeHtml(transfer.playerName||'Unbekannter Spieler')+'</div><div class="transfer-route"><span>'+escapeHtml(transfer.from||'Kickbase')+'</span><b aria-hidden="true">›</b><span>'+escapeHtml(transfer.to||'Kickbase')+'</span></div></div></div>'
           +'<div class="recent-transfer-money"><div><span>Bezahlt</span><strong>'+(number(transfer.price)===null?'–':euros(transfer.price))+'</strong></div><div><span>Overpay</span><strong class="'+(overpay===null?'neutral':overpay>0?'negative':overpay<0?'positive':'neutral')+'">'+(overpay===null?'–':signed(overpay))+'</strong></div></div>'
           +'<div class="recent-transfer-footer"><span>'+escapeHtml(relativeTime(transfer.transferredAt))+'</span><span title="Marktwert beim Transfer">MW '+(marketValue===null?'–':euros(marketValue))+'</span></div></article>';
