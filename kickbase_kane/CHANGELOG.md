@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.61
+
+- Verdoppelt Wappen und Spielerbild in „Letzte Transfers“ und „Beste Chancen vor MW-Update“.
+- Vergrößert den reservierten Bildbereich, damit die deutlich größere Komposition nicht mit den Texten kollidiert.
+- Wechselt bei schmaleren Ansichten früher auf eine einzelne Transferkachel pro Reihe.
+
 ## 0.2.60
 
 - Repariert das Layout von „Beste Chancen vor MW-Update“ mit einer eigenen, stabilen Inhaltsstruktur.

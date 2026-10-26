@@ -51,14 +51,16 @@ class DashboardUiTests(unittest.TestCase):
         self.assertIn("<article class=\"recent-transfer-card\">'+avatar(", self.javascript)
         self.assertIn('.chance>summary>.player-art,.recent-transfer-card>.player-art{position:absolute',
                       self.styles)
-        self.assertIn('inset:0 auto 0 -82px;width:164px;height:100%', self.styles)
+        self.assertIn('inset:auto auto 0 -164px;width:328px;height:200%', self.styles)
         self.assertIn('transform:scale(1.28)', self.styles)
-        self.assertIn('left:32px;bottom:0;width:auto;height:100%', self.styles)
+        self.assertIn('left:64px;bottom:0;width:auto;height:100%;max-width:216px', self.styles)
+        self.assertIn('left:-144px;width:288px;height:200%', self.styles)
+        self.assertIn('left:56px;max-width:192px', self.styles)
         self.assertIn('.chance-content,.recent-transfer-content{position:relative;z-index:1',
                       self.styles)
         self.assertIn('.recent-transfer-grid{grid-template-columns:repeat(3,minmax(0,1fr))}',
                       self.styles)
-        self.assertIn('@media(max-width:560px){.recent-transfer-grid{grid-template-columns:1fr}}',
+        self.assertIn('@media(max-width:680px){.recent-transfer-grid{grid-template-columns:1fr}}',
                       self.styles)
 
     def test_mobile_transfer_market_never_forces_horizontal_scrolling(self):
