@@ -57,6 +57,20 @@ class OptimizerTests(unittest.TestCase):
         self.assertIsNone(payload['players'][1]['bid'])
         self.assertEqual(payload['budget'], -1000000)
 
+    @patch('features.lineup_optimizer.render_optimizer')
+    @patch('features.lineup_optimizer.get_budget', return_value=0)
+    @patch('features.lineup_optimizer.get_json_with_token', return_value={'it': [
+        {'i': '2', 'fn': 'Market', 'ln': 'Player', 'pos': 2, 'mv': 500000}
+    ]})
+    @patch('features.lineup_optimizer.get_players_in_squad', return_value={'it': []})
+    def test_writer_forwards_market_li_data(self, squad, market, budget, render):
+        market_df = pd.DataFrame([{'player_id': 2, 'starter_rate': 75}])
+        write_lineup_optimizer(
+            'token', 'league', 'me', pd.DataFrame(), pd.DataFrame(columns=['player_id']),
+            market_df=market_df,
+        )
+        self.assertEqual(render.call_args.args[0]['marketPlayers'][0]['li'], 75)
+
     @patch('features.lineup_optimizer.get_player_performance', return_value=[])
     @patch('features.lineup_optimizer.get_player_info', return_value={'player_id': '1', 'team_name': 'A', 'team_id': 1})
     @patch('features.lineup_optimizer.render_optimizer')

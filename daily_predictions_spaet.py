@@ -202,6 +202,7 @@ try:
         token, league_id, current_user_id, squad_recommendations_df, live_predictions_df,
         history_df=player_df,
         forecast_snapshot=forecast_snapshot,
+        market_df=market_recommendations_df,
     )
 except Exception as exc:
     print(f"Warning: Startelf optimizer could not be generated: {exc}")

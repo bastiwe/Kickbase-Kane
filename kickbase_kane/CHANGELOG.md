@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.53
+
+- Reicht die LigaInsider-Startelfwahrscheinlichkeiten des Transfermarkts bis in Dashboard und Startelfplaner durch.
+- Bewahrt vorhandene LI-Werte bei Fast-1T-Läufen, wenn der Schnellreport selbst keine neuen LigaInsider-Daten lädt.
+- Speichert den aktualisierten Dashboard-Report nach Reportläufen dauerhaft, damit LI-Werte einen Add-on-Neustart überstehen.
+
 ## 0.2.52
 
 - Zeigt die LI-Startelfwahrscheinlichkeit als farbcodierten Badge im Startelfplaner, in Kaderlisten, Marktchancen, Handlungsbedarf und Transfermarkt.

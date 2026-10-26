@@ -1,4 +1,5 @@
 """Run the existing reports without blocking the local HTTP server."""
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -28,6 +29,15 @@ class ReportJobs:
         if status.get('status') == 'running':
             status.update(self._progress_from_log(status.get('kind')))
         return status
+
+    def _persist_report(self, report):
+        path = getattr(self.server, 'persist_path', None)
+        if not path:
+            return
+        path = Path(path)
+        temporary = path.with_suffix('.tmp')
+        temporary.write_text(json.dumps(report, allow_nan=False), encoding='utf-8')
+        temporary.replace(path)
 
     def _progress_from_log(self, kind):
         """Translate stable report milestones into UI-safe progress information."""
@@ -115,7 +125,6 @@ class ReportJobs:
             snapshot = read_prediction_snapshot(snapshot_path)
             if not snapshot:
                 raise RuntimeError('Neue Prognosen sind ungültig.')
-            li = {}
             generated_by_id = {}
             generated = None
             horizon = initial.get('forecastHorizon')
@@ -127,7 +136,6 @@ class ReportJobs:
                 generated = read_report(optimizer_path.read_text(encoding='utf-8'))
                 if (generated['user'], generated['league']) != (initial['user'], initial['league']):
                     raise RuntimeError('Ergebnis gehört zu einer anderen Liga.')
-                li = {p['id']: p.get('li') for p in generated['players']}
                 generated_by_id = {
                     p['id']: p for p in generated['players'] + generated.get('marketPlayers', [])
                 }
@@ -137,12 +145,23 @@ class ReportJobs:
                 report = self.server.report
                 if (report['user'], report['league']) != (initial['user'], initial['league']):
                     raise RuntimeError('Liga wurde gewechselt; Ergebnis nicht übernommen.')
+                previous_by_id = {
+                    p['id']: p for p in report['players'] + report.get('marketPlayers', [])
+                }
                 # A generated optimizer report contains richer identity data than
                 # the lean live market payload. Replace both collections rather
                 # than patching only rows that happen to overlap.
                 if generated is not None:
+                    for generated_player in generated['players'] + generated.get('marketPlayers', []):
+                        previous = previous_by_id.get(generated_player['id'], {})
+                        if generated_player.get('li') is None and previous.get('li') is not None:
+                            generated_player['li'] = previous['li']
                     report['players'] = generated['players']
                     report['marketPlayers'] = generated.get('marketPlayers', [])
+                li = {
+                    p['id']: p.get('li') for p in report['players'] + report.get('marketPlayers', [])
+                    if p.get('li') is not None
+                }
                 patches = {}
                 for p in report['players'] + report.get('marketPlayers', []):
                     # The report export has richer player metadata than the lean
@@ -165,6 +184,8 @@ class ReportJobs:
                     patches[p['id']] = patch
                 forecast = forecast_metadata(snapshot)
                 report.update(forecast=forecast, forecastHorizon=horizon)
+                persisted_report = deepcopy(report)
+            self._persist_report(persisted_report)
             with self.lock:
                 self.status.update(
                     status='done', patches=patches, forecast=forecast, forecastHorizon=horizon,

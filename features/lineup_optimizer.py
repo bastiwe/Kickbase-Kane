@@ -67,10 +67,10 @@ def own_bid_amount(item, user_id):
 def write_lineup_optimizer(token, league_id, user_id, squad_df, predictions_df,
                            output_path='startelf_optimizer.html', history_df=None,
                            refresh_missing_history=False, competition_id=1, history_note=None,
-                           forecast_snapshot=None):
+                           forecast_snapshot=None, market_df=None):
     payload = build_lineup_payload(
         token, league_id, user_id, squad_df, predictions_df, history_df,
-        refresh_missing_history, competition_id, history_note, forecast_snapshot)
+        refresh_missing_history, competition_id, history_note, forecast_snapshot, market_df)
     return render_optimizer(payload, output_path)
 
 
