@@ -46,6 +46,12 @@ class DashboardUiTests(unittest.TestCase):
         self.assertIn('transfer.overpay', self.javascript)
         self.assertIn('.recent-transfer-grid', self.styles)
 
+    def test_mobile_transfer_market_never_forces_horizontal_scrolling(self):
+        self.assertIn('.table-wrap table{display:block;width:100%;min-width:0!important', self.styles)
+        self.assertIn('.table-wrap tr.market-row{display:grid;width:100%', self.styles)
+        self.assertIn('.table-wrap tr.market-history-row[hidden]{display:none!important}', self.styles)
+        self.assertIn('html,body{max-width:100%;overflow-x:hidden}', self.styles)
+
 
 if __name__ == '__main__':
     unittest.main()

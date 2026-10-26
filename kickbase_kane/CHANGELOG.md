@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.56
+
+- Stellt den Transfermarkt auf Mobilgeräten als kompakte Karten statt als breite Desktop-Tabelle dar.
+- Verhindert horizontales Scrollen durch eine vollständig flexible Tabellenbreite und gekürzte lange Spielernamen.
+- Blendet die Marktwert-Detailzeile mobil wieder korrekt aus, bis ein Spieler aktiv aufgeklappt wird.
+
 ## 0.2.55
 
 - Zeigt im Trading Dashboard die fünf neuesten Liga-Transfers live aus dem Kickbase-Aktivitätenfeed.

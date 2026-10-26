@@ -60,3 +60,30 @@ h1{font-size:clamp(25px,3vw,34px);line-height:1.1;letter-spacing:-.035em}.eyebro
 @media(max-width:1180px){.recent-transfer-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:820px){.recent-transfer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:560px){.recent-transfer-grid{grid-template-columns:1fr}.recent-transfer-card{min-height:0}.recent-transfer-money strong{font-size:13px}}
+
+/* Mobile transfer market: replace the wide desktop table with stacked cards. */
+@media(max-width:640px){
+  html,body{max-width:100%;overflow-x:hidden}
+  .app-shell,.dashboard-grid,.panel,.table-wrap{min-width:0;max-width:100%}
+  .table-wrap{width:100%;overflow:visible}
+  .table-wrap table{display:block;width:100%;min-width:0!important;table-layout:fixed}
+  .table-wrap thead{display:none}
+  .table-wrap tbody{display:block;width:100%}
+  .table-wrap tr.market-row{display:grid;width:100%;grid-template-columns:minmax(0,1fr) minmax(94px,auto);column-gap:10px;padding:12px 0;border-top:1px solid var(--line)}
+  .table-wrap .market-row>td{min-width:0;border:0;padding:2px 0;font-size:12px}
+  .table-wrap .market-row>td:first-child{grid-column:1;grid-row:1/4}
+  .table-wrap .market-row>td:nth-child(2){grid-column:2;grid-row:1;text-align:right;font-size:12px;font-weight:800}
+  .table-wrap .market-row>td:nth-child(3){grid-column:2;grid-row:2;text-align:right;white-space:nowrap}
+  .table-wrap .market-row>td:nth-child(4){grid-column:2;grid-row:3;text-align:right;font-weight:800;white-space:nowrap}
+  .table-wrap .market-row>td:nth-child(5),.table-wrap .market-row>td:nth-child(6){grid-column:1/-1;padding-left:44px;color:var(--muted)}
+  .table-wrap .market-row>td:nth-child(3)::before{content:'MW ';color:var(--muted)}
+  .table-wrap .market-row>td:nth-child(4)::before{content:'Erw. 1T ';color:var(--muted);font-weight:600}
+  .table-wrap .market-row>td:nth-child(5)::before{content:'LI ';color:var(--muted)}
+  .table-wrap .market-row>td:nth-child(6)::before{content:'Ablauf ';color:var(--muted)}
+  .table-player,.table-player>div{min-width:0}
+  .table-player .name,.table-player .sub{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .table-wrap tr.market-history-row[hidden]{display:none!important}
+  .table-wrap tr.market-history-row:not([hidden]){display:block;width:100%;padding:0;border:0}
+  .table-wrap .market-history-row>td{display:block;width:100%;padding:0!important;border:0}
+  .market-history-row .player-history{max-width:100%;margin:0 0 10px;overflow:hidden}
+}
