@@ -51,10 +51,10 @@ class DashboardUiTests(unittest.TestCase):
         self.assertIn("<article class=\"recent-transfer-card\">'+avatar(", self.javascript)
         self.assertIn('.chance>summary>.player-art,.recent-transfer-card>.player-art{position:absolute',
                       self.styles)
-        self.assertIn('inset:auto auto 0 -164px;width:328px;height:200%', self.styles)
+        self.assertIn('inset:auto auto 0 -140px;width:328px;height:200%', self.styles)
         self.assertIn('transform:scale(1.28)', self.styles)
         self.assertIn('left:64px;bottom:0;width:auto;height:100%;max-width:216px', self.styles)
-        self.assertIn('left:-144px;width:288px;height:200%', self.styles)
+        self.assertIn('left:-120px;width:288px;height:200%', self.styles)
         self.assertIn('left:56px;max-width:192px', self.styles)
         self.assertIn('.chance-content,.recent-transfer-content{position:relative;z-index:1',
                       self.styles)
@@ -64,12 +64,12 @@ class DashboardUiTests(unittest.TestCase):
                       self.styles)
 
     def test_large_artwork_is_shared_by_roster_risks_and_market_cards(self):
-        self.assertIn('bottom:-38%;width:100%;height:100%', self.styles)
+        self.assertIn('bottom:-26%;width:100%;height:100%', self.styles)
         self.assertIn('.roster-player .list-row,.risk-player .list-row{min-height:210px;',
                       self.styles)
         self.assertIn('.risk-player .list-row .player-art,.table-player .player-art{position:absolute',
                       self.styles)
-        self.assertIn('.table-player{min-height:210px;padding:16px 14px 16px 176px}',
+        self.assertIn('.table-player{min-height:210px;padding:16px 14px 16px 200px}',
                       self.styles)
 
     def test_mobile_transfer_market_never_forces_horizontal_scrolling(self):

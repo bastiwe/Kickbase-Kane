@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.63
+
+- Rückt Spieler und Vereinswappen in der gemeinsamen Kartenkomposition etwas nach rechts, sodass die Spielergesichter vollständig sichtbar bleiben.
+- Hebt das Wappen hinter dem Spieler wieder leicht an, bis es beinahe den oberen Kachelrand erreicht.
+- Vergrößert die reservierten Textabstände passend zur verschobenen Grafik und stapelt mobile Transferwerte bei Bedarf.
+
 ## 0.2.62
 
 - Zieht das übergroße Vereinswappen in der gemeinsamen Bildkomposition weiter nach unten hinter den Spieler.

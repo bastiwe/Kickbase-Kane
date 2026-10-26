@@ -106,11 +106,12 @@ class MobileLineupPlannerTests(unittest.TestCase):
 
     def test_all_planner_cards_share_half_cropped_lowered_crest_composition(self):
         self.assertIn('.card,.bank .card{min-height:200px;', self.template)
-        self.assertIn('inset:auto auto 0 -144px;width:288px;height:200%', self.template)
-        self.assertIn('top:auto;bottom:-38%;width:100%;height:100%', self.template)
+        self.assertIn('inset:auto auto 0 -120px;width:288px;height:200%', self.template)
+        self.assertIn('top:auto;bottom:-26%;width:100%;height:100%', self.template)
         self.assertIn('left:56px;bottom:0;width:auto;height:100%;max-width:192px', self.template)
         self.assertIn('.candidate-option{min-height:210px;', self.template)
-        self.assertIn('.slot .card .player-art{left:-100px;width:200px;height:200%}', self.template)
+        self.assertIn('.slot .card .player-art{left:-82px;width:200px;height:200%}', self.template)
+        self.assertIn('.slot .card .player-cutout{left:0;max-width:132px}', self.template)
 
 
 if __name__ == '__main__':
