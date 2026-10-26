@@ -30,7 +30,13 @@
   const cls = value => value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral';
   const avatar = p => image(p) ? '<img class="avatar" src="'+escapeHtml(image(p))+'" alt="" loading="lazy">' : '<span class="avatar"></span>';
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
-  const playerLabel = p => '<div class="player">'+avatar(p)+'<div><div class="name">'+escapeHtml(name(p))+'</div><div class="sub">'+escapeHtml(club(p))+' · '+escapeHtml(position(p))+'</div></div></div>';
+  const liBadge = (p,label='LI') => {
+    const value=li(p);
+    const tone=value===null?'unknown':value>=85?'high':value>=45?'medium':'low';
+    const text=value===null?'–':Math.round(value)+' %';
+    return '<span class="li-badge '+tone+'" title="LigaInsider-Startelfwahrscheinlichkeit">'+(label?escapeHtml(label)+' ':'')+text+'</span>';
+  };
+  const playerLabel = p => '<div class="player">'+avatar(p)+'<div><div class="name">'+escapeHtml(name(p))+'</div><div class="player-subline"><span class="sub">'+escapeHtml(club(p))+' · '+escapeHtml(position(p))+'</span>'+liBadge(p)+'</div></div></div>';
   const timeValue = value => { if (!value) return Infinity; if (typeof value === 'string' && Number.isNaN(Number(value))) { const parsed = Date.parse(value); return Number.isNaN(parsed) ? Infinity : parsed; } const numeric = Number(value); return numeric > 1e12 ? numeric : numeric * 1000; };
   const formatTime = value => { const stamp=timeValue(value); if(!Number.isFinite(stamp))return '–'; return new Date(stamp).toLocaleString('de-DE',{timeZone:'Europe/Berlin',dateStyle:'short',timeStyle:'short'});};
   const trendArrow = p => {
@@ -212,7 +218,7 @@
     const rows=sortedMarket().slice(0,50);
     $('market-table').innerHTML=rows.map(p=>
       '<tr class="market-row" data-player-id="'+escapeHtml(p.id)+'" aria-expanded="false" tabindex="0">'
-      +'<td><div class="table-player">'+avatar(p)+'<div><div class="name">'+escapeHtml(name(p))+'</div><div class="sub">'+escapeHtml(club(p))+'</div></div></div></td><td>'+escapeHtml(position(p))+'</td><td>'+euros(mv(p))+'</td><td class="'+cls(change(p))+'">'+signed(change(p))+trendArrow(p)+'</td><td>'+((li(p)===null)?'–':Math.round(li(p))+' %')+'</td><td>'+escapeHtml(formatTime(deadline(p)))+'</td></tr>'
+      +'<td><div class="table-player">'+avatar(p)+'<div><div class="name">'+escapeHtml(name(p))+'</div><div class="sub">'+escapeHtml(club(p))+'</div></div></div></td><td>'+escapeHtml(position(p))+'</td><td>'+euros(mv(p))+'</td><td class="'+cls(change(p))+'">'+signed(change(p))+trendArrow(p)+'</td><td>'+liBadge(p,'')+'</td><td>'+escapeHtml(formatTime(deadline(p)))+'</td></tr>'
       +'<tr class="market-history-row" hidden><td colspan="6"><div class="player-history"><p class="empty">Aufklappen lädt die Tagesänderungen.</p></div></td></tr>'
     ).join('')||'<tr><td colspan="6" class="empty">Keine Marktangebote im aktuellen Stand.</td></tr>';
     document.querySelectorAll('.market-row').forEach(row=>{

@@ -51,6 +51,14 @@ class MobileLineupPlannerTests(unittest.TestCase):
         self.assertIn('.money small.red{color:var(--r)}', self.template)
         self.assertIn("trendClass=v=>Number.isFinite(v)?(v>=0?'green':'red'):''", self.template)
 
+    def test_li_probability_is_shown_on_cards_and_in_candidate_picker(self):
+        self.assertIn('function liChip(p)', self.template)
+        self.assertGreaterEqual(self.template.count('+liChip(p)+'), 2)
+        self.assertIn("value>=85?' li-high':value>=45?' li-medium':' li-low'", self.template)
+        self.assertIn('.li-chip.li-high', self.template)
+        self.assertIn('.li-chip.li-medium', self.template)
+        self.assertIn('.li-chip.li-low', self.template)
+
     def test_status_swipes_can_return_to_neutral(self):
         self.assertIn("locked.delete(id);msg('Halte-Status aufgehoben.')", self.template)
         self.assertIn("sell.delete(id);msg('Verkauf aufgehoben · Status neutral.')", self.template)

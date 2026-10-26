@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.52
+
+- Zeigt die LI-Startelfwahrscheinlichkeit als farbcodierten Badge im Startelfplaner, in Kaderlisten, Marktchancen, Handlungsbedarf und Transfermarkt.
+- Modernisiert das Trading Dashboard mit klarer Kartenhierarchie, responsivem 12-Spalten-Raster und einer kompakteren mobilen Darstellung.
+- Hebt wichtige Aktionen, Statusinformationen und Kennzahlen deutlicher hervor.
+
 ## 0.2.51
 
 - Färbt MW-Prognose und G/V auf den Spielerkacheln des Startelfplaners passend zur positiven oder negativen Tendenz ein.

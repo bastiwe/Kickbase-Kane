@@ -8,34 +8,40 @@
 <body>
   <main class="app-shell">
     <header class="topbar">
-      <div>
-        <p class="eyebrow">KICKBASE KANE</p>
-        <h1>Trading Dashboard</h1>
+      <div class="brand-block">
+        <span class="brand-mark" aria-hidden="true">K</span>
+        <div>
+          <p class="eyebrow">KICKBASE KANE</p>
+          <h1>Trading Dashboard</h1>
+          <p class="header-subtitle">Kader, Marktchancen und Entscheidungen auf einen Blick.</p>
+        </div>
       </div>
       <div class="header-actions">
         <div class="report-actions" aria-label="Prognose und Planung">
-          <a class="button secondary" href="planner">Startelfplaner</a>
+          <a class="button primary" href="planner">Startelf planen</a>
           <button id="run-full-report" class="button secondary" type="button">Vollreport</button>
           <button id="run-fast-report" class="button secondary" type="button">Fast 1T</button>
         </div>
-        <span id="forecast-status" class="status">Prognose wird geladen …</span>
-        <span id="live-status" class="status">Daten werden geladen …</span>
+        <div class="status-cluster">
+          <span id="forecast-status" class="status">Prognose wird geladen …</span>
+          <span id="live-status" class="status">Daten werden geladen …</span>
+        </div>
       </div>
     </header>
 
     <section class="metrics" aria-label="Kennzahlen">
-      <article class="metric">
-        <span>Verfügbares Budget</span>
+      <article class="metric metric-budget">
+        <span class="metric-label"><span class="metric-icon" aria-hidden="true">€</span>Verfügbares Budget</span>
         <strong id="metric-budget">–</strong>
         <small id="metric-budget-note">Live aus Kickbase</small>
       </article>
-      <article class="metric">
-        <span>Kaderwert</span>
+      <article class="metric metric-squad">
+        <span class="metric-label"><span class="metric-icon" aria-hidden="true">XI</span>Kaderwert</span>
         <strong id="metric-roster-value">–</strong>
         <small id="metric-roster-count">–</small>
       </article>
-      <article class="metric">
-        <span>Erw. Kader-MW in 1T</span>
+      <article class="metric metric-forecast">
+        <span class="metric-label"><span class="metric-icon" aria-hidden="true">↗</span>Erw. Kader-MW in 1T</span>
         <strong id="metric-roster-change">–</strong>
         <small id="metric-roster-change-note">aus Prognose</small>
       </article>
@@ -67,7 +73,7 @@
         <div id="top-chances" class="chance-grid"></div>
       </article>
 
-      <article class="panel panel-wide roster-panel">
+      <article class="panel roster-panel">
         <div class="panel-heading">
           <div><p class="eyebrow">DEIN KADER</p><h2>Wertentwicklung</h2><p class="panel-description">Aufklappen für die letzten tatsächlichen Tagesänderungen.</p></div>
           <span id="roster-count" class="panel-meta"></span>
@@ -75,7 +81,7 @@
         <div id="roster-movers" class="compact-list"></div>
       </article>
 
-      <article class="panel">
+      <article class="panel action-panel">
         <div class="panel-heading">
           <div><p class="eyebrow">HANDELSDRUCK</p><h2>Handlungsbedarf</h2><p class="panel-description">Mögliche MW-Verluste im Kader und Angebote mit nahem Ablauf.</p></div>
         </div>
