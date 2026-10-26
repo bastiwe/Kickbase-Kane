@@ -64,6 +64,12 @@ class DashboardUiTests(unittest.TestCase):
         self.assertIn('left:9%;bottom:0;height:50%', self.styles)
         self.assertIn('opacity:.28', self.styles)
         self.assertIn('background:rgba(7,16,29,.64)', self.styles)
+        self.assertIn('.chance{padding-left:128px;min-height:190px}', self.styles)
+        self.assertIn('.list-row{padding-left:108px;min-height:106px}', self.styles)
+        self.assertIn('.recent-transfer-card{padding-left:128px;min-height:190px}', self.styles)
+        self.assertIn('.table-player{min-height:62px;padding-left:64px}', self.styles)
+        self.assertIn('height:100%;max-width:94%;object-fit:contain', self.styles)
+        self.assertIn('background:transparent;box-shadow:none;backdrop-filter:none', self.styles)
 
 
 if __name__ == '__main__':

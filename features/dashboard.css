@@ -99,3 +99,14 @@ h1{font-size:clamp(25px,3vw,34px);line-height:1.1;letter-spacing:-.035em}.eyebro
 .chance-top,.chance-change,.chance-details,.roster-values,.risk-values,.recent-transfer-money,.recent-transfer-footer{position:relative;z-index:1}
 .chance-change,.chance-details,.roster-values,.risk-values,.recent-transfer-money,.recent-transfer-footer{border-radius:8px;background:rgba(7,16,29,.62);backdrop-filter:blur(3px)}
 .chance-change,.chance-details{padding:5px 7px}.roster-values,.risk-values{padding:4px 7px}.recent-transfer-money,.recent-transfer-footer{padding:7px}
+
+/* Reference composition: artwork owns the left column; content never overlaps it. */
+.chance{padding-left:128px;min-height:190px}.chance .player-art{width:112px}
+.list-row{padding-left:108px;min-height:106px}.list-row .player-art{width:94px}
+.recent-transfer-card{padding-left:128px;min-height:190px}.recent-transfer-card .player-art{width:112px}
+.table-player{min-height:62px;padding-left:64px}.table-player .player-art{width:54px}
+.chance .player-art,.list-row .player-art,.recent-transfer-card .player-art,.table-player .player-art{overflow:hidden}
+.chance .club-crest,.list-row .club-crest,.recent-transfer-card .club-crest,.table-player .club-crest{left:-10%;width:120%;height:100%;opacity:.38;transform:scale(1.06)}
+.chance .player-cutout,.list-row .player-cutout,.recent-transfer-card .player-cutout,.table-player .player-cutout{left:-6%;bottom:0;width:auto;height:100%;max-width:94%;object-fit:contain;object-position:left bottom}
+.player>div,.recent-transfer-identity,.table-player>div{padding:4px 0;border:0;background:transparent;box-shadow:none;backdrop-filter:none}
+@media(max-width:640px){.chance{padding-left:104px;min-height:170px}.chance .player-art{width:90px}.list-row{padding-left:88px;min-height:98px}.list-row .player-art{width:76px}.recent-transfer-card{padding-left:104px;min-height:174px}.recent-transfer-card .player-art{width:90px}.table-player{padding-left:54px}.table-player .player-art{width:46px}}

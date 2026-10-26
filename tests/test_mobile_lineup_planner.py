@@ -76,14 +76,33 @@ class MobileLineupPlannerTests(unittest.TestCase):
         self.assertIn('.player-cutout{position:relative;z-index:1', self.template)
         self.assertIn('height:67%', self.template)
         self.assertIn('border:0;border-radius:0;background:transparent', self.template)
-        self.assertIn('.card .player-art,.candidate-option .player-art{position:absolute', self.template)
-        self.assertIn('inset:0 auto 0 0;width:58%;height:100%', self.template)
-        self.assertIn('.card .player-cutout,.candidate-option .player-cutout{position:absolute', self.template)
-        self.assertIn('left:10%;bottom:0;height:50%', self.template)
+        self.assertIn('.card{min-height:104px;grid-template-columns:92px minmax(0,1fr) auto',
+                      self.template)
+        self.assertIn('.card .player-art{position:relative', self.template)
+        self.assertIn('grid-column:1;grid-row:1/3', self.template)
+        self.assertIn('.card .player-cutout{position:absolute', self.template)
+        self.assertIn('height:100%;max-width:94%', self.template)
         self.assertIn('.card-copy,.candidate-copy,.card .money,.candidate-budget{position:relative',
                       self.template)
         self.assertIn('opacity:.28', self.template)
         self.assertIn('background:#07101ea8', self.template)
+        self.assertIn('.card-copy{grid-column:2;grid-row:1', self.template)
+        self.assertIn('.card .money{grid-column:3;grid-row:1', self.template)
+
+    def test_candidate_picker_uses_large_left_aligned_reference_artwork(self):
+        self.assertIn('min-height:156px;grid-template-columns:clamp(124px,25%,174px)',
+                      self.template)
+        self.assertIn('.candidate-option .player-art{position:relative', self.template)
+        self.assertIn('align-self:stretch;width:100%;height:100%;overflow:hidden', self.template)
+        self.assertIn('.candidate-option .club-crest{position:absolute;left:-9%', self.template)
+        self.assertIn('height:100%;object-fit:contain;object-position:left center;opacity:.38',
+                      self.template)
+        self.assertIn('.candidate-option .player-cutout{position:absolute;z-index:1;left:-5%;bottom:0',
+                      self.template)
+        self.assertIn('height:100%;max-width:92%;object-fit:contain;object-position:left bottom',
+                      self.template)
+        self.assertIn('grid-template-columns:106px minmax(0,1fr)', self.template)
+        self.assertIn('.candidate-option .player-art{grid-row:1/3}', self.template)
 
 
 if __name__ == '__main__':

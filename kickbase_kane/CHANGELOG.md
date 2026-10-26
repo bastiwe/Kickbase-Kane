@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.59
+
+- Ordnet Spielerbild und Vereinswappen in „für freien Platz wählen“ nach der gelieferten Referenz neu an.
+- Reserviert links einen hohen, angeschnittenen Bildbereich mit vollhohem Wappen im Hintergrund und vollhohem Spieler davor.
+- Übernimmt diese Bildkomposition auch in Startelf-, Bank-, Dashboard- und Transferkacheln.
+- Trennt Bildbereich, Texte, Werte und Buttons räumlich, sodass keine Beschriftung die Bilder überlappt.
+- Behält Statistiken und Budgetberechnung unverändert bei und passt die Bildfläche für schmale Mobilansichten separat an.
+
 ## 0.2.58
 
 - Skaliert das Vereinswappen über die vollständige Höhe der jeweiligen Spielerkachel.
