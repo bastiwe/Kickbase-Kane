@@ -133,6 +133,7 @@ def build_lineup_payload(token, league_id, user_id, squad_df, predictions_df,
             'average': number(row.get('last_season_avg_points')),
             'li': number(row.get('starter_rate')),
             'change': number((forecast_snapshot or {}).get('predictions', {}).get(player_id)),
+            'lastMvChange': number(row.get('mv_change_yesterday')),
             'change7': multi_day_prediction(forecast_snapshot, player_id, 7),
         })
         if player_history is not None and not player_history.empty:
@@ -188,6 +189,7 @@ def market_context(market, own_ids, user_id, predictions, history, forecasts):
             'status': normalize_player_status(player_status_value(item))
             if player_status_value(item) is not None else 'Unbekannt',
             'change': number((forecasts or {}).get('predictions', {}).get(player_id)),
+            'lastMvChange': number(row.get('mv_change_yesterday')),
             'l3': None, 'season': number(row.get('kickbase_average_points')),
             'average': number(row.get('last_season_avg_points')),
             'li': number(row.get('starter_rate')),

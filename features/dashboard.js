@@ -6,7 +6,8 @@
   const apiPath = path => path.replace(/^\//, '');
   const euros = value => new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(Number(value)||0);
   const signed = value => { const n=Number(value)||0; return (n>0?'+':'')+euros(n); };
-  const number = value => Number.isFinite(Number(value)) ? Number(value) : null;
+  const number = value => value === null || value === undefined || value === '' || typeof value === 'boolean'
+    ? null : Number.isFinite(Number(value)) ? Number(value) : null;
   const field = (player,...names) => { for(const name of names){if(player && player[name] !== undefined && player[name] !== null && player[name] !== '') return player[name];} return null; };
   const players = Array.isArray(data.players) ? data.players : [];
   const market = (Array.isArray(data.marketPlayers) ? data.marketPlayers : []).filter(p => !p.owned);
@@ -32,6 +33,20 @@
   const playerLabel = p => '<div class="player">'+avatar(p)+'<div><div class="name">'+escapeHtml(name(p))+'</div><div class="sub">'+escapeHtml(club(p))+' · '+escapeHtml(position(p))+'</div></div></div>';
   const timeValue = value => { if (!value) return Infinity; if (typeof value === 'string' && Number.isNaN(Number(value))) { const parsed = Date.parse(value); return Number.isNaN(parsed) ? Infinity : parsed; } const numeric = Number(value); return numeric > 1e12 ? numeric : numeric * 1000; };
   const formatTime = value => { const stamp=timeValue(value); if(!Number.isFinite(stamp))return '–'; return new Date(stamp).toLocaleString('de-DE',{timeZone:'Europe/Berlin',dateStyle:'short',timeStyle:'short'});};
+  const trendArrow = p => {
+    const expected=prediction(p), previous=lastMarketChange(p);
+    if(expected===null || previous===null)return '';
+    const direction=expected>previous ? ['↑','positive','Prognose höher als letzte MW-Änderung']
+      : expected<previous ? ['↓','negative','Prognose niedriger als letzte MW-Änderung']
+      : ['→','neutral','Prognose entspricht letzter MW-Änderung'];
+    return '<span class="trend-arrow '+direction[1]+'" title="'+direction[2]+'" aria-label="'+direction[2]+'">'+direction[0]+'</span>';
+  };
+  const expiryDetails = p => {
+    const stamp=timeValue(deadline(p));
+    if(!Number.isFinite(stamp))return '<span class="risk-expiry">Ablauf – · Restlaufzeit –</span>';
+    const hours=Math.max(0,(stamp-Date.now())/3600000).toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1});
+    return '<span class="risk-expiry">Ablauf '+escapeHtml(formatTime(deadline(p)))+' · Restlaufzeit '+hours+' Std.</span>';
+  };
 
   function renderMetrics(){
     const budget=number(data.budget) ?? number(data.availableBudget) ?? number(data.cash);
@@ -114,7 +129,7 @@
       const averageText=average===null?'Ø –':'Ø '+average.toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1});
       return '<div class="player">'+avatar(p)+'<div><div class="name">'+escapeHtml(name(p))+'</div><div class="sub">'+escapeHtml(club(p))+' · '+escapeHtml(position(p))+'</div><div class="roster-statline"><span class="'+(profit===null?'':cls(profit))+'">'+profitText+'</span><span>'+pointsText+'</span><span>'+averageText+'</span></div></div></div>';
     };
-    $('roster-movers').innerHTML=chosen.length?chosen.map(p=>'<details class="roster-player" data-player-id="'+escapeHtml(p.id)+'"><summary><div class="list-row">'+rosterLabel(p)+'<div class="roster-values"><span class="sub">Erw. 1T</span><strong class="list-value '+cls(change(p))+'">'+forecastText(p)+'</strong></div></div></summary><div class="player-history"><p class="empty">Aufklappen lädt die Tagesänderungen.</p></div></details>').join(''):'<p class="empty">Noch kein Kader geladen.</p>';
+    $('roster-movers').innerHTML=chosen.length?chosen.map(p=>'<details class="roster-player" data-player-id="'+escapeHtml(p.id)+'"><summary><div class="list-row">'+rosterLabel(p)+'<div class="roster-values"><span class="sub">Erw. 1T</span><strong class="list-value '+cls(change(p))+'">'+forecastText(p)+trendArrow(p)+'</strong></div></div></summary><div class="player-history"><p class="empty">Aufklappen lädt die Tagesänderungen.</p></div></details>').join(''):'<p class="empty">Noch kein Kader geladen.</p>';
     document.querySelectorAll('.roster-player').forEach(details=>details.addEventListener('toggle',()=>{if(details.open)loadPlayerHistory(details);}));
   }
   function nextMarketUpdate(){
@@ -130,7 +145,7 @@
     const overnight=[...market].filter(p=>prediction(p)!==null && change(p)>=TRADING_THRESHOLD && timeValue(deadline(p))>update && timeValue(deadline(p))<=nightEnd).sort((a,b)=>change(b)-change(a)).slice(0,2);
     const riskRow=(player, tone, label, dot) =>
       '<details class="risk-player market-history-player" data-player-id="'+escapeHtml(player.id)+'"><summary><div class="list-row">'
-      +playerLabel(player)+'<div class="list-value '+tone+'"><span class="risk-dot '+dot+'"></span>'+label+' '+forecastText(player)+'</div></div></summary>'
+      +playerLabel(player)+'<div class="risk-values"><span class="list-value '+tone+'"><span class="risk-dot '+dot+'"></span>'+label+' '+forecastText(player)+'</span>'+expiryDetails(player)+'</div></div></summary>'
       +'<div class="player-history"><p class="empty">Aufklappen lädt die Tagesänderungen.</p></div></details>';
     const rows=[];
     risky.forEach(p=>rows.push(riskRow(p,'negative','Drohender MW-Verlust','red')));
@@ -197,7 +212,7 @@
     const rows=sortedMarket().slice(0,50);
     $('market-table').innerHTML=rows.map(p=>
       '<tr class="market-row" data-player-id="'+escapeHtml(p.id)+'" aria-expanded="false" tabindex="0">'
-      +'<td><div class="table-player">'+avatar(p)+'<div><div class="name">'+escapeHtml(name(p))+'</div><div class="sub">'+escapeHtml(club(p))+'</div></div></div></td><td>'+escapeHtml(position(p))+'</td><td>'+euros(mv(p))+'</td><td class="'+cls(change(p))+'">'+signed(change(p))+'</td><td>'+((li(p)===null)?'–':Math.round(li(p))+' %')+'</td><td>'+escapeHtml(formatTime(deadline(p)))+'</td></tr>'
+      +'<td><div class="table-player">'+avatar(p)+'<div><div class="name">'+escapeHtml(name(p))+'</div><div class="sub">'+escapeHtml(club(p))+'</div></div></div></td><td>'+escapeHtml(position(p))+'</td><td>'+euros(mv(p))+'</td><td class="'+cls(change(p))+'">'+signed(change(p))+trendArrow(p)+'</td><td>'+((li(p)===null)?'–':Math.round(li(p))+' %')+'</td><td>'+escapeHtml(formatTime(deadline(p)))+'</td></tr>'
       +'<tr class="market-history-row" hidden><td colspan="6"><div class="player-history"><p class="empty">Aufklappen lädt die Tagesänderungen.</p></div></td></tr>'
     ).join('')||'<tr><td colspan="6" class="empty">Keine Marktangebote im aktuellen Stand.</td></tr>';
     document.querySelectorAll('.market-row').forEach(row=>{

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.51
+
+- Färbt MW-Prognose und G/V auf den Spielerkacheln des Startelfplaners passend zur positiven oder negativen Tendenz ein.
+- Zeigt in Kader-Wertentwicklung und Transfermarkt einen Tendenzpfeil für die 1T-Prognose im Vergleich zur letzten MW-Änderung.
+- Ergänzt im Bereich Handlungsbedarf Ablaufdatum, Uhrzeit und die verbleibende Laufzeit in Stunden.
+
 ## 0.2.50
 
 - Spieler lassen sich im Startelfplaner für die Startelf fixieren; mobil per langem Drücken. Formationswahl und „Beste Elf“ respektieren diese Fixierung.

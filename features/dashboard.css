@@ -9,13 +9,15 @@
 .report-actions{display:flex;gap:7px}.report-actions .button{padding:7px 10px;font-size:12px}@media(max-width:480px){.report-actions{width:100%}.report-actions .button{flex:1}}
 
 .roster-statline{display:flex;gap:9px;flex-wrap:wrap;margin-top:3px;color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}.roster-statline .positive,.roster-statline .negative{font-weight:750}
+.trend-arrow{display:inline-block;margin-left:6px;font-size:1.05em;font-weight:900}.risk-values{display:flex;flex-direction:column;align-items:flex-end;gap:3px}.risk-expiry{color:var(--muted);font-size:11px;font-weight:500;white-space:nowrap}
 
 .manager-budget-grid{display:grid;grid-template-columns:1fr;gap:8px}.manager-budget-card{display:grid;grid-template-columns:minmax(150px,1fr) minmax(0,3fr);align-items:center;gap:18px;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:13px;min-width:0}.manager-budget-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.manager-budget-head .name{font-size:15px}.manager-budget-basis{color:var(--muted);font-size:10px;white-space:nowrap}.manager-budget-values{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.manager-budget-value{min-width:0;padding-left:14px;border-left:1px solid var(--line)}.manager-budget-value span{display:block;color:var(--muted);font-size:10px;margin-bottom:2px}.manager-budget-value strong{display:block;font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 
 @media(max-width:480px){
   #timing-risks .list-row{grid-template-columns:1fr;gap:4px;padding:12px 0}
-  #timing-risks .list-value{padding-left:48px;white-space:normal;font-size:13px;line-height:1.35}
+  #timing-risks .risk-values{align-items:flex-start;padding-left:48px}.risk-expiry{white-space:normal}
+  #timing-risks .list-value{white-space:normal;font-size:13px;line-height:1.35}
   .table-wrap{overflow:visible}
   .table-wrap table{min-width:0}
   .table-wrap thead{display:none}

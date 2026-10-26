@@ -29,6 +29,9 @@ class LiveTests(unittest.TestCase):
 
     def test_live_values_replace_snapshot_without_mutation_and_exclude_owned_market(self):
         client, report, state = self.setup_live()
+        client.player_profiles = Mock(return_value={})
+        client.player_market_changes = Mock(return_value={'0': 15, 'target': -10})
+        client.player_purchase_prices = Mock(return_value={})
         fresh, plan, info = client.refresh(report, state)
         context = prepare_context(fresh, plan)
         self.assertEqual(context['checkedCurrentPlan']['endBudget'], 70)
@@ -36,6 +39,10 @@ class LiveTests(unittest.TestCase):
         self.assertEqual([p['id'] for p in context['marketPlayers']], ['target'])
         self.assertEqual(fresh['players'][0]['mv'], 200)
         self.assertEqual(fresh['players'][0]['l3'], 50)
+        self.assertEqual(fresh['players'][0]['lastMvChange'], 15)
+        self.assertEqual(fresh['marketPlayers'][0]['lastMvChange'], -10)
+        requested_ids = client.player_market_changes.call_args.args[0]
+        self.assertIn('target', requested_ids)
         self.assertEqual(state['budget'], 50)
         self.assertEqual(report['players'][0]['mv'], 100)
         self.assertEqual(info['marketCount'], 1)

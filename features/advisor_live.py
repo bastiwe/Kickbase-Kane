@@ -220,7 +220,7 @@ class LiveKickbase:
         return prices
 
     def player_market_changes(self, player_ids):
-        """Read the last completed market-value movement for owned players."""
+        """Read the last completed market-value movement for players."""
         now = time.monotonic()
         wanted = [str(player_id) for player_id in player_ids if str(player_id).isdigit()]
         changes = {}
@@ -515,7 +515,7 @@ class LiveKickbase:
             raise RuntimeError('Kickbase lieferte unvollständige Kader-/Marktdaten.')
         profile_ids = [item.get('i') for item in squad] + [item.get('i') for item in market]
         live_profiles = self.player_profiles(profile_ids)
-        live_market_changes = self.player_market_changes([item.get('i') for item in squad])
+        live_market_changes = self.player_market_changes(profile_ids)
         purchase_prices = self.player_purchase_prices(league_id, [item.get('i') for item in squad], user_id, str(user.get('n') or user.get('name') or ''))
         forecast_horizon = None
         if squad:
@@ -583,7 +583,7 @@ class LiveKickbase:
                               'minutes', 'cards', 'goals', 'assists', 'purchasePrice', 'profitLoss'):
                     if player.get(field) is None and previous.get(field) is not None:
                         player[field] = previous[field]
-                if owned and player['id'] in live_market_changes:
+                if player['id'] in live_market_changes:
                     player['lastMvChange'] = live_market_changes[player['id']]
                 if owned and purchase_prices.get(player['id']) is not None:
                     player['purchasePrice'] = purchase_prices[player['id']]

@@ -28,3 +28,8 @@ class LivePayloadTests(unittest.TestCase):
         player = market_context([{'i': '1', 'pos': 1, 'pim': 'content/file/player.png'}],
                                 set(), None, {}, None, None)[0]
         self.assertEqual(player['image'], 'https://kickbase.b-cdn.net/content/file/player.png')
+
+    def test_market_player_includes_last_market_value_change(self):
+        predictions = {'1': {'mv_change_yesterday': -42_000}}
+        player = market_context([{'i': '1', 'pos': 1}], set(), None, predictions, None, None)[0]
+        self.assertEqual(player['lastMvChange'], -42_000)

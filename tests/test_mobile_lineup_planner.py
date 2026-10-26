@@ -47,6 +47,9 @@ class MobileLineupPlannerTests(unittest.TestCase):
         self.assertGreaterEqual(self.template.count("' · G/V '+profit"), 1)
         self.assertIn("G/V '+profit", self.template)
         self.assertIn('MW-Prognose ', self.template)
+        self.assertIn('.money small.green{color:var(--g)}', self.template)
+        self.assertIn('.money small.red{color:var(--r)}', self.template)
+        self.assertIn("trendClass=v=>Number.isFinite(v)?(v>=0?'green':'red'):''", self.template)
 
     def test_status_swipes_can_return_to_neutral(self):
         self.assertIn("locked.delete(id);msg('Halte-Status aufgehoben.')", self.template)
