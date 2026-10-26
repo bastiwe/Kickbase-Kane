@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.55
+
+- Zeigt im Trading Dashboard die fünf neuesten Liga-Transfers live aus dem Kickbase-Aktivitätenfeed.
+- Ergänzt Spielerbild, Transferweg, bezahlten Preis, damaligen Marktwert und zeitlichen Abstand zum Transfer.
+- Berechnet den Overpay als gezahlten Preis abzüglich Marktwert zum Transferzeitpunkt; fehlende Werte werden aus der Kickbase-Marktwerthistorie ergänzt.
+
 ## 0.2.54
 
 - Synchronisiert neben der MW-Prognose nun auch den vollständigen Dashboard-Report aus dem GitHub-Vollreport ins Add-on.

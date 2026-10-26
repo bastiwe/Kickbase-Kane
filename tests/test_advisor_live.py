@@ -153,6 +153,39 @@ class LiveTests(unittest.TestCase):
         self.assertNotIn('/leagues/league/activitiesFeed?max=5000', requested)
         self.assertIn('/leagues/league/managers/me/transfer?start=0', requested)
 
+    def test_recent_transfers_are_live_enriched_and_overpay_is_calculated(self):
+        client = LiveKickbase('PRIVATE_EMAIL', 'PRIVATE_PASSWORD')
+        client.get = Mock(return_value={'af': [
+            {'t': 22, 'dt': '2026-10-26T10:30:00Z', 'data': {}},
+            {'t': 15, 'dt': '2026-10-26T10:00:00Z', 'data': {
+                'pi': '7', 'pn': 'Live Name', 'byr': 'Anna',
+                'trp': 12_000_000, 'mv': 10_000_000,
+            }},
+            {'t': 15, 'dt': '2026-10-26T09:00:00Z', 'data': {
+                'pi': '8', 'slr': 'Ben', 'byr': 'Chris', 'trp': 8_500_000,
+            }},
+        ]})
+        client.player_profiles = Mock(return_value={
+            '7': {'pim': 'players/7.png'},
+            '8': {'fn': 'Fallback', 'ln': 'Name', 'pim': 'players/8.png'},
+        })
+        epoch = date(1970, 1, 1)
+        client.player_market_histories = Mock(return_value={'8': [
+            {'dt': (date(2026, 10, 25) - epoch).days, 'mv': 8_000_000},
+        ]})
+
+        result = client.recent_transfers('league')
+
+        self.assertEqual(len(result['transfers']), 2)
+        first, second = result['transfers']
+        self.assertEqual((first['from'], first['to']), ('Kickbase', 'Anna'))
+        self.assertEqual(first['overpay'], 2_000_000)
+        self.assertEqual(second['playerName'], 'Fallback Name')
+        self.assertEqual(second['marketValue'], 8_000_000)
+        self.assertEqual(second['overpay'], 500_000)
+        self.assertTrue(first['image'].startswith('https://'))
+        client.get.assert_called_once_with('/leagues/league/activitiesFeed?max=100')
+
     @patch('features.ai_advisor.requests.post')
     def test_web_search_enabled_and_citations_returned(self, post):
         post.return_value = Mock(status_code=200)

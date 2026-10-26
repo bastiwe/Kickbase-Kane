@@ -39,6 +39,16 @@
   const playerLabel = p => '<div class="player">'+avatar(p)+'<div><div class="name">'+escapeHtml(name(p))+'</div><div class="player-subline"><span class="sub">'+escapeHtml(club(p))+' · '+escapeHtml(position(p))+'</span>'+liBadge(p)+'</div></div></div>';
   const timeValue = value => { if (!value) return Infinity; if (typeof value === 'string' && Number.isNaN(Number(value))) { const parsed = Date.parse(value); return Number.isNaN(parsed) ? Infinity : parsed; } const numeric = Number(value); return numeric > 1e12 ? numeric : numeric * 1000; };
   const formatTime = value => { const stamp=timeValue(value); if(!Number.isFinite(stamp))return '–'; return new Date(stamp).toLocaleString('de-DE',{timeZone:'Europe/Berlin',dateStyle:'short',timeStyle:'short'});};
+  const relativeTime = value => {
+    const stamp=timeValue(value);
+    if(!Number.isFinite(stamp))return 'Zeit unbekannt';
+    const minutes=Math.max(0,Math.floor((Date.now()-stamp)/60000));
+    if(minutes<60)return 'vor '+minutes+' '+(minutes===1?'Minute':'Minuten');
+    const hours=Math.floor(minutes/60);
+    if(hours<24)return 'vor '+hours+' '+(hours===1?'Stunde':'Stunden');
+    const days=Math.floor(hours/24);
+    return 'vor '+days+' '+(days===1?'Tag':'Tagen');
+  };
   const trendArrow = p => {
     const expected=prediction(p), previous=lastMarketChange(p);
     if(expected===null || previous===null)return '';
@@ -205,6 +215,28 @@
       $('manager-budgets').innerHTML='<p class="empty">Managerbudgets derzeit nicht verfügbar.</p>';
     }
   }
+  async function renderRecentTransfers(){
+    const container=$('recent-transfers');
+    try{
+      const response=await fetch(apiPath('/api/recent-transfers'),{cache:'no-store'});
+      const payload=await response.json();
+      if(!response.ok)throw new Error(payload.error||'Abruf fehlgeschlagen');
+      const transfers=Array.isArray(payload.transfers)?payload.transfers.slice(0,5):[];
+      const stamp=new Date(payload.fetchedAt);
+      $('recent-transfers-updated').textContent=Number.isNaN(stamp.getTime())?'Live aus Kickbase':'Live · '+stamp.toLocaleTimeString('de-DE',{timeZone:'Europe/Berlin',hour:'2-digit',minute:'2-digit'})+' Uhr';
+      container.innerHTML=transfers.length?transfers.map(transfer=>{
+        const overpay=number(transfer.overpay);
+        const marketValue=number(transfer.marketValue);
+        return '<article class="recent-transfer-card"><div class="recent-transfer-player">'+avatar({image:transfer.image})
+          +'<div class="recent-transfer-identity"><div class="name">'+escapeHtml(transfer.playerName||'Unbekannter Spieler')+'</div><div class="transfer-route"><span>'+escapeHtml(transfer.from||'Kickbase')+'</span><b aria-hidden="true">›</b><span>'+escapeHtml(transfer.to||'Kickbase')+'</span></div></div></div>'
+          +'<div class="recent-transfer-money"><div><span>Bezahlt</span><strong>'+(number(transfer.price)===null?'–':euros(transfer.price))+'</strong></div><div><span>Overpay</span><strong class="'+(overpay===null?'neutral':overpay>0?'negative':overpay<0?'positive':'neutral')+'">'+(overpay===null?'–':signed(overpay))+'</strong></div></div>'
+          +'<div class="recent-transfer-footer"><span>'+escapeHtml(relativeTime(transfer.transferredAt))+'</span><span title="Marktwert beim Transfer">MW '+(marketValue===null?'–':euros(marketValue))+'</span></div></article>';
+      }).join(''):'<p class="empty">Im Kickbase-Aktivitätenfeed wurden noch keine Transfers gefunden.</p>';
+    }catch(error){
+      $('recent-transfers-updated').textContent='nicht verfügbar';
+      container.innerHTML='<p class="empty">Letzte Transfers konnten nicht live aus Kickbase geladen werden.</p>';
+    }
+  }
   function sortedMarket(){
     const mode=$('market-sort').value;
     return [...market].sort((a,b)=>{
@@ -268,5 +300,5 @@
   $('run-full-report').onclick=()=>startGitHubReport('full',$('run-full-report'));
   $('run-fast-report').onclick=()=>startGitHubReport('fast',$('run-fast-report'));
   $('live-status').textContent=settings.liveMessage||data.generated||'Reportstand geladen';
-  renderForecastStatus();render();renderValueHistory();renderManagerBudgets();
+  renderForecastStatus();render();renderValueHistory();renderManagerBudgets();renderRecentTransfers();
 })();

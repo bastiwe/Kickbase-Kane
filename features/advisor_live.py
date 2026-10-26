@@ -16,7 +16,7 @@ import time
 import threading
 from features.player_details import build_details
 
-from kickbase_api.config import BASE_URL
+from kickbase_api.config import BASE_URL, get_cdn_url
 from features.cash_reconstruction import fetch_manager_transfers
 from features.lineup_optimizer import forecast_horizon_from_matchdays, market_context
 
@@ -143,6 +143,8 @@ class LiveKickbase:
         self.market_history_lock = threading.Lock()
         self.purchase_price_cache = {}
         self.purchase_price_lock = threading.Lock()
+        self.recent_transfers_cache = {}
+        self.recent_transfers_lock = threading.Lock()
 
     def player_profiles(self, player_ids):
         """Read current player facts directly from Kickbase, with a short cache."""
@@ -361,6 +363,126 @@ class LiveKickbase:
             })
         return {'changes': list(reversed(changes[-max(1, limit):]))}
 
+    def recent_transfers(self, league_id, limit=5):
+        """Return the newest league transfers directly from Kickbase."""
+        cache_key = str(league_id)
+        now = time.monotonic()
+        with self.recent_transfers_lock:
+            cached = self.recent_transfers_cache.get(cache_key)
+            if cached and now - cached[0] < 60:
+                return deepcopy(cached[1])
+
+        payload = self.get(
+            '/leagues/' + quote(cache_key, safe='') + '/activitiesFeed?max=100'
+        )
+        activities = payload.get('af', [])
+        if not isinstance(activities, list):
+            raise ValueError('Ungültiger Kickbase-Aktivitätenfeed.')
+        raw_transfers = [
+            entry for entry in activities
+            if isinstance(entry, dict) and str(entry.get('t')) == '15'
+            and isinstance(entry.get('data'), dict)
+        ]
+        raw_transfers.sort(key=lambda entry: str(entry.get('dt') or ''), reverse=True)
+        raw_transfers = raw_transfers[:max(1, int(limit))]
+
+        def value(data, *keys):
+            for key in keys:
+                candidate = data.get(key)
+                if candidate in (None, ''):
+                    continue
+                if isinstance(candidate, dict):
+                    for nested in ('v', 'value', 'amount', 'price', 'trp', 'mv', 'mvo',
+                                   'n', 'name', 'unm', 'i', 'id'):
+                        if candidate.get(nested) not in (None, ''):
+                            return candidate[nested]
+                    continue
+                return candidate
+            return None
+
+        parsed = []
+        for entry in raw_transfers:
+            data = entry['data']
+            player_id = activity_player_id(data)
+            price = value(data, 'trp', 'prc', 'price', 'amount', 'bid', 'value')
+            market_value = value(data, 'mv', 'marketValue', 'market_value',
+                                 'mvo', 'marketValueOld', 'market_value_old')
+            try:
+                price = float(price)
+            except (TypeError, ValueError):
+                price = None
+            try:
+                market_value = float(market_value)
+            except (TypeError, ValueError):
+                market_value = None
+            parsed.append({
+                'playerId': player_id,
+                'playerName': activity_field(value(
+                    data, 'pn', 'playerName', 'player_name', 'name', 'n', 'player')),
+                'image': activity_field(value(
+                    data, 'pim', 'image', 'imageUrl', 'image_url')),
+                'from': activity_field(value(
+                    data, 'slr', 'seller', 'sellerName', 'seller_name', 'su')) or 'Kickbase',
+                'to': activity_field(value(
+                    data, 'byr', 'buyer', 'buyerName', 'buyer_name', 'bu')) or 'Kickbase',
+                'price': round(price) if price is not None else None,
+                'marketValue': market_value,
+                'transferredAt': entry.get('dt'),
+            })
+
+        player_ids = {item['playerId'] for item in parsed if item['playerId']}
+        profiles = self.player_profiles(player_ids) if player_ids else {}
+        local_metadata = local_player_metadata(player_ids)
+        missing_market_values = {
+            item['playerId'] for item in parsed
+            if item['playerId'] and item['marketValue'] is None
+        }
+        histories = self.player_market_histories(missing_market_values) if missing_market_values else {}
+        epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+        for item in parsed:
+            player_id = item['playerId'] or ''
+            profile = profiles.get(player_id, {})
+            stored = local_metadata.get(player_id, {})
+            if not item['playerName']:
+                item['playerName'] = ' '.join(filter(None, (
+                    profile.get('fn') or stored.get('first_name'),
+                    profile.get('ln') or stored.get('last_name'),
+                ))).strip() or ('Spieler ' + player_id if player_id else 'Unbekannter Spieler')
+            image_path = item['image'] or profile.get('pim') or stored.get('image_url') or ''
+            item['image'] = get_cdn_url(image_path) or ''
+            if item['marketValue'] is None and player_id in histories:
+                transfer_day = activity_day(item['transferredAt'])
+                candidates = []
+                for history_entry in histories[player_id]:
+                    if not isinstance(history_entry, dict):
+                        continue
+                    try:
+                        day = (epoch + timedelta(days=int(history_entry['dt']))).date().isoformat()
+                        market_value = float(history_entry['mv'])
+                    except (KeyError, TypeError, ValueError, OverflowError):
+                        continue
+                    if day <= transfer_day:
+                        candidates.append((day, market_value))
+                if candidates:
+                    item['marketValue'] = max(candidates, key=lambda candidate: candidate[0])[1]
+            item['marketValue'] = (
+                round(item['marketValue']) if item['marketValue'] is not None else None
+            )
+            item['overpay'] = (
+                item['price'] - item['marketValue']
+                if item['price'] is not None and item['marketValue'] is not None else None
+            )
+
+        result = {
+            'transfers': parsed,
+            'fetchedAt': datetime.now(timezone.utc).isoformat(),
+            'note': 'Live aus dem Kickbase-Aktivitätenfeed',
+        }
+        with self.recent_transfers_lock:
+            self.recent_transfers_cache[cache_key] = (now, deepcopy(result))
+        return result
+
     def squad_value_history(self, league_id, player_ids):
         """Reconstruct the app's daily squad value from complete manager trades.
 
@@ -572,7 +694,6 @@ class LiveKickbase:
                 # The market/squad endpoint is refreshed for every page load
                 # and therefore remains the source of truth for current MV.
                 if live_profile.get('pim'):
-                    from kickbase_api.config import get_cdn_url
                     player['image'] = get_cdn_url(live_profile['pim'])
                 if not player.get('image'):
                     player['image'] = previous.get('image', '')

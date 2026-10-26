@@ -170,12 +170,29 @@ class LocalServerTests(unittest.TestCase):
         response = requests.get(self.server.origin + '/')
         self.assertEqual(read_report(response.text)['budget'], 123)
         self.assertEqual(read_report(response.text)['players'], fresh['players'])
-        self.assertLess(response.text.index('window.KICKBASE_ADVISOR='), response.text.index('if(window.KICKBASE_ADVISOR)'))
+        self.assertLess(
+            response.text.index('window.KICKBASE_DASHBOARD='),
+            response.text.index('<script src="dashboard.js"></script>'))
         self.server.kickbase.refresh.side_effect = RuntimeError('unavailable')
         response = requests.get(self.server.origin + '/')
         self.assertEqual(response.status_code, 200)
         self.assertIn('alte Reportstand', response.text)
         self.assertEqual(read_report(response.text)['players'], fresh['players'])
+
+    def test_recent_transfers_endpoint_uses_live_kickbase_client(self):
+        self.server.report['league'] = 'league'
+        self.server.kickbase = Mock()
+        self.server.kickbase.recent_transfers.return_value = {
+            'transfers': [{'playerName': 'Testspieler', 'overpay': 123}],
+            'fetchedAt': '2026-10-26T12:00:00Z',
+        }
+
+        response = requests.get(self.server.origin + '/api/recent-transfers')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['transfers'][0]['overpay'], 123)
+        self.server.kickbase.recent_transfers.assert_called_once_with(
+            'league', limit=5)
 
     @patch('advisor_server.ask_advisor', return_value={'answer': 'Test advice'})
     def test_followup_uses_changed_plan_and_old_report_tabs_are_rejected(self, ask):

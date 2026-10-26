@@ -334,6 +334,18 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             self.reply(200, read_manager_budgets(
                 DATA_ROOT / 'manager-history-output' / 'latest.json',
                 own_cash, own_name, cash_fetched_at))
+        elif path == '/api/recent-transfers':
+            with self.server.lock:
+                client = self.server.kickbase
+                league_id = self.server.report.get('league')
+            if not client or not league_id:
+                self.reply(409, {'transfers': [], 'error': 'Kickbase-Livezugriff ist nicht aktiviert.'})
+            else:
+                try:
+                    self.reply(200, client.recent_transfers(league_id, limit=5))
+                except (requests.RequestException, RuntimeError, ValueError, KeyError, TypeError):
+                    self.server.log_event('ERROR Letzte Transfers nicht geladen')
+                    self.reply(502, {'transfers': [], 'error': 'Letzte Transfers derzeit nicht abrufbar.'})
         elif path == '/api/report-job':
             self.reply(200, self.server.report_jobs.read())
         elif path == '/api/status':

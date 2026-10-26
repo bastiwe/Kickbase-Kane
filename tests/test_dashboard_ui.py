@@ -37,6 +37,15 @@ class DashboardUiTests(unittest.TestCase):
         self.assertIn('.action-panel{grid-column:span 5}', self.styles)
         self.assertIn('.brand-mark', self.styles)
 
+    def test_recent_live_transfers_show_route_price_overpay_and_relative_time(self):
+        html = (Path(__file__).parents[1] / 'features' / 'trading_dashboard.html').read_text(encoding='utf-8')
+        self.assertIn('id="recent-transfers"', html)
+        self.assertIn("fetch(apiPath('/api/recent-transfers')", self.javascript)
+        self.assertIn("const relativeTime = value =>", self.javascript)
+        self.assertIn("transfer.from||'Kickbase'", self.javascript)
+        self.assertIn('transfer.overpay', self.javascript)
+        self.assertIn('.recent-transfer-grid', self.styles)
+
 
 if __name__ == '__main__':
     unittest.main()
