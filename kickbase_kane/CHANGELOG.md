@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.62
+
+- Zieht das übergroße Vereinswappen in der gemeinsamen Bildkomposition weiter nach unten hinter den Spieler.
+- Überträgt die halb angeschnittene Wappen-Spieler-Komposition auf Wertentwicklung, Handlungsbedarf und Transfermarkt.
+- Vereinheitlicht Startelf-, Bank- und Auswahlkacheln im Startelfplaner mit derselben Bildsprache und getrennten Textflächen.
+- Behält für schmale Ansichten eigene Abstände und Größen bei, damit kein horizontaler Seitenüberlauf entsteht.
+
 ## 0.2.61
 
 - Verdoppelt Wappen und Spielerbild in „Letzte Transfers“ und „Beste Chancen vor MW-Update“.

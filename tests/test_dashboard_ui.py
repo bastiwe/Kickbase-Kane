@@ -63,6 +63,15 @@ class DashboardUiTests(unittest.TestCase):
         self.assertIn('@media(max-width:680px){.recent-transfer-grid{grid-template-columns:1fr}}',
                       self.styles)
 
+    def test_large_artwork_is_shared_by_roster_risks_and_market_cards(self):
+        self.assertIn('bottom:-38%;width:100%;height:100%', self.styles)
+        self.assertIn('.roster-player .list-row,.risk-player .list-row{min-height:210px;',
+                      self.styles)
+        self.assertIn('.risk-player .list-row .player-art,.table-player .player-art{position:absolute',
+                      self.styles)
+        self.assertIn('.table-player{min-height:210px;padding:16px 14px 16px 176px}',
+                      self.styles)
+
     def test_mobile_transfer_market_never_forces_horizontal_scrolling(self):
         self.assertIn('.table-wrap table{display:block;width:100%;min-width:0!important', self.styles)
         self.assertIn('.table-wrap tr.market-row{display:grid;width:100%', self.styles)
