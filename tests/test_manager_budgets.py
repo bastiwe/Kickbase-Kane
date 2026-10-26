@@ -44,6 +44,29 @@ class ManagerBudgetTests(unittest.TestCase):
         self.assertEqual(result['managers'], [])
         self.assertIn('Vollreport', result['note'])
 
+    def test_live_own_cash_replaces_stale_report_value_and_updates_buying_power(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'latest.json'
+            path.write_text(json.dumps({
+                'generated_at': '2026-10-25T14:00:00+01:00',
+                'manager_budgets': [
+                    {'name': 'Anna', 'cash': 1_000_000, 'squadValue': 90_000_000,
+                     'buyingPower': 30_700_000, 'basis': 'API (eigener Kontostand)'},
+                    {'name': 'Ben', 'cash': 2_000_000, 'squadValue': 80_000_000,
+                     'buyingPower': 28_400_000, 'basis': 'Schätzung'},
+                ],
+            }), encoding='utf-8')
+            result = read_manager_budgets(
+                path, own_cash=4_000_000, own_name='Anna',
+                cash_fetched_at='2026-10-26T10:00:00+01:00')
+        anna = next(row for row in result['managers'] if row['name'] == 'Anna')
+        ben = next(row for row in result['managers'] if row['name'] == 'Ben')
+        self.assertEqual(anna['cash'], 4_000_000)
+        self.assertEqual(anna['buyingPower'], 33_700_000)
+        self.assertEqual(anna['basis'], 'API live (eigener Kontostand)')
+        self.assertEqual(ben['cash'], 2_000_000)
+        self.assertEqual(result['cashFetchedAt'], '2026-10-26T10:00:00+01:00')
+
     def test_manager_audit_artifact_is_saved_for_dashboard(self):
         payload = {
             'generated_at': '2026-10-25T14:00:00+01:00',

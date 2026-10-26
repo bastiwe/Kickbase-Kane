@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.50
+
+- Spieler lassen sich im Startelfplaner für die Startelf fixieren; mobil per langem Drücken. Formationswahl und „Beste Elf“ respektieren diese Fixierung.
+- Zeigt G/V unter der MW-Prognose auf den Spielerkacheln und zusätzlich in der Auswahl für freie Startelfplätze.
+- Rechtswisch hebt einen Halten-Status auf, Linkswisch einen Verkauf-Status; der Spieler ist danach jeweils neutral.
+- Ergänzt einen eindeutigen Rücklink vom Startelfplaner zum Trading Dashboard.
+- Aktualisiert den eigenen Cashwert der Managerbudgets beim Öffnen live aus der Kickbase-API und kennzeichnet Zeitbezug sowie Schätzwerte transparent.
+
 ## 0.2.49
 
 - Markiert Formationen mit nichtnegativem Endbudget grün, mit negativem Endbudget gelb und nicht vollständig besetzbare Formationen rot.

@@ -36,6 +36,26 @@ class MobileLineupPlannerTests(unittest.TestCase):
         self.assertIn('.forms button.active{outline:3px solid var(--form-color)', self.template)
         self.assertIn("if(f){selectFormation(f.dataset.form);return}", self.template)
 
+    def test_starting_lineup_pins_are_available_on_desktop_and_long_press(self):
+        self.assertIn('class="start-toggle ', self.template)
+        self.assertIn('data-start="', self.template)
+        self.assertIn('function toggleStarter(id)', self.template)
+        self.assertIn('setTimeout(()=>{touch.long=true', self.template)
+        self.assertIn('pool.filter(p=>forced.has(p.id))', self.template)
+
+    def test_profit_loss_is_shown_on_cards_and_candidate_picker(self):
+        self.assertGreaterEqual(self.template.count("' · G/V '+profit"), 1)
+        self.assertIn("G/V '+profit", self.template)
+        self.assertIn('MW-Prognose ', self.template)
+
+    def test_status_swipes_can_return_to_neutral(self):
+        self.assertIn("locked.delete(id);msg('Halte-Status aufgehoben.')", self.template)
+        self.assertIn("sell.delete(id);msg('Verkauf aufgehoben · Status neutral.')", self.template)
+
+    def test_dashboard_back_link_is_explicit(self):
+        self.assertIn('aria-label="Zurück zum Trading Dashboard"', self.template)
+        self.assertIn('← Trading Dashboard</a>', self.template)
+
 
 if __name__ == '__main__':
     unittest.main()

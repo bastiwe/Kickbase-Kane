@@ -30,7 +30,7 @@ DATA_ROOT = Path(os.getenv('KICKBASE_DATA_DIR', APP_ROOT)).resolve()
 MAX_BODY = 2_000_000
 
 
-def read_manager_budgets(path):
+def read_manager_budgets(path, own_cash=None, own_name=None, cash_fetched_at=None):
     """Return the display-safe budget summary produced by the full report."""
     try:
         payload = json.loads(Path(path).read_text(encoding='utf-8'))
@@ -51,11 +51,24 @@ def read_manager_budgets(path):
             **values,
             'basis': str(item.get('basis') or 'Schätzung'),
         })
+    if own_cash is not None:
+        own_row = next((row for row in rows if own_name and row['name'] == own_name), None)
+        if own_row is None:
+            own_row = next((row for row in rows if row['basis'].startswith('API')), None)
+        if own_row is not None:
+            own_row['cash'] = float(own_cash)
+            own_row['buyingPower'] = float(own_cash) + 0.33 * own_row['squadValue']
+            own_row['basis'] = 'API live (eigener Kontostand)'
+    note = ('Eigener Cash wurde beim Öffnen live aus der API abgerufen; '
+            'Cash der Mitmanager bleibt geschätzt. Kaderwerte stammen aus dem letzten Vollreport.'
+            if own_cash is not None else
+            'Stand des letzten Vollreports: eigener Cash damals aus der API; '
+            'Cash der Mitmanager geschätzt. Kaderwerte und Kaufkraft sind nicht live.')
     return {
         'generatedAt': payload.get('generated_at'),
+        'cashFetchedAt': cash_fetched_at,
         'managers': rows,
-        'note': ('Eigener Cashwert aus der API; Cash der Mitmanager geschätzt. '
-                 'Kaderwerte und Kaufkraft stammen aus dem letzten Vollreport.'),
+        'note': note,
     }
 
 
@@ -278,7 +291,22 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                     self.server.log_event('ERROR Kaderwertverlauf nicht geladen')
                     self.reply(502, {'series': [], 'note': 'Kaderwertverlauf aus Kickbase derzeit nicht abrufbar.'})
         elif path == '/api/manager-budgets':
-            self.reply(200, read_manager_budgets(DATA_ROOT / 'manager-history-output' / 'latest.json'))
+            with self.server.lock:
+                client = self.server.kickbase
+                league_id = self.server.report.get('league')
+            own_cash = own_name = cash_fetched_at = None
+            if client and league_id:
+                try:
+                    user = client.get('/user/settings').get('u', {})
+                    own_name = user.get('unm') or user.get('n') or user.get('name')
+                    own_cash = client.get(
+                        '/leagues/' + str(league_id) + '/me/budget')['b']
+                    cash_fetched_at = datetime.now(ZoneInfo('Europe/Berlin')).isoformat()
+                except (requests.RequestException, RuntimeError, ValueError, KeyError, TypeError):
+                    self.server.log_event('ERROR Live-Cash für Managerbudgets nicht geladen')
+            self.reply(200, read_manager_budgets(
+                DATA_ROOT / 'manager-history-output' / 'latest.json',
+                own_cash, own_name, cash_fetched_at))
         elif path == '/api/report-job':
             self.reply(200, self.server.report_jobs.read())
         elif path == '/api/status':

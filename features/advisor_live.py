@@ -580,7 +580,7 @@ class LiveKickbase:
                     player['name'] = previous['name']
                 for field in ('l3', 'season', 'average', 'li', 'change', 'lastMvChange', 'opponent',
                               'matchdayChange', 'recent', 'previous', 'history', 'fixtures',
-                              'minutes', 'cards', 'goals', 'assists'):
+                              'minutes', 'cards', 'goals', 'assists', 'purchasePrice', 'profitLoss'):
                     if player.get(field) is None and previous.get(field) is not None:
                         player[field] = previous[field]
                 if owned and player['id'] in live_market_changes:

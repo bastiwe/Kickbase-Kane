@@ -167,9 +167,9 @@
       const payload=await response.json();
       const managers=Array.isArray(payload.managers)?payload.managers:[];
       $('manager-budget-note').textContent=payload.note||'';
-      if(payload.generatedAt){
-        const stamp=new Date(payload.generatedAt);
-        $('manager-budget-updated').textContent=Number.isNaN(stamp.getTime())?'':('Stand '+stamp.toLocaleString('de-DE',{timeZone:'Europe/Berlin',dateStyle:'short',timeStyle:'short'}));
+      if(payload.cashFetchedAt||payload.generatedAt){
+        const cashLive=Boolean(payload.cashFetchedAt), stamp=new Date(payload.cashFetchedAt||payload.generatedAt);
+        $('manager-budget-updated').textContent=Number.isNaN(stamp.getTime())?'':((cashLive?'Eigener Cash live · ':'Stand ')+stamp.toLocaleString('de-DE',{timeZone:'Europe/Berlin',dateStyle:'short',timeStyle:'short'}));
       }
       $('manager-budgets').innerHTML=managers.length?managers.map(manager=>{
         const cash=number(manager.cash)||0, buyingPower=number(manager.buyingPower)||0;
