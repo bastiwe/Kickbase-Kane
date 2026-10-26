@@ -40,7 +40,7 @@
     const text=value===null?'–':Math.round(value)+' %';
     return '<span class="li-badge '+tone+'" title="LigaInsider-Startelfwahrscheinlichkeit">'+(label?escapeHtml(label)+' ':'')+text+'</span>';
   };
-  const playerLabel = p => '<div class="player">'+avatar(p)+'<div><div class="name">'+escapeHtml(name(p))+'</div><div class="player-subline"><span class="sub">'+escapeHtml(club(p))+' · '+escapeHtml(position(p))+'</span>'+liBadge(p)+'</div></div></div>';
+  const playerLabel = (p,includeArt=true) => '<div class="player">'+(includeArt?avatar(p):'')+'<div><div class="name">'+escapeHtml(name(p))+'</div><div class="player-subline"><span class="sub">'+escapeHtml(club(p))+' · '+escapeHtml(position(p))+'</span>'+liBadge(p)+'</div></div></div>';
   const timeValue = value => { if (!value) return Infinity; if (typeof value === 'string' && Number.isNaN(Number(value))) { const parsed = Date.parse(value); return Number.isNaN(parsed) ? Infinity : parsed; } const numeric = Number(value); return numeric > 1e12 ? numeric : numeric * 1000; };
   const formatTime = value => { const stamp=timeValue(value); if(!Number.isFinite(stamp))return '–'; return new Date(stamp).toLocaleString('de-DE',{timeZone:'Europe/Berlin',dateStyle:'short',timeStyle:'short'});};
   const relativeTime = value => {
@@ -98,7 +98,7 @@
       .filter(p=>prediction(p)!==null && prediction(p)>=TRADING_THRESHOLD && timeValue(deadline(p))<nextUpdate)
       .sort((a,b)=>change(b)-change(a))
       .slice(0,6);
-    $('top-chances').innerHTML=chosen.length?chosen.map(p=>'<details class="chance market-history-player" data-player-id="'+escapeHtml(p.id)+'"><summary><div class="chance-top">'+playerLabel(p)+'<span class="tag">'+escapeHtml(position(p))+'</span></div><div class="chance-change"><span>Erw. MW in 1T</span><strong class="positive">'+forecastText(p)+'</strong></div><div class="chance-details"><span>MW '+euros(mv(p))+'</span><span>Ablauf '+escapeHtml(formatTime(deadline(p)))+'</span></div></summary><div class="player-history"><p class="empty">Aufklappen lädt die Tagesänderungen.</p></div></details>').join(''):'<p class="empty">Keine passende Chance vor dem nächsten MW-Update.</p>';
+    $('top-chances').innerHTML=chosen.length?chosen.map(p=>'<details class="chance market-history-player" data-player-id="'+escapeHtml(p.id)+'"><summary>'+avatar(p)+'<div class="chance-content"><div class="chance-top">'+playerLabel(p,false)+'<span class="tag">'+escapeHtml(position(p))+'</span></div><div class="chance-change"><span>Erw. MW in 1T</span><strong class="positive">'+forecastText(p)+'</strong></div><div class="chance-details"><span>MW '+euros(mv(p))+'</span><span>Ablauf '+escapeHtml(formatTime(deadline(p)))+'</span></div></div></summary><div class="player-history"><p class="empty">Aufklappen lädt die Tagesänderungen.</p></div></details>').join(''):'<p class="empty">Keine passende Chance vor dem nächsten MW-Update.</p>';
     document.querySelectorAll('.market-history-player').forEach(details=>details.addEventListener('toggle',()=>{if(details.open)loadPlayerHistory(details);}));
   }
   const historyCache=new Map();
@@ -231,10 +231,10 @@
       container.innerHTML=transfers.length?transfers.map(transfer=>{
         const overpay=number(transfer.overpay);
         const marketValue=number(transfer.marketValue);
-        return '<article class="recent-transfer-card"><div class="recent-transfer-player">'+avatar({image:transfer.image,teamImage:transfer.teamImage})
+        return '<article class="recent-transfer-card">'+avatar({image:transfer.image,teamImage:transfer.teamImage})+'<div class="recent-transfer-content"><div class="recent-transfer-player">'
           +'<div class="recent-transfer-identity"><div class="name">'+escapeHtml(transfer.playerName||'Unbekannter Spieler')+'</div><div class="transfer-route"><span>'+escapeHtml(transfer.from||'Kickbase')+'</span><b aria-hidden="true">›</b><span>'+escapeHtml(transfer.to||'Kickbase')+'</span></div></div></div>'
           +'<div class="recent-transfer-money"><div><span>Bezahlt</span><strong>'+(number(transfer.price)===null?'–':euros(transfer.price))+'</strong></div><div><span>Overpay</span><strong class="'+(overpay===null?'neutral':overpay>0?'negative':overpay<0?'positive':'neutral')+'">'+(overpay===null?'–':signed(overpay))+'</strong></div></div>'
-          +'<div class="recent-transfer-footer"><span>'+escapeHtml(relativeTime(transfer.transferredAt))+'</span><span title="Marktwert beim Transfer">MW '+(marketValue===null?'–':euros(marketValue))+'</span></div></article>';
+          +'<div class="recent-transfer-footer"><span>'+escapeHtml(relativeTime(transfer.transferredAt))+'</span><span title="Marktwert beim Transfer">MW '+(marketValue===null?'–':euros(marketValue))+'</span></div></div></article>';
       }).join(''):'<p class="empty">Im Kickbase-Aktivitätenfeed wurden noch keine Transfers gefunden.</p>';
     }catch(error){
       $('recent-transfers-updated').textContent='nicht verfügbar';

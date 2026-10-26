@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.60
+
+- Repariert das Layout von „Beste Chancen vor MW-Update“ mit einer eigenen, stabilen Inhaltsstruktur.
+- Schiebt Wappen und Spieler in „Letzte Transfers“ sowie „Beste Chancen“ jeweils ungefähr zur Hälfte links aus der Kachel.
+- Vergrößert das Wappen deutlich und hält den Spieler als vordere Ebene klar davor.
+- Reserviert rechts neben dem sichtbaren Bildausschnitt ausreichend Platz für Namen, Werte und Ablaufdaten.
+- Zeigt „Letzte Transfers“ auf Desktop in maximal drei deutlich breiteren Kacheln pro Reihe statt fünf schmalen Spalten.
+
 ## 0.2.59
 
 - Ordnet Spielerbild und Vereinswappen in „für freien Platz wählen“ nach der gelieferten Referenz neu an.

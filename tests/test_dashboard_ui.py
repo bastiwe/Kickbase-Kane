@@ -24,7 +24,7 @@ class DashboardUiTests(unittest.TestCase):
     def test_li_probability_badges_are_used_across_player_views(self):
         self.assertIn("const liBadge = (p,label='LI') =>", self.javascript)
         self.assertIn("value>=85?'high':value>=45?'medium':'low'", self.javascript)
-        self.assertIn("const playerLabel = p =>", self.javascript)
+        self.assertIn("const playerLabel = (p,includeArt=true) =>", self.javascript)
         self.assertIn("+liBadge(p)+", self.javascript)
         self.assertIn("+liBadge(p,'')+", self.javascript)
         self.assertIn('.li-badge.high', self.styles)
@@ -45,6 +45,21 @@ class DashboardUiTests(unittest.TestCase):
         self.assertIn("transfer.from||'Kickbase'", self.javascript)
         self.assertIn('transfer.overpay', self.javascript)
         self.assertIn('.recent-transfer-grid', self.styles)
+
+    def test_top_chances_and_recent_transfers_use_half_cropped_artwork(self):
+        self.assertIn("<summary>'+avatar(p)+'<div class=\"chance-content\">", self.javascript)
+        self.assertIn("<article class=\"recent-transfer-card\">'+avatar(", self.javascript)
+        self.assertIn('.chance>summary>.player-art,.recent-transfer-card>.player-art{position:absolute',
+                      self.styles)
+        self.assertIn('inset:0 auto 0 -82px;width:164px;height:100%', self.styles)
+        self.assertIn('transform:scale(1.28)', self.styles)
+        self.assertIn('left:32px;bottom:0;width:auto;height:100%', self.styles)
+        self.assertIn('.chance-content,.recent-transfer-content{position:relative;z-index:1',
+                      self.styles)
+        self.assertIn('.recent-transfer-grid{grid-template-columns:repeat(3,minmax(0,1fr))}',
+                      self.styles)
+        self.assertIn('@media(max-width:560px){.recent-transfer-grid{grid-template-columns:1fr}}',
+                      self.styles)
 
     def test_mobile_transfer_market_never_forces_horizontal_scrolling(self):
         self.assertIn('.table-wrap table{display:block;width:100%;min-width:0!important', self.styles)
