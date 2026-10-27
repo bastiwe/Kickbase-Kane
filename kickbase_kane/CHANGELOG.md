@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.78
+
+- Zentriert die Desktop-Positionsreihen mit kompakteren Abständen zwischen den Spielerkacheln.
+- Vergrößert den Porträt-Zoom und verwendet das vergrößerte Vereinswappen mit 20 % Deckkraft als angeschnittenen Hintergrund der Startelf- und Bankkacheln.
+
 ## 0.2.77
 
 - Zeigt den grünen Halten-Rand auch bei Startelfspielern im mobilen und Desktop-Startelfplaner; die Markierung wird beim Aufheben wieder entfernt.
