@@ -7,7 +7,7 @@ import unittest
 from features.cash_reconstruction import BERLIN
 from features.manager_history import (
     HistoryStore, audit_managers, goal_machine_events, historical_roster,
-    lineup_estimate, mvp_events, settled_matchday_days,
+    lineup_estimate, mvp_events, settled_matchday_days, confirmed_lineup,
 )
 from manager_history import kickoff_due
 
@@ -44,6 +44,41 @@ class ManagerHistoryTests(unittest.TestCase):
         self.assertEqual(estimate['always_selected'], [])
         self.assertFalse(estimate['formation_checked'])
 
+    def test_confirmed_bench_excludes_player_bonuses_and_goals(self):
+        players = [str(i) for i in range(12)]
+        points = {pid: 10 for pid in players}
+        points['0'], points['11'] = 229, 500
+        goals = {pid: 0 for pid in players}
+        goals['0'], goals['11'] = 1, 3
+        roster = confirmed_lineup({'players': players, 'issues': []},
+                                  {'bench': ['11'], 'source': 'Nutzerbestätigung'})
+        estimate = lineup_estimate(roster['locked_lineup'], points, 329, goals=goals)
+        self.assertEqual(estimate['solutions'], 1)
+        self.assertEqual(estimate['bonus_min'], 100_000)
+        self.assertEqual(estimate['goals_min'], 1)
+        self.assertNotIn('11', estimate['possibly_selected'])
+
+    def test_player_point_tiers_are_awarded_once_per_manager(self):
+        players = [str(i) for i in range(11)]
+        points = {pid: 0 for pid in players}
+        points['0'], points['1'] = 365, 221
+        estimate = lineup_estimate(players, points, 586)
+        self.assertEqual(estimate['bonus_min'], 600_000)
+
+    def test_mvp_ignores_bench_player_with_higher_points(self):
+        base = {'roster': {'issues': []}, 'fetch_errors': []}
+        entries = {
+            'A': {**base, 'points': {'bench': 500, 'starter': 229},
+                  'lineup': {'solutions': 1, 'always_selected': ['starter'],
+                             'possibly_selected': ['starter']}},
+            'B': {**base, 'points': {'star': 365},
+                  'lineup': {'solutions': 1, 'always_selected': ['star'],
+                             'possibly_selected': ['star']}},
+        }
+        events = {event['manager']: event for event in mvp_events(7, entries)}
+        self.assertEqual(events['B']['amount'], 1_000_000)
+        self.assertEqual(events['A']['amount'], 0)
+
     def test_mvp_requires_unique_leader_in_every_matching_lineup(self):
         base = {'roster': {'issues': []}, 'fetch_errors': []}
         entries = {
@@ -56,12 +91,15 @@ class ManagerHistoryTests(unittest.TestCase):
         self.assertEqual(events['A']['amount'], 1_000_000)
         self.assertEqual(events['B']['amount'], 0)
 
-    def test_goal_machine_uses_squad_goals_and_manager_points_as_tiebreaker(self):
+    def test_goal_machine_uses_starting_goals_and_manager_points_as_tiebreaker(self):
         base = {'roster': {'issues': []}, 'fetch_errors': []}
         entries = {
-            'A': {**base, 'goals': {'one': 2}, 'md': {'mdp': 1_000}},
-            'B': {**base, 'goals': {'two': 1, 'three': 1}, 'md': {'mdp': 1_200}},
-            'C': {**base, 'goals': {'four': 1}, 'md': {'mdp': 1_500}},
+            'A': {**base, 'goals': {'one': 2, 'bench': 3}, 'md': {'mdp': 1_000},
+                  'lineup': {'goals_min': 2, 'goals_max': 2}},
+            'B': {**base, 'goals': {'two': 1, 'three': 1}, 'md': {'mdp': 1_200},
+                  'lineup': {'goals_min': 2, 'goals_max': 2}},
+            'C': {**base, 'goals': {'four': 1}, 'md': {'mdp': 1_500},
+                  'lineup': {'goals_min': 1, 'goals_max': 1}},
         }
         events = {event['manager']: event for event in goal_machine_events(3, entries)}
         self.assertEqual(events['B']['amount'], 250_000)
@@ -69,7 +107,8 @@ class ManagerHistoryTests(unittest.TestCase):
         self.assertEqual(events['C']['amount'], 0)
 
     def test_goal_machine_keeps_equal_goals_and_points_open(self):
-        base = {'roster': {'issues': []}, 'fetch_errors': [], 'md': {'mdp': 1_000}}
+        base = {'roster': {'issues': []}, 'fetch_errors': [], 'md': {'mdp': 1_000},
+                'lineup': {'goals_min': 1, 'goals_max': 1}}
         entries = {
             'A': {**base, 'goals': {'one': 1}},
             'B': {**base, 'goals': {'two': 1}},
@@ -78,6 +117,13 @@ class ManagerHistoryTests(unittest.TestCase):
         self.assertEqual(events['A']['status'], 'offen')
         self.assertEqual(events['A']['amount'], 0)
         self.assertEqual(events['A']['amount_max'], 250_000)
+
+    def test_goal_machine_does_not_award_uncertain_lineup_goals(self):
+        entry = {'roster': {'issues': []}, 'fetch_errors': [], 'md': {'mdp': 1_000},
+                 'lineup': {'goals_min': 1, 'goals_max': 3}}
+        event = goal_machine_events(7, {'A': entry})[0]
+        self.assertEqual(event['status'], 'offen')
+        self.assertIsNone(event['amount'])
 
     def test_observations_are_append_only_between_runs(self):
         with tempfile.TemporaryDirectory() as folder:

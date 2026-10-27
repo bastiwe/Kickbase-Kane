@@ -127,7 +127,21 @@ def historical_roster(squad, transfers, kickoff):
     return {'players': sorted(owned), 'issues': issues, 'basis': 'aus Transfers rekonstruiert'}
 
 
-def lineup_estimate(players, points, actual_points, issues=()):
+def confirmed_lineup(roster, confirmation):
+    """Apply user-confirmed bench evidence without modifying the archived squad."""
+    roster = dict(roster)
+    bench = set(confirmation['bench'])
+    roster['issues'] = list(roster['issues'])
+    if not bench.issubset(roster['players']):
+        roster['issues'].append('Bestätigte Bankspieler fehlen im historischen Kader')
+    roster['locked_lineup'] = sorted(set(roster['players']) - bench)
+    roster['basis'] = confirmation['source']
+    if len(roster['locked_lineup']) != 11:
+        roster['issues'].append('Bestätigte Aufstellung ergibt nicht elf Spieler')
+    return roster
+
+
+def lineup_estimate(players, points, actual_points, issues=(), goals=None):
     """Conditional model bounds, not confidence bounds or confirmed lineups.
 
     Null/missing match points may stand for a non-playing footballer; treating
@@ -137,10 +151,11 @@ def lineup_estimate(players, points, actual_points, issues=()):
     zeros = [pid for pid in players if points.get(pid) is None]
     result = {'zero_assumption': zeros, 'issues': list(issues), 'solutions': 0,
               'bonus_min': None, 'bonus_max': None, 'always_selected': [],
-              'possibly_selected': [], 'formation_checked': False}
+              'possibly_selected': [], 'formation_checked': False,
+              'goals_min': None, 'goals_max': None}
     if issues or not 11 <= len(players) <= 20 or not finite(actual_points):
         return result
-    always, possible, rewards = set(players), set(), []
+    always, possible, rewards, goal_totals = set(players), set(), [], []
     for chosen in combinations(players, 11):
         if sum(points.get(pid) or 0 for pid in chosen) != actual_points:
             continue
@@ -149,20 +164,26 @@ def lineup_estimate(players, points, actual_points, issues=()):
         possible.update(chosen)
         peak = max(points.get(pid) or 0 for pid in chosen)
         rewards.append(sum(bonus for threshold, bonus in PLAYER_TIERS if peak >= threshold))
+        if goals is not None and all(finite(goals.get(pid)) for pid in chosen):
+            goal_totals.append(sum(goals[pid] for pid in chosen))
     if rewards:
         result.update(bonus_min=min(rewards), bonus_max=max(rewards),
                       always_selected=sorted(always), possibly_selected=sorted(possible))
+    if goal_totals and len(goal_totals) == result['solutions']:
+        result.update(goals_min=min(goal_totals), goals_max=max(goal_totals))
     return result
 
 
 def mvp_events(day, entries):
-    """User-specified rule: highest scorer among owned players at kickoff.
+    """Highest scorer among active starting players at kickoff.
 
     Award only if this player is in all inferred lineups. Ties remain unresolved
     without the teams' kickoff values. Never substitute another manager's award.
     """
     candidates = [(p or 0, name, pid) for name, entry in entries.items()
-                  for pid, p in entry['points'].items()]
+                  for pid, p in entry['points'].items()
+                  if pid in entry['lineup'].get('possibly_selected',
+                                               entry['lineup']['always_selected'])]
     usable = candidates and all(not e['roster']['issues'] and e['lineup']['solutions']
                                 and not e.get('fetch_errors') for e in entries.values())
     leaders = []
@@ -181,20 +202,21 @@ def mvp_events(day, entries):
         events.append({'key': f'{name}:md:{day}:mvp', 'manager': name, 'kind': 'MVP',
                        'status': 'geschätzt' if usable else 'offen', 'amount': amount,
                        'amount_max': possible, 'day': day, 'leaders': leaders,
-                       'rule': 'punktbester Spieler in Managerkadern zum Anpfiff; aufgestellt',
+                       'rule': 'punktbester Spieler der aktiven Startelf zum Anpfiff',
                        'tie_unresolved': len(leaders) > 1})
     return events
 
 
 def goal_machine_events(day, entries):
-    """Award most squad goals; manager points break a goals tie."""
+    """Award most starting-eleven goals; uncertain lineups remain unresolved."""
     usable = bool(entries) and all(
         not entry['roster']['issues'] and not entry.get('fetch_errors')
         and finite(entry.get('md', {}).get('mdp'))
-        and all(finite(value) for value in entry.get('goals', {}).values())
+        and finite(entry.get('lineup', {}).get('goals_min'))
+        and entry['lineup']['goals_min'] == entry['lineup']['goals_max']
         for entry in entries.values()
     )
-    totals = {name: sum(entry.get('goals', {}).values()) for name, entry in entries.items()} if usable else {}
+    totals = {name: entry['lineup']['goals_min'] for name, entry in entries.items()} if usable else {}
     finalists = []
     if usable and max(totals.values(), default=0) > 0:
         most_goals = max(totals.values())
@@ -213,7 +235,7 @@ def goal_machine_events(day, entries):
             'status': 'offen' if not usable or unresolved_tie else 'geschätzt',
             'amount': amount, 'amount_max': amount_max,
             'goals_by_manager': totals, 'winner': winner,
-            'rule': 'meiste Tore im Kader zum Anpfiff; bei Torgleichstand mehr Managerpunkte',
+            'rule': 'meiste Tore der aktiven Startelf zum Anpfiff; bei Torgleichstand mehr Managerpunkte',
         })
     return result
 
@@ -240,6 +262,7 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
                    now=None, capture_only=False, output_dir='manager-history-output'):
     now = now or datetime.now(BERLIN)
     scope, run = f'{league_id}:{start_date}', uuid.uuid4().hex
+    confirmations = json.loads(Path(__file__).with_name('confirmed_lineups.json').read_text(encoding='utf-8')).get(scope, {})
     store = HistoryStore(history_path)
     try:
         managers, errors = capture(get, league_id, start_date, store, now, run)
@@ -328,6 +351,9 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
                                   'basis': 'Snapshot kurz nach Spieltagsbeginn'}
                     else:
                         roster = historical_roster(data['squad'], trades, md['md'])
+                    confirmation = confirmations.get(str(md['day']), {}).get(str(data['id']))
+                    if confirmation:
+                        roster = confirmed_lineup(roster, confirmation)
                     store.observe(scope, run, 'matchday_roster', f"{data['id']}:{md['day']}", now,
                                   dict(roster, kickoff=md['md'], day=md['day']))
                     if (md.get('cur') is not False and int(md.get('day', -1)) not in settled_days) or 'mdp' not in md:
@@ -383,8 +409,9 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
                               if len(entry['roster'].get('locked_lineup', [])) == 11
                               else entry['roster']['players'])
                 entry['lineup'] = lineup_estimate(candidates, points, entry['md']['mdp'],
-                                                  entry['roster']['issues'] + entry['fetch_errors'])
-                entry['lineup']['basis'] = ('gesperrte Aufstellung aus API-Snapshot'
+                                                  entry['roster']['issues'] + entry['fetch_errors'],
+                                                  goals=entry['goals'])
+                entry['lineup']['basis'] = (entry['roster']['basis']
                                             if candidates is not entry['roster']['players']
                                             else 'aus Kader und Managerpunkten rekonstruiert')
                 store.observe(scope, run, 'lineup_estimate', f"{managers[name]['id']}:{day}", now, entry)
@@ -449,8 +476,8 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
                                    f'Erfolgsereignisse erst ab {start_date}',
                                    'Erfolgsboni aktiv', 'Profilgewinn = realisierter Gewinn seit Reset',
                                    'Sieg-, Saisonpunkt-, Transferanzahl- und Kadergrößen-Meilensteine',
-                                   'MVP innerhalb der Liga; Aufstellungen rekonstruiert',
-                                   'Tormaschine aus fixiertem Kader, Torcodes und Managerpunkten',
+                                   'MVP innerhalb der Liga ausschließlich aus aktiven Startelfspielern',
+                                   'Tormaschine aus Startelf, Torcodes und Managerpunkten',
                                    'Fehlende Spielerpunkte als null; Formation nicht geprüft'],
                    'errors': dict(errors, player_performance=player_errors), 'managers': audits,
                    'manager_budgets': manager_budgets,

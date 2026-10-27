@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.71
+
+- Berücksichtigt für MVP und Tormaschine ausschließlich die aktive Startelf zum Spieltagsbeginn; Bankspieler lösen keine Spieltagsboni aus.
+- Übernimmt die vom Nutzer bestätigten Bankspieler von Johannes und Sebastian für Spieltag 7 als gesonderten historischen Beleg.
+- Lässt Tormaschine bei uneindeutigen Torzahlen der rekonstruierten Startelf offen und zählt Spieler-Punktestufen weiterhin höchstens einmal pro Manager.
+
 ## 0.2.70
 
 - Wertet die montägliche Kickbase-Ranglistenveröffentlichung als verbindlichen Abschluss eines Spieltags, auch wenn die Manager-API ihn weiterhin als `cur` markiert.
