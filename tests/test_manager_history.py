@@ -7,12 +7,19 @@ import unittest
 from features.cash_reconstruction import BERLIN
 from features.manager_history import (
     HistoryStore, audit_managers, goal_machine_events, historical_roster,
-    lineup_estimate, mvp_events,
+    lineup_estimate, mvp_events, settled_matchday_days,
 )
 from manager_history import kickoff_due
 
 
 class ManagerHistoryTests(unittest.TestCase):
+    def test_ranking_event_finalizes_current_matchday(self):
+        feed = {'af': [
+            {'t': 17, 'dt': '2026-10-26T17:57:50Z', 'data': {'day': 7, 'pl': 1}},
+            {'t': 22, 'dt': '2026-10-27T05:45:33Z', 'data': {'day': 74}},
+        ]}
+        self.assertEqual(settled_matchday_days(feed, '2026-08-15'), {7})
+
     def test_capture_window_is_after_first_kickoff(self):
         payload = {'it': [{'day': 1, 'it': [{'dt': '2026-08-28T18:30:00Z'}]}]}
         self.assertFalse(kickoff_due(payload, datetime(2026, 8, 28, 20, 20, tzinfo=BERLIN)))

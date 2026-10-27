@@ -149,7 +149,7 @@ def reconstruct_season_milestones(transfers, matchdays, squad, *, start_date):
 def reconstruct_cash(transfers, performance, squad, profile_profit, *,
                      start_date, as_of, start_cash=80_000_000,
                      points_reward=1000, achievements_enabled=True,
-                     initial_squad_value=100_000_000):
+                     initial_squad_value=100_000_000, settled_days=()):
     """Return a partial estimate with explicit assumptions and omitted bonuses.
 
     Transfers are cash movements. Initial allocation has no purchase entry;
@@ -190,8 +190,10 @@ def reconstruct_cash(transfers, performance, squad, profile_profit, *,
 
     seasons = performance.get('it', [])
     season = max(seasons, key=lambda s: int(s['sid'])) if seasons else {}
+    settled_days = {int(day) for day in settled_days}
     matchdays = [m for m in season.get('it', [])
-                 if m.get('cur') is False and 'mdp' in m and m.get('md')
+                 if (m.get('cur') is False or int(m.get('day', -1)) in settled_days)
+                 and 'mdp' in m and m.get('md')
                  and cutoff <= timestamp(m['md']) <= end]
     points = sum(m['mdp'] for m in matchdays) * points_reward
     wins = sum(m.get('tw') is True for m in matchdays) * 1_000_000 if achievements_enabled else 0

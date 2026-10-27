@@ -75,6 +75,17 @@ class CashReconstructionTests(unittest.TestCase):
         self.assertEqual(result['matchday_thresholds'], 750_000)
         self.assertEqual(result['season_milestone_bonus'], 100_000)
 
+    def test_ranking_event_can_settle_current_matchday(self):
+        performance = {'it': [{'sid': '2', 'it': [
+            {'day': 7, 'md': '2026-10-23', 'mdp': 2100, 'cur': True, 'tw': True},
+        ]}]}
+        result = reconstruct_cash([], performance, {'it': []}, 0,
+                                  start_date='2026-08-15',
+                                  as_of='2026-10-27T12:00:00+01:00', settled_days={7})
+        self.assertEqual(result['settled_points_reward'], 2_100_000)
+        self.assertEqual(result['matchday_wins'], 1_000_000)
+        self.assertEqual(result['matchday_thresholds'], 1_750_000)
+
     def test_cumulative_win_and_season_point_milestones_stack(self):
         matchdays = [{'md': f'2026-09-{day:02d}', 'day': day, 'mdp': 1000,
                       'cur': False, 'tw': True} for day in range(1, 6)]

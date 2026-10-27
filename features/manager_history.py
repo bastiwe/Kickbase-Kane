@@ -90,6 +90,22 @@ def current_season(performance):
     return max(performance.get('it', []), key=lambda s: int(s['sid']), default={})
 
 
+def settled_matchday_days(activity_feed, start_date):
+    """Return matchdays finalized by Kickbase's ranking event."""
+    days = set()
+    for event in activity_feed.get('af', []) if isinstance(activity_feed, dict) else []:
+        data = event.get('data') if isinstance(event, dict) else None
+        if event.get('t') != 17 or not isinstance(data, dict) or data.get('day') is None:
+            continue
+        if event.get('dt') and timestamp(event['dt']) < timestamp(start_date):
+            continue
+        try:
+            days.add(int(data['day']))
+        except (TypeError, ValueError):
+            continue
+    return days
+
+
 def historical_roster(squad, transfers, kickoff):
     """Undo post-kickoff transfers, preserving contradictions as audit evidence."""
     owned = {str(p['pi']) for p in squad['it']}
@@ -252,11 +268,13 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
         except Exception as error:
             errors['own_budget'] = type(error).__name__
         # Preserve raw account-only evidence. Never attribute it to opponents.
+        activity_feed = {}
         for suffix in ['settings', 'user/achievements', 'activitiesFeed?max=5000']:
             try:
                 payload = get(f'/leagues/{league_id}/{suffix}')
                 store.observe(scope, run, suffix, own_name or 'account', now, payload)
                 if suffix == 'activitiesFeed?max=5000':
+                    activity_feed = payload
                     for event in payload.get('af', []):
                         if event.get('t') == 26 and timestamp(event['dt']) >= timestamp(start_date):
                             evidence = {'key': 'observed:' + str(event['i']), 'manager': own_name or 'account',
@@ -265,6 +283,7 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
                             events.append(evidence)
             except Exception as error:
                 errors[suffix] = type(error).__name__
+        settled_days = settled_matchday_days(activity_feed, start_date)
 
         for name, data in managers.items():
             try:
@@ -273,7 +292,8 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
                 audit = reconstruct_cash(trades, data['performance'], data['squad'],
                                          data['dashboard']['prft'], start_date=start_date,
                                          as_of=now.isoformat(), start_cash=start_cash,
-                                         initial_squad_value=initial_squad_value)
+                                         initial_squad_value=initial_squad_value,
+                                         settled_days=settled_days)
                 audits[name] = audit
                 lucky = audit['lucky_hand_event']
                 for index, evidence in enumerate(lucky['events'], 1):
@@ -310,7 +330,7 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
                         roster = historical_roster(data['squad'], trades, md['md'])
                     store.observe(scope, run, 'matchday_roster', f"{data['id']}:{md['day']}", now,
                                   dict(roster, kickoff=md['md'], day=md['day']))
-                    if md.get('cur') is not False or 'mdp' not in md:
+                    if (md.get('cur') is not False and int(md.get('day', -1)) not in settled_days) or 'mdp' not in md:
                         continue
                     rounds.setdefault(md['day'], {})[name] = {'md': md, 'roster': roster}
                     from features.budgets import MATCHDAY_POINT_BONUSES

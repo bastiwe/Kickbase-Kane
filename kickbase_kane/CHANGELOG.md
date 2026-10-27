@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.70
+
+- Wertet die montägliche Kickbase-Ranglistenveröffentlichung als verbindlichen Abschluss eines Spieltags, auch wenn die Manager-API ihn weiterhin als `cur` markiert.
+- Bezieht dadurch finale Punkte, Spieltagssieg, Punkteboni und Saisonmeilensteine in die Cash-Rekonstruktion ein.
+- Nutzt für Spieler-Punkteerfolge, MVP und Tormaschine weiterhin den zum Freitagsspiel fixierten Kader; fehlt ein historischer Snapshot, bleibt die Rekonstruktionsbasis sichtbar.
+
 ## 0.2.69
 
 - Berücksichtigt in der Formanzeige stets die letzten drei Bundesliga-Spieltage und zeigt einen Spieltag ohne Einsatz als 0 Punkte an.
