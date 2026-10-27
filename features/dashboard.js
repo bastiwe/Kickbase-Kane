@@ -317,10 +317,17 @@
       const design=await L.json('api/dashboard-layout');if(!design.enabled)return;
       const source={report:data,api:{}},mobile=matchMedia('(max-width:899px)');let custom=true;
       const layout=()=>design[mobile.matches?'mobile':'desktop'];
-      const paint=()=>{if(!layout())return;host.hidden=!custom;document.querySelector('.app-shell').classList.toggle('custom-layout-active',custom);toggle.textContent=custom?'Standardansicht':'Mein Layout';L.render(host,layout(),source);};
+      const paint=()=>{if(!layout())return;const sections=layout().tiles.some(t=>t.section),shell=document.querySelector('.app-shell');
+        // Preserve the existing metrics, history chart and manager budgets around the five editable sections.
+        if(sections)document.querySelector('.dashboard-grid').append(host);else shell.insertBefore(host,shell.querySelector('.metrics'));
+        host.hidden=!custom;shell.classList.toggle('custom-layout-active',custom);shell.classList.toggle('section-layout-active',custom&&sections);
+        toggle.textContent=custom?'Standardansicht':'Mein Layout';L.render(host,layout(),source);};
       if(!layout())return;toggle.hidden=false;toggle.onclick=()=>{custom=!custom;paint();};paint();
-      await L.liveData(source);await Promise.all([design.desktop&&L.boundData(source,design.desktop),design.mobile&&L.boundData(source,design.mobile)]);paint();
       mobile.addEventListener('change',paint);
+      let lastWidth=0;
+      const resizeObserver=new ResizeObserver(entries=>{const width=entries[0].contentRect.width;if(width>0&&Math.abs(width-lastWidth)>.5){lastWidth=width;requestAnimationFrame(paint);}});
+      resizeObserver.observe(host);
+      await L.liveData(source);await Promise.all([design.desktop&&L.boundData(source,design.desktop),design.mobile&&L.boundData(source,design.mobile)]);paint();
       // Refresh visible bindings without disturbing the stored layout.
       let refreshing=false;
       setInterval(async()=>{if(document.hidden||!custom||refreshing)return;refreshing=true;

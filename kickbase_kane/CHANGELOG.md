@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.82
+
+- Bietet das bestehende Dashboard mit den fünf Hauptbereichen Letzte Transfers, Beste Chancen vor MW-Update, Wertentwicklung, Handlungsbedarf und Transfermarkt als Editor-Vorlage an.
+- Bearbeitet pro Hauptbereich genau eine Spielerkachel mit selbsterklärenden Platzhaltern wie Spielerbild, Vereinswappen, Marktwert, Erw. 1T und LI; das Design gilt automatisch für alle passenden Datensätze.
+- Ermöglicht getrennte Spielerkachelraster je Hauptbereich und Desktop-/Mobilansicht. Anzahl und Bereichshöhe passen sich den aktuellen Report- und API-Daten an.
+- Erhält die bisherigen Kennzahlen, Kaderwertgrafik und Managerbudgets. Vorhandene freie Layouts werden nicht überschrieben und lassen sich im Editor gezielt durch die Dashboard-Vorlage ersetzen.
+
 ## 0.2.81
 
 - Ergänzt einen Dashboard-Editor mit getrennten Desktop- und Mobil-Layouts, anpassbarem Kachelraster und Ziehen zum Verschieben und Skalieren von Kacheln und Elementen.

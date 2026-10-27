@@ -54,6 +54,7 @@ def validate_design(body):
         clean = {'columns': columns, 'rowHeight': number(layout.get('rowHeight'), 10, 150, True),
                  'gap': number(layout.get('gap'), 0, 40, True), 'tiles': []}
         tile_ids = set()
+        sections = set()
         for tile in layout['tiles']:
             if not isinstance(tile, dict) or not isinstance(tile.get('elements'), list) or len(tile['elements']) > 40:
                 raise ValueError('Maximal 40 Elemente pro Kachel erlaubt.')
@@ -66,6 +67,19 @@ def validate_design(body):
             if item['x'] + item['w'] > columns or item['id'] in tile_ids:
                 raise ValueError('Kachel liegt außerhalb des Rasters oder hat eine doppelte ID.')
             tile_ids.add(item['id'])
+            if tile.get('section') is not None:
+                section = tile['section']
+                if section not in ('transfers', 'chances', 'roster', 'risks', 'market') or section in sections:
+                    raise ValueError('Jeder Dashboard-Bereich darf nur eine Spielerkachel-Vorlage haben.')
+                sections.add(section)
+                item.update(section=section,
+                            cardColumns=number(tile.get('cardColumns'), 1, 8, True),
+                            cardHeight=number(tile.get('cardHeight'), 80, 600, True),
+                            cardGap=number(tile.get('cardGap'), 0, 40, True),
+                            cardColor=color(tile.get('cardColor')),
+                            cardOpacity=number(tile.get('cardOpacity'), 0, 1))
+                # Repeated templates must never bind to an individual player.
+                item['collection'] = item['record'] = ''
             element_ids = set()
             for element in tile['elements']:
                 if not isinstance(element, dict) or element.get('type') not in ('text', 'data', 'image'):

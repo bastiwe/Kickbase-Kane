@@ -6,7 +6,17 @@
 .layout-image{overflow:hidden}.layout-image img{display:block;width:100%;height:100%;pointer-events:none}
 .missing-image{display:grid;place-content:center;color:#a9bacd;border:1px dashed #526579;font-size:12px!important}
 .custom-dashboard{margin:22px 0;min-height:100px}
-.custom-layout-active>.metrics,.custom-layout-active>.value-history,.custom-layout-active>.dashboard-grid{display:none}
+.custom-layout-active:not(.section-layout-active)>.metrics,.custom-layout-active:not(.section-layout-active)>.value-history,.custom-layout-active:not(.section-layout-active)>.dashboard-grid{display:none}
+.section-layout-active>.dashboard-grid>article:not(.manager-budget-panel){display:none}
+.section-layout-active .custom-dashboard{grid-column:1/-1;margin:0}
+.layout-section{padding:16px;overflow:hidden}
+.layout-section-title{font:700 18px/1.4 system-ui,sans-serif;margin:0 0 16px;color:#e3eef7;min-height:26px}
+.section-player-grid{display:grid;align-items:start;min-width:0}
+.section-player-card{position:relative;min-width:0;overflow:hidden;border:1px solid #2b4357;border-radius:13px}
+.section-empty{grid-column:1/-1;margin:0;color:#9eb5c8;font-size:13px}
+.template-image{background:#20394a;white-space:normal;text-align:center;align-content:center;word-break:break-word;overflow-wrap:anywhere;font-weight:600}
+.editor-editing .layout-section{overflow:visible}
+.editor-editing .layout-section>.section-player-grid{position:relative}
 [hidden]{display:none!important}
 /* Editor controls and canvas */
 .dashboard-editor{margin:0;background:#08131d;color:#e3eef7;font-family:system-ui,sans-serif;font-size:14px;color-scheme:dark}

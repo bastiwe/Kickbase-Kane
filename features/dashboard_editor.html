@@ -11,23 +11,22 @@
   </header>
   <main class="editor-workspace">
     <aside class="editor-sidebar">
-      <h2>Kacheln & Raster</h2>
+      <h2>Hauptbereiche & Raster</h2>
       <label>Spalten<input id="grid-columns" type="number" min="1" max="24"></label>
       <label>Zeilenhöhe (px)<input id="grid-row-height" type="number" min="10" max="150"></label>
       <label>Abstand (px)<input id="grid-gap" type="number" min="0" max="40"></label>
-      <div class="editor-buttons"><button id="add-tile">+ Leere Kachel</button><button id="add-player">+ Spieler-Blueprint</button></div>
-      <label>Spieler / Marktangebot<select id="blueprint-player"></select></label>
-      <button id="load-player-details">Spielerdetails als Quelle laden</button>
-      <button id="load-player-history">Spieler-Marktwertverlauf laden</button>
-      <p class="editor-hint">Blueprints binden Spieler anhand ihrer ID. Spielerbild und Wappen lassen sich auch einzeln als Bildquelle wählen.</p>
-      <h2>Kachel auswählen</h2><div id="tile-list"></div>
+      <button id="dashboard-template">Bestehendes Dashboard als Vorlage</button>
+      <label>Bereich<select id="section-type"></select></label>
+      <div class="editor-buttons"><button id="add-tile">+ Leere Kachel</button><button id="add-section">+ Bereichsvorlage</button></div>
+      <p class="editor-hint">Pro Hauptbereich bearbeitest du genau eine Spielerkachel mit Platzhaltern. Das Dashboard wiederholt sie für alle passenden Datensätze. Das Spielerkachel-Raster stellst du rechts ein.</p>
+      <h2>Hauptbereich auswählen</h2><div id="tile-list"></div>
       <h2>Layout-Datei</h2><div class="editor-buttons"><button id="export-design">Exportieren</button><button id="import-design">Importieren</button><button id="copy-layout">Andere Ansicht übernehmen</button><button id="reset-layout">Diese Ansicht zurücksetzen</button></div>
       <input id="import-file" type="file" accept="application/json,.json" hidden>
       <p class="editor-hint">Speichern gilt für beide Ansichten und alle Geräte. Mobil wird im Dashboard bis 899 px Breite verwendet. Ungespeicherte Änderungen bleiben ein Entwurf.</p>
     </aside>
     <section class="editor-stage-area" aria-label="Layout bearbeiten">
       <div class="editor-stage-toolbar"><strong id="stage-label">Desktop · 1200 px</strong><label>Vorschaubreite<input id="preview-width" type="number" min="280" max="1920" value="1200"> px</label><button id="undo" disabled>Rückgängig</button><button id="redo" disabled>Wiederholen</button></div>
-      <p class="editor-hint">Kacheln am Titelgriff verschieben. Elemente direkt ziehen; am Eckgriff skalieren. Die Eigenschaften rechts erlauben genaue Werte. Überlappungen sind für Grafiken möglich.</p>
+      <p class="editor-hint">Hauptbereiche am Titelgriff verschieben. Innerhalb der einen Spielervorlage Elemente ziehen oder am Eckgriff skalieren. Platzhalter werden später automatisch durch die jeweiligen Spielerdaten ersetzt.</p>
       <div class="editor-stage-scroll"><div id="editor-canvas" class="layout-canvas"></div></div>
     </section>
     <aside class="editor-properties"><h2>Eigenschaften</h2><div id="properties"><p>Kachel auswählen oder hinzufügen.</p></div>

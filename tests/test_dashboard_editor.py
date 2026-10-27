@@ -23,6 +23,35 @@ def design_fixture():
 
 
 class DesignValidationTests(unittest.TestCase):
+    def test_repeated_sections_roundtrip_and_never_bind_concrete_players(self):
+        design = design_fixture()
+        tile = design['desktop']['tiles'][0]
+        tile.update(section='roster', cardColumns=3, cardHeight=240, cardGap=12,
+                    cardColor='#112233', cardOpacity=.7, collection='/report/players', record='id:7')
+        clean = validate_design(design)
+        self.assertEqual(clean['desktop']['tiles'][0]['section'], 'roster')
+        self.assertEqual(clean['desktop']['tiles'][0]['cardColumns'], 3)
+        self.assertEqual(clean['desktop']['tiles'][0]['collection'], '')
+        self.assertEqual(clean['desktop']['tiles'][0]['record'], '')
+        self.assertEqual(validate_design(clean), clean)
+
+    def test_duplicate_sections_and_invalid_player_grids_are_rejected(self):
+        base = design_fixture()
+        base['desktop']['tiles'][0].update(section='market', cardColumns=2, cardHeight=240,
+                                          cardGap=12, cardColor='#112233', cardOpacity=1)
+        for key, value in [('section', 'unknown'), ('cardColumns', 0), ('cardColumns', 2.5),
+                           ('cardHeight', 2000), ('cardGap', -1), ('cardOpacity', 5)]:
+            with self.subTest(key=key, value=value):
+                design = copy.deepcopy(base)
+                design['desktop']['tiles'][0][key] = value
+                with self.assertRaises(ValueError):
+                    validate_design(design)
+        tile = copy.deepcopy(base['desktop']['tiles'][0])
+        tile['id'] = 'another'
+        base['desktop']['tiles'].append(tile)
+        with self.assertRaises(ValueError):
+            validate_design(base)
+
     def test_roundtrip_preserves_separate_views_and_missing_sources(self):
         design = design_fixture()
         design['mobile']['columns'] = 4

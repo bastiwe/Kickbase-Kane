@@ -6,10 +6,26 @@ Benutzeranmeldung; es wird kein eigener Port am Router freigegeben.
 
 ## Dashboard individuell gestalten
 
-Ab Version **0.2.81** öffnet **Dashboard bearbeiten** den Editor. Links lassen sich
-Rasterspalten, Zeilenhöhe und Abstand einstellen sowie leere Kacheln oder
-Spieler-Blueprints hinzufügen. Kacheln am Titelgriff ziehen und am grünen Eckgriff
-skalieren. Bei überlappenden Kacheln weichen die anderen Kacheln nach unten aus.
+**Dashboard bearbeiten** öffnet den Editor. Ab Version **0.2.82** startet ein neues
+Layout mit den fünf Hauptbereichen des bestehenden Dashboards: **Letzte Transfers**,
+**Beste Chancen vor MW-Update**, **Wertentwicklung**, **Handlungsbedarf** und
+**Transfermarkt**. Kennzahlen, Kaderwertgrafik und Managerbudgets bleiben im
+Dashboard erhalten.
+
+Pro Hauptbereich wird genau **eine Spielerkachel als Vorlage** bearbeitet,
+unabhängig davon, wie viele Spieler gerade vorhanden sind. Der Editor zeigt
+Platzhalter statt konkreter Spieler. Das Dashboard wiederholt die Vorlage später
+für alle passenden Datensätze. Ein vorhandenes freies Layout bleibt erhalten;
+**Bestehendes Dashboard als Vorlage** ersetzt die aktuell bearbeitete Ansicht
+erst als Entwurf. Zum Umstellen beide Ansichten laden und anschließend speichern.
+
+Links lassen sich Rasterspalten, Zeilenhöhe und Abstand der Hauptbereiche
+einstellen. Bereiche am Titelgriff ziehen und am grünen Eckgriff skalieren.
+Rechts legt **Spielerkacheln je Zeile** das Raster innerhalb des ausgewählten
+Bereichs fest. **Spielerkachelhöhe** und **Spielerkachelabstand** gelten für alle
+Spieler dieses Bereichs. Diese Einstellungen sind für Desktop und Mobil getrennt.
+Bei neuen oder entfernten Datensätzen ändern sich Kachelanzahl und Bereichshöhe
+automatisch; folgende Bereiche weichen nach unten aus.
 
 Rechts zeigt die ausgewählte Kachel ihre Elemente und Eigenschaften. Text-, Daten-
 und Bildelemente lassen sich hinzufügen, direkt verschieben und am blauen Eckgriff
@@ -18,18 +34,28 @@ können auch exakt eingestellt werden. **Nach vorne / Nach hinten** legt fest,
 welche Elemente sich überdecken. Ein Wappen als Bildelement mit 5 % Deckkraft und
 voller Kachelgröße eignet sich beispielsweise als Hintergrund.
 
-Der Quellen-Wähler durchsucht alle Felder des aktuell geladenen Dashboard-Reports
-und die verfügbaren API-Antworten für Managerbudgets, Transfers, Kaderwertverlauf
-und Aufstellung. Unter **Dashboard-Kennzahlen** stehen auch die berechneten Summen
-für Kaderwert, Kadergröße und erwartete Marktwertänderung bereit.
-Zusätzliche Spielerdetails und Marktwertverläufe lassen sich für
-den ausgewählten Spieler laden; gespeicherte Bindungen laden diese Daten beim
-Anzeigen wieder nach. **Quelle zuweisen** verbindet das ausgewählte Daten- oder
-Bildelement mit einem Feld. **+ Datenelement** erstellt ein neues Element.
-Bei Spieler-Blueprints beziehen sich die Quellen unter **Gewählter Datensatz**
-auf die Spieler-ID, auch wenn die Kaderliste später anders sortiert ist. Fehlende
-Werte erscheinen als „–“, fehlende Bilder als Platzhalter. Ohne Live-Zugang
-bleiben die Reportdaten nutzbar; zusätzliche API-Quellen sind dann nicht verfügbar.
+Bei einer Bereichsvorlage stehen im Quellen-Wähler benannte Platzhalter bereit,
+etwa **Name**, **Nachname**, **Vereinswappen**, **Spielerbild**, **Position**,
+**Marktwert**, **Erw. 1T**, **LI**, **Status**, **Durchschnittspunkte** und **Form 1–3**.
+Für Transfers gibt es zusätzlich Bezahlt, Verkäufer, Käufer, Overpay und G/V des
+Verkäufers. Unter **Weitere Spielerdaten** sind zusätzliche Felder der aktuell
+verfügbaren Datensätze zugänglich. Jeder Platzhalter wird mit den Daten der
+jeweiligen Spielerkachel gefüllt; es wird keine feste Spieler-ID gespeichert.
+**Quelle zuweisen** bindet ein vorhandenes Element, **+ Datenelement** erstellt
+ein neues. Unter **Dashboard-Kennzahlen** stehen auch die berechneten Summen
+bereit. Freie zusätzliche Kacheln können weiterhin auf die kompletten aktuellen
+Report- und API-Antworten zugreifen. Fehlende Werte erscheinen als „–“.
+
+Die Datenzuordnung folgt den Bereichen: Transfers stammen aus dem Live-Feed,
+Wertentwicklung enthält den Kader, Transfermarkt die vorhandenen Marktangebote.
+Beste Chancen enthält Angebote mit mindestens 100.000 € erwarteter Steigerung
+und Ablauf vor dem nächsten Berliner MW-Update um 22 Uhr. Handlungsbedarf zeigt
+negative Kaderprognosen und passende Angebote bis zur folgenden Nacht-/Morgenphase.
+Es gibt keine feste Anzahl gespeicherter Spielerkacheln und keine zusätzlichen
+Kachel-Limits im Renderer; der Transfer-Feed liefert aktuell die fünf neuesten
+Transfers. Bei Verkäufen an Kickbase wird Overpay ausgeblendet und stattdessen
+G/V angezeigt. Der Transfer-Marktwert bleibt der damalige Wert. Form 1 ist der
+neueste Spieltag; vorhandene Nullpunkte werden erhalten.
 
 Grafiken können über HTTPS-Adressen oder per Upload eingebunden werden. Uploads
 werden auf maximal 1000 Pixel verkleinert und platzsparend im Layout hinterlegt

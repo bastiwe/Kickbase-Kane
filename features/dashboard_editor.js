@@ -64,22 +64,32 @@
     for(const [key,label,min,max]of [['x','Spalte (ab 0)',0,current().columns-t.w],['y','Zeile (ab 0)',0,1000],['w','Breite (Spalten)',1,current().columns],['h','Höhe (Zeilen)',1,30]]){
       field(root,label,t[key],v=>{t[key]=v;t.x=Math.min(t.x,current().columns-t.w);makeRoom(t);},{type:'number',min,max,step:1,key:'tile-'+key});
     }
+    if(t.section){
+      const note=document.createElement('p');note.className='editor-hint';note.textContent='Eine Vorlage für alle Spieler dieses Bereichs. Im Dashboard: '+L.sectionItems(data,t.section).length+' passende Datensätze. Die Kachelanzahl wird automatisch bestimmt.';root.append(note);
+      field(root,'Spielerkacheln je Zeile',t.cardColumns,v=>t.cardColumns=v,{type:'number',min:1,max:8,step:1,key:'cardColumns'});
+      field(root,'Spielerkachelhöhe (px)',t.cardHeight,v=>{t.cardHeight=v;t.h=Math.ceil((v+76+current().gap)/(current().rowHeight+current().gap));makeRoom(t);},{type:'number',min:80,max:600,step:1,key:'cardHeight'});
+      field(root,'Spielerkachelabstand (px)',t.cardGap,v=>t.cardGap=v,{type:'number',min:0,max:40,step:1,key:'cardGap'});
+      field(root,'Spielerkachelfarbe',t.cardColor,v=>t.cardColor=v,{type:'color',key:'cardColor'});
+      field(root,'Spielerkachel-Deckkraft',t.cardOpacity,v=>t.cardOpacity=v,{type:'range',min:0,max:1,step:.01,key:'cardOpacity'});
+    }else{
     const rows=collections();field(root,'Datensatz-Liste',t.collection,v=>{t.collection=v;const entries=L.valueAt(data,v);t.record=entries?.length?L.rowKey(entries[0],0):'';},
       {choices:[['','Kein Spieler / Datensatz'],...rows.map(c=>[c.path,c.label])],key:'collection'});
     const entries=L.valueAt(data,t.collection);
     if(Array.isArray(entries))field(root,'Datensatz',t.record,v=>t.record=v,{choices:entries.map((r,i)=>[L.rowKey(r,i),String(r?.name||r?.playerName||r?.id||'Eintrag '+(i+1))]),key:'record'});
+    }
     const actions=document.createElement('div');actions.className='editor-buttons';root.append(actions);
-    button(actions,'Kachel duplizieren',()=>edit(()=>{const copy=L.clone(t);copy.id=L.id();copy.elements.forEach(e=>e.id=L.id());appendTile(copy);}));
+    if(!t.section)button(actions,'Kachel duplizieren',()=>edit(()=>{const copy=L.clone(t);copy.id=L.id();copy.elements.forEach(e=>e.id=L.id());appendTile(copy);}));
     button(actions,'Kachel löschen',()=>edit(()=>{current().tiles=current().tiles.filter(v=>v!==t);tileId=null;elementId=null;}));
     divider(root);
     const elements=document.createElement('div');elements.className='property-elements';root.append(elements);
-    t.elements.forEach((e,i)=>{const b=button(elements,(i+1)+'. '+(e.text||e.source||e.type).slice(0,40),()=>select(t.id,e.id));b.setAttribute('aria-pressed',String(e.id===elementId));});
+    t.elements.forEach((e,i)=>{const label=e.source.startsWith('/item/')?e.source.slice(6).replace(/~1/g,'/').replace(/~0/g,'~'):e.text||e.source||e.type;const b=button(elements,(i+1)+'. '+label.slice(0,40),()=>select(t.id,e.id));b.setAttribute('aria-pressed',String(e.id===elementId));});
     const add=document.createElement('div');add.className='editor-buttons';root.append(add);
     for(const[type,label]of [['text','+ Text'],['data','+ Daten'],['image','+ Grafik']])button(add,label,()=>edit(()=>{const e=L.element(type);t.elements.push(e);elementId=e.id;}));
     const e=selectedElement();if(!e)return;divider(root);
     field(root,e.type==='data'?'Text vor dem Wert':e.type==='image'?'Bildbeschreibung':'Text',e.text,v=>e.text=v,{key:'text'});
     if(e.type!=='text'){
-      field(root,'Datenpfad',e.source,v=>e.source=v,{key:'source'});
+      if(t.section)field(root,'Platzhalter',e.source,v=>e.source=v,{key:'source',choices:[['','Kein Platzhalter'],...templateFields(t).map(f=>[f.path,f.label]) ,...(!e.source.startsWith('/item/')&&e.source?[[e.source,'Globale Quelle']]:[])]});
+      else field(root,'Datenpfad',e.source,v=>e.source=v,{key:'source'});
       if(e.type==='data')field(root,'Format',e.format,v=>e.format=v,{key:'format',choices:[['auto','Originalwert'],['number','Zahl'],['euro','Euro'],['million','Millionen €'],['percent','Prozent'],['date','Datum / Uhrzeit']]});
     }
     if(e.type==='image'){
@@ -107,6 +117,11 @@
     button(ea,'Duplizieren',()=>edit(()=>{const copy=L.clone(e);copy.id=L.id();copy.x=Math.min(100-copy.w,copy.x+3);copy.y=Math.min(100-copy.h,copy.y+3);t.elements.push(copy);elementId=copy.id;}));
     button(ea,'Element löschen',()=>edit(()=>{t.elements=t.elements.filter(v=>v!==e);elementId=null;}));
   }
+  function templateFields(t){
+    const fields=L.aliases.map(name=>({path:'/item/'+L.escapeToken(name),label:name,value:'{'+name+'}'})),seen=new Set(fields.map(f=>f.path));
+    function walk(value,path,label,depth=0){if(depth>24)return;if(value&&typeof value==='object'&&!Array.isArray(value)){for(const [key,v]of Object.entries(value))walk(v,path+'/'+L.escapeToken(key),label+' › '+key,depth+1);}else if(!seen.has(path)){seen.add(path);fields.push({path,label,value:'{'+label+'}'});}}
+    for(const item of L.sectionItems(data,t.section))walk(item.Rohdaten,'/item/Rohdaten','Weitere Spielerdaten');return fields;
+  }
   function buildCatalog(){
     L.enrich(data);catalog=[];
     function walk(value,path,label,depth=0){
@@ -121,25 +136,19 @@
   }
   function sourceOptions(){
     if(!design)return;const t=selectedTile(),ctx=t?L.context(data,t):data;
-    const options=catalog.slice();
+    const options=t?.section?[...templateFields(t),...catalog.filter(c=>!/^\/(report\/(players|marketPlayers)|api\/)/.test(c.path))]:catalog.slice();
     function walkItem(value,path,label){if(value&&typeof value==='object'){Object.entries(value).forEach(([k,v])=>walkItem(v,path+'/'+L.escapeToken(k),label+' › '+k));}else options.unshift({path,label,value});}
-    if(ctx.item)walkItem(ctx.item,'/item','Gewählter Datensatz');
+    if(ctx.item&&!t?.section)walkItem(ctx.item,'/item','Gewählter Datensatz');
     const query=$('source-search').value.toLocaleLowerCase('de');const selected=$('source-picker').value||selectedElement()?.source;
     const filtered=options.filter(c=>(c.label+' '+String(c.value)).toLocaleLowerCase('de').includes(query));
     $('source-picker').replaceChildren();for(const c of filtered.slice(0,600)){const opt=document.createElement('option');opt.value=c.path;opt.textContent=c.label+' = '+(Array.isArray(c.value)?'Liste mit '+c.value.length+' Einträgen':L.format(c.value,'auto').slice(0,100));$('source-picker').append(opt);}
     if([...$('source-picker').options].some(o=>o.value===selected))$('source-picker').value=selected;
     $('source-status').textContent=options.length+' Datenfelder verfügbar'+(filtered.length>600?' · Suche eingrenzen (erste 600 Treffer angezeigt).':'.');showSource();
   }
-  function showSource(){const path=$('source-picker').value,t=selectedTile();$('source-value').textContent=path?'Pfad: '+path+' · Wert: '+L.format(L.valueAt(t?L.context(data,t):data,path),'auto').slice(0,500):$('source-picker').options.length?'Eine Datenquelle aus der Liste auswählen.':'Keine passende Quelle im aktuellen Datenstand.';}
-  function blueprintOptions(){
-    const previous=$('blueprint-player').value;$('blueprint-player').replaceChildren();
-    for(const collection of ['players','marketPlayers'])(data.report[collection]||[]).forEach((p,i)=>{const opt=document.createElement('option');opt.value=collection+':'+i;opt.textContent=(collection==='players'?'Kader: ':'Markt: ')+(p.name||p.id);$('blueprint-player').append(opt);});
-    if([...$('blueprint-player').options].some(o=>o.value===previous))$('blueprint-player').value=previous;
-  }
-  function getBlueprint(){const [key,index]=$('blueprint-player').value.split(':');return{player:data.report[key]?.[Number(index)],index:Number(index),collection:'/report/'+key};}
+  function showSource(){const path=$('source-picker').value,t=selectedTile();$('source-value').textContent=path?(t?.section&&path.startsWith('/item/')?'Platzhalter: '+path.slice(6).replace(/~1/g,'/').replace(/~0/g,'~')+' · Wird je Spielerkachel automatisch ersetzt.':'Pfad: '+path+' · Wert: '+L.format(L.valueAt(t?L.context(data,t):data,path),'auto').slice(0,500)):$('source-picker').options.length?'Eine Datenquelle aus der Liste auswählen.':'Keine passende Quelle im aktuellen Datenstand.';}
   async function refresh(){
     $('refresh-sources').disabled=true;status('Datenquellen werden aktualisiert …');
-    try{data.report=await L.json('api/dashboard-data');const errors=await L.liveData(data);buildCatalog();blueprintOptions();render();status(errors.length?'Report geladen; einzelne Live-Quellen nicht verfügbar: '+errors.join(' · '):(dirty?'Daten aktualisiert · Entwurf noch nicht gespeichert.':'Datenquellen aktualisiert.'));}
+    try{data.report=await L.json('api/dashboard-data');const errors=await L.liveData(data);buildCatalog();render();status(errors.length?'Report geladen; einzelne Live-Quellen nicht verfügbar: '+errors.join(' · '):(dirty?'Daten aktualisiert · Entwurf noch nicht gespeichert.':'Datenquellen aktualisiert.'));}
     catch(error){status(error.message,true);}finally{$('refresh-sources').disabled=false;}
   }
   function gesture(event){
@@ -178,12 +187,9 @@
   $('apply-source').onclick=()=>{const e=selectedElement(),source=$('source-picker').value;if(!e||!source){status('Zuerst ein Daten- oder Bildelement und eine Quelle auswählen.',true);return;}if(e.type==='text'){status('Bitte ein Daten- oder Bildelement wählen.',true);return;}edit(()=>e.source=source);};
   $('add-source').onclick=()=>{const t=selectedTile(),source=$('source-picker').value;if(!t||!source){status('Zuerst eine Kachel und eine Quelle auswählen.',true);return;}edit(()=>{const e=L.element('data',{source});t.elements.push(e);elementId=e.id;});};
   $('add-tile').onclick=()=>edit(()=>appendTile(L.tile({w:mode==='mobile'?current().columns:Math.min(3,current().columns),elements:[L.element('text')]})));
-  $('add-player').onclick=()=>{const p=getBlueprint();if(!p.player){status('Kein Spieler im aktuellen Report vorhanden.',true);return;}edit(()=>appendTile(L.playerTile(p.player,p.index,mode==='mobile',p.collection)));};
-  $('load-player-details').onclick=async()=>{const {player}=getBlueprint();if(!player)return;$('load-player-details').disabled=true;
-    try{data.api.playerDetails ||= {};data.api.playerDetails[player.id]=await L.json('api/player-details/'+encodeURIComponent(player.id));buildCatalog();sourceOptions();status('Spielerdetails für '+player.name+' geladen.');}catch(error){status(error.message,true);}finally{$('load-player-details').disabled=false;}};
-  $('load-player-history').onclick=async()=>{const {player}=getBlueprint();if(!player)return;$('load-player-history').disabled=true;
-    try{data.api.playerMarketHistory ||= {};data.api.playerMarketHistory[player.id]=await L.json('api/player-market-history/'+encodeURIComponent(player.id));buildCatalog();sourceOptions();status('Marktwertverlauf für '+player.name+' geladen.');}catch(error){status(error.message,true);}finally{$('load-player-history').disabled=false;}};
-  for(const m of ['desktop','mobile'])$('mode-'+m).onclick=()=>{mode=m;tileId=null;elementId=null;$('preview-width').value=m==='mobile'?390:1200;canvas.style.width=$('preview-width').value+'px';render();};
+  $('add-section').onclick=()=>{const section=$('section-type').value;if(current().tiles.some(t=>t.section===section)){status('Für diesen Hauptbereich gibt es bereits eine Vorlage. Bitte links auswählen.',true);return;}edit(()=>appendTile(L.sectionTile(section,mode==='mobile')));};
+  $('dashboard-template').onclick=()=>{if(confirm('Diese Ansicht durch die fünf Hauptbereiche des bestehenden Dashboards ersetzen? Ungespeicherte Änderungen lassen sich danach rückgängig machen.'))edit(()=>{design[mode]=L.seed(data,mode==='mobile');tileId=null;elementId=null;});};
+  for(const m of ['desktop','mobile'])$('mode-'+m).onclick=()=>{mode=m;tileId=current().tiles.find(t=>t.section)?.id||null;elementId=null;$('preview-width').value=m==='mobile'?390:1200;canvas.style.width=$('preview-width').value+'px';render();};
   $('preview-width').onchange=()=>{const width=Math.max(280,Math.min(1920,Number($('preview-width').value)||390));$('preview-width').value=width;canvas.style.width=width+'px';$('stage-label').textContent=(mode==='mobile'?'Mobil':'Desktop')+' · '+width+' px';};
   $('design-enabled').onchange=()=>edit(()=>design.enabled=$('design-enabled').checked);
   for(const [input,key]of [['grid-columns','columns'],['grid-row-height','rowHeight'],['grid-gap','gap']])$(input).onchange=()=>{
@@ -219,8 +225,9 @@
   $('refresh-sources').onclick=refresh;
   window.addEventListener('beforeunload',event=>{if(dirty){event.preventDefault();event.returnValue='';}});
   try{design=await L.json('api/dashboard-layout');const fresh=!design.desktop&&!design.mobile;
-    design.desktop ||= L.seed(data);design.mobile ||= L.seed(data,true);buildCatalog();blueprintOptions();render();
-    status(fresh?'Vorlagen geladen. Kacheln bearbeiten und speichern; zum Anzeigen im Dashboard „Mein Layout“ aktivieren.':'Gespeichertes Layout geladen.');
+    design.desktop ||= L.seed(data);design.mobile ||= L.seed(data,true);buildCatalog();
+    for(const [key,title]of Object.entries(L.sections)){const option=document.createElement('option');option.value=key;option.textContent=title;$('section-type').append(option);}tileId=current().tiles.find(t=>t.section)?.id||null;render();
+    status(fresh?'Bereichsvorlagen geladen. Je Hauptbereich eine Spielerkachel mit Platzhaltern gestalten und speichern.':current().tiles.some(t=>t.section)?'Gespeichertes Layout mit Bereichsvorlagen geladen.':'Gespeichertes Layout geladen. Über „Bestehendes Dashboard als Vorlage“ die fünf Bereichsvorlagen laden.');
     const errors=await L.liveData(data);await Promise.all([L.boundData(data,design.desktop),L.boundData(data,design.mobile)]);buildCatalog();properties();sourceOptions();
     if(errors.length)$('source-status').textContent+=' Einige API-Quellen sind momentan nicht verfügbar; der Report bleibt nutzbar.';
   }catch(error){status('Editor konnte nicht geladen werden: '+error.message,true);document.querySelectorAll('button,input,select').forEach(c=>c.disabled=true);}
