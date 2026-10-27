@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.69
+
+- Berücksichtigt in der Formanzeige stets die letzten drei Bundesliga-Spieltage und zeigt einen Spieltag ohne Einsatz als 0 Punkte an.
+
 ## 0.2.68
 
 - Kennzeichnet den nächsten Gegner auf den Matchday-Karten mit H oder A für Heim- und Auswärtsspiele.

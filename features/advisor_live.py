@@ -125,17 +125,16 @@ def activity_market_value_day(value):
 
 
 def recent_form_points(profile, limit=3):
-    """Return Kickbase profile form points; ``ph`` is newest-first."""
+    """Return the latest Kickbase matchdays, including non-appearances as zero."""
     values = []
-    for entry in profile.get('ph', []) if isinstance(profile, dict) else []:
-        if not isinstance(entry, dict) or entry.get('p') is None:
+    entries = profile.get('ph', []) if isinstance(profile, dict) else []
+    for entry in entries[:limit] if isinstance(entries, list) else []:
+        if not isinstance(entry, dict):
             continue
         try:
-            values.append(float(entry['p']))
+            values.append(float(entry.get('p') or 0))
         except (TypeError, ValueError):
-            continue
-        if len(values) >= limit:
-            break
+            values.append(0.0)
     return values
 
 

@@ -15,6 +15,11 @@ class LiveTests(unittest.TestCase):
         profile = {'ph': [{'p': 90}, {'p': 345}, {'p': 214}, {'p': 294}, {'p': 209}]}
         self.assertEqual(recent_form_points(profile), [90.0, 345.0, 214.0])
 
+    def test_profile_form_counts_matchday_without_appearance_as_zero(self):
+        profile = {'ph': [{'hp': False}, {'hp': True, 'p': 271}, {'hp': True, 'p': 195},
+                          {'hp': True, 'p': 216}]}
+        self.assertEqual(recent_form_points(profile), [0.0, 271.0, 195.0])
+
     def setup_live(self, acquired=False):
         report, state = fixture()
         report.update(user='me', league='league')
