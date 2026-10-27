@@ -13,6 +13,8 @@ prediction_snapshot_1t.json
 .advisor-*.pid
 .advisor-report.json
 .advisor-memory.json
+.advisor-dashboard-layout.json
+.advisor-dashboard-layout.tmp
 .advisor.log
 .advisor-report.tmp
 s11_strategy_report.html

@@ -4,6 +4,52 @@ Das Add-on betreibt das private Kickbase-Dashboard innerhalb von Home Assistant.
 Es nutzt Ingress: Zugriff erfolgt ausschliesslich ueber Home Assistant und dessen
 Benutzeranmeldung; es wird kein eigener Port am Router freigegeben.
 
+## Dashboard individuell gestalten
+
+Ab Version **0.2.81** öffnet **Dashboard bearbeiten** den Editor. Links lassen sich
+Rasterspalten, Zeilenhöhe und Abstand einstellen sowie leere Kacheln oder
+Spieler-Blueprints hinzufügen. Kacheln am Titelgriff ziehen und am grünen Eckgriff
+skalieren. Bei überlappenden Kacheln weichen die anderen Kacheln nach unten aus.
+
+Rechts zeigt die ausgewählte Kachel ihre Elemente und Eigenschaften. Text-, Daten-
+und Bildelemente lassen sich hinzufügen, direkt verschieben und am blauen Eckgriff
+skalieren. Farbe, Schriftgröße, Deckkraft, Rundung, Bildausschnitt und Position
+können auch exakt eingestellt werden. **Nach vorne / Nach hinten** legt fest,
+welche Elemente sich überdecken. Ein Wappen als Bildelement mit 5 % Deckkraft und
+voller Kachelgröße eignet sich beispielsweise als Hintergrund.
+
+Der Quellen-Wähler durchsucht alle Felder des aktuell geladenen Dashboard-Reports
+und die verfügbaren API-Antworten für Managerbudgets, Transfers, Kaderwertverlauf
+und Aufstellung. Unter **Dashboard-Kennzahlen** stehen auch die berechneten Summen
+für Kaderwert, Kadergröße und erwartete Marktwertänderung bereit.
+Zusätzliche Spielerdetails und Marktwertverläufe lassen sich für
+den ausgewählten Spieler laden; gespeicherte Bindungen laden diese Daten beim
+Anzeigen wieder nach. **Quelle zuweisen** verbindet das ausgewählte Daten- oder
+Bildelement mit einem Feld. **+ Datenelement** erstellt ein neues Element.
+Bei Spieler-Blueprints beziehen sich die Quellen unter **Gewählter Datensatz**
+auf die Spieler-ID, auch wenn die Kaderliste später anders sortiert ist. Fehlende
+Werte erscheinen als „–“, fehlende Bilder als Platzhalter. Ohne Live-Zugang
+bleiben die Reportdaten nutzbar; zusätzliche API-Quellen sind dann nicht verfügbar.
+
+Grafiken können über HTTPS-Adressen oder per Upload eingebunden werden. Uploads
+werden auf maximal 1000 Pixel verkleinert und platzsparend im Layout hinterlegt
+(GIFs als Einzelbild). Eine Bilddatei darf beim Upload höchstens 10 MB groß sein;
+das gespeicherte Layout darf insgesamt 1,8 MB und 80 Kacheln je Ansicht enthalten.
+
+Über **Desktop / Mobil** zwei unabhängige Layouts bearbeiten. Die Vorschaubreite
+simuliert das Gerät; das Dashboard verwendet unter 900 Pixeln automatisch das
+Mobil-Layout. **Andere Ansicht übernehmen** kopiert bei Bedarf ein Layout, danach
+kann dessen Raster angepasst werden. **Vorschau** blendet Bearbeitungsgriffe aus.
+
+**Mein Layout im Dashboard verwenden** aktivieren und **Speichern** drücken.
+Gespeichert werden immer beide Ansichten; ohne Speichern bleibt es ein Entwurf.
+Das Layout liegt in `/data/.advisor-dashboard-layout.json` und übersteht Neustarts
+und Add-on-Updates. Es gilt für dieses Add-on und alle zugreifenden Geräte.
+**Standardansicht** im Dashboard schaltet vorübergehend zur bisherigen Ansicht.
+Export/Import sichert das Layout als JSON-Datei; Import wird erst mit Speichern
+übernommen. Rückgängig/Wiederholen gilt für Änderungen seit dem letzten Speichern.
+Bei einem Speicherkonflikt zuerst den Entwurf exportieren und die Seite neu laden.
+
 ## Einrichtung
 
 Nach Installation in Home Assistant unter **Einstellungen -> Apps -> Kickbase Kane

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.81
+
+- Ergänzt einen Dashboard-Editor mit getrennten Desktop- und Mobil-Layouts, anpassbarem Kachelraster und Ziehen zum Verschieben und Skalieren von Kacheln und Elementen.
+- Bietet Text-, Daten- und Bildelemente, Spieler-Blueprints mit Porträts und Wappen, Bild-Upload, Farben, Deckkraft, Schriftgrößen und Ebenenreihenfolge.
+- Macht alle Felder des aktuellen Dashboard-Reports und die verfügbaren Live-Daten aus Managerbudgets, Transfers, Aufstellung, Marktwertverläufen und Spielerdetails als durchsuchbare Quellen nutzbar.
+- Speichert beide Ansichten dauerhaft im Add-on, inklusive Export/Import, Vorschau, Rückgängig/Wiederholen und Schutz vor gleichzeitigem Überschreiben. Die Standardansicht bleibt umschaltbar.
+
 ## 0.2.80
 
 - Verkleinert die Porträts leicht, sodass etwas Trikokragen sichtbar wird; die Skalierung ist oben verankert und verschiebt die Köpfe nicht nach unten.

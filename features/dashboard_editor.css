@@ -1,0 +1,43 @@
+/* Shared custom-dashboard renderer */
+.layout-canvas{display:grid;width:100%;position:relative;align-content:start;box-sizing:border-box}
+.layout-tile{position:relative;min-width:0;min-height:0;border:1px solid #395163;border-radius:16px;box-sizing:border-box}
+.tile-surface{position:absolute;inset:0;overflow:hidden;border-radius:inherit}
+.layout-element{position:absolute;box-sizing:border-box;white-space:pre-wrap;overflow:hidden;line-height:1.2;overflow-wrap:anywhere;min-width:0}
+.layout-image{overflow:hidden}.layout-image img{display:block;width:100%;height:100%;pointer-events:none}
+.missing-image{display:grid;place-content:center;color:#a9bacd;border:1px dashed #526579;font-size:12px!important}
+.custom-dashboard{margin:22px 0;min-height:100px}
+.custom-layout-active>.metrics,.custom-layout-active>.value-history,.custom-layout-active>.dashboard-grid{display:none}
+[hidden]{display:none!important}
+/* Editor controls and canvas */
+.dashboard-editor{margin:0;background:#08131d;color:#e3eef7;font-family:system-ui,sans-serif;font-size:14px;color-scheme:dark}
+.dashboard-editor *{box-sizing:border-box}
+.dashboard-editor button,.dashboard-editor input,.dashboard-editor select{font:inherit;color:inherit;background:#152736;border:1px solid #3c566c;border-radius:7px;padding:7px;max-width:100%}
+.dashboard-editor button{cursor:pointer;min-height:34px}.dashboard-editor button:hover{background:#26455b}.dashboard-editor button:disabled{opacity:.4;cursor:default}
+.dashboard-editor button.accent,.dashboard-editor button[aria-pressed=true]{background:#087e5a;border-color:#28d4a0}
+.dashboard-editor a{color:#60dcba;text-decoration:none}.dashboard-editor label{display:flex;align-items:center;justify-content:space-between;gap:6px;margin:7px 0}
+.dashboard-editor label>input:not([type=checkbox]),.dashboard-editor label>select{width:58%;min-width:0}
+.dashboard-editor h1{font-size:18px;margin:0}.dashboard-editor h2{font-size:14px;margin:18px 0 9px}
+.editor-header{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 18px;background:#10202e;border-bottom:1px solid #3c566c;position:sticky;top:0;z-index:50}
+.editor-header #editor-status{width:100%;color:#a8c4d5;min-height:18px}.editor-header label{margin-left:auto}
+.editor-modes{display:flex;gap:4px}.editor-workspace{display:grid;grid-template-columns:230px minmax(300px,1fr) 290px;gap:16px;padding:0 14px 30px}
+.editor-sidebar,.editor-properties{min-width:0;padding:0 4px}.editor-stage-area{min-width:0}.editor-stage-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 0}
+.editor-stage-toolbar input{width:90px!important}.editor-stage-scroll{overflow:auto;max-height:calc(100vh - 230px);padding:25px 10px 40px;background:#0c1c28;border:1px solid #2c475d;border-radius:8px}
+#editor-canvas{width:1200px;min-height:200px;background-image:linear-gradient(#87b5d309 1px,transparent 1px),linear-gradient(90deg,#87b5d309 1px,transparent 1px);background-size:20px 20px}
+.editor-hint{font-size:12px;line-height:1.5;color:#9eb5c8;overflow-wrap:anywhere}
+.editor-buttons{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.editor-buttons>button{flex:1 1 100px}
+#blueprint-player,#source-picker,#source-search{width:100%}#source-picker{font-size:12px;margin-top:8px}#source-picker option{padding:4px;white-space:normal;overflow-wrap:anywhere}
+#tile-list{display:flex;flex-direction:column;gap:4px;max-height:260px;overflow:auto}#tile-list button{text-align:left}
+.editor-tile-tools{position:absolute;left:0;top:-21px;max-width:100%;display:flex;z-index:8;gap:2px;opacity:.7}
+.dashboard-editor .tile-grip{border-radius:5px 5px 0 0;font-size:11px;padding:2px 6px;min-height:21px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;touch-action:none;cursor:grab}
+.editor-tile-selected{outline:2px solid #29d5a0;outline-offset:1px}.editor-tile-selected .editor-tile-tools{opacity:1}
+.editor-element-selected{outline:2px dashed #53c9ff;outline-offset:-2px}
+.editor-editing .layout-element{cursor:move;touch-action:none;user-select:none}
+.dashboard-editor .resize-handle{position:absolute;right:0;bottom:0;width:17px;height:17px;min-height:0;padding:0;border:1px solid #bce8ff;border-radius:3px;background:#1597cd;cursor:nwse-resize;touch-action:none;z-index:12}
+.tile-resize{right:-5px!important;bottom:-5px!important;background:#087e5a!important}
+.editor-preview .editor-tile-tools,.editor-preview .resize-handle{display:none}.editor-preview .editor-tile-selected,.editor-preview .editor-element-selected{outline:0}
+.editor-preview .layout-element{cursor:default}.editor-preview .editor-stage-scroll{background:#08131d}
+.property-divider{border:0;border-top:1px solid #2c475d;margin:16px 0}.property-elements{display:flex;flex-wrap:wrap;gap:4px}.property-elements button{font-size:12px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.editor-warning{color:#ffc36b!important}.editor-error{color:#ff8c9a!important}
+@media(min-width:1101px){.editor-workspace{align-items:start}.editor-sidebar,.editor-properties{max-height:calc(100vh - 110px);overflow-y:auto;position:sticky;top:110px;padding-bottom:20px}}
+@media(max-width:1100px){.editor-workspace{grid-template-columns:190px minmax(280px,1fr)}.editor-properties{grid-column:1/-1;max-width:700px}.editor-stage-scroll{max-height:65vh}}
+@media(max-width:650px){.editor-workspace{display:flex;flex-direction:column;padding:0 10px 20px}.editor-stage-area{order:-1}.editor-header{position:relative;padding:10px}.editor-header label{margin-left:0}.editor-header h1{font-size:16px}.editor-stage-scroll{max-height:60vh}.editor-sidebar,.editor-properties{width:100%}.editor-home{width:100%}}

@@ -23,6 +23,7 @@ from features.sale_bonus import load_sale_bonus
 from features.predictions.snapshot import forecast_metadata, multi_day_prediction, read_prediction_snapshot, project_to_matchday
 from features.report_jobs import ReportJobs
 from features.github_forecast_sync import dispatch_workflow
+from features.dashboard_layout import load_design, validate_design
 
 
 APP_ROOT = Path(__file__).resolve().parent
@@ -117,6 +118,7 @@ class AdvisorServer(ThreadingHTTPServer):
         self.memory = self._load_memory()
         self.lock = threading.Lock()
         self.request_lock = threading.Lock()
+        self.layout_path = DATA_ROOT / '.advisor-dashboard-layout.json'
         self.kickbase = None
         self.report_jobs = ReportJobs(self, APP_ROOT, DATA_ROOT)
 
@@ -209,7 +211,7 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             self.reply(403, {'error': 'Nur lokaler Zugriff erlaubt.'})
             return
         path = urlsplit(self.path).path
-        if path in ('/', '/planner'):
+        if path in ('/', '/planner', '/editor', '/api/dashboard-data'):
             self.server.reload_persisted_report()
         if path == '/':
             live_message = ''
@@ -266,7 +268,19 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             template = (APP_ROOT / 'features/mobile_lineup_planner.html').read_text(encoding='utf-8')
             page = template.replace('__PAYLOAD__', payload).replace('__SETTINGS__', settings)
             self.reply(200, page, 'text/html; charset=utf-8')
-        elif path in ('/dashboard.js', '/dashboard.css'):
+        elif path == '/editor':
+            with self.server.lock:
+                payload = json.dumps(self.server.report, ensure_ascii=True, allow_nan=False).replace('<', '\\u003c')
+                settings = json.dumps({'csrf': self.server.csrf}, ensure_ascii=True)
+            template = (APP_ROOT / 'features/dashboard_editor.html').read_text(encoding='utf-8')
+            self.reply(200, template.replace('__PAYLOAD__', payload).replace('__SETTINGS__', settings), 'text/html; charset=utf-8')
+        elif path == '/api/dashboard-layout':
+            with self.server.lock:
+                self.reply(200, load_design(self.server.layout_path))
+        elif path == '/api/dashboard-data':
+            with self.server.lock:
+                self.reply(200, self.server.report)
+        elif path in ('/dashboard.js', '/dashboard.css', '/dashboard_layout.js', '/dashboard_editor.js', '/dashboard_editor.css'):
             name = path.lstrip('/')
             content_type = 'text/javascript; charset=utf-8' if name.endswith('.js') else 'text/css; charset=utf-8'
             self.reply(200, (APP_ROOT / 'features' / name).read_text(encoding='utf-8'), content_type)
@@ -387,7 +401,22 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(length))
             if not isinstance(body, dict):
                 raise ValueError('Ungültige Anfrage.')
-            if path == '/api/github-report':
+            if path in ('/api/dashboard-layout', '/api/dashboard-layout/validate'):
+                design = validate_design(body)
+                if path.endswith('/validate'):
+                    self.reply(200, design)
+                    return
+                with self.server.lock:
+                    current = load_design(self.server.layout_path)
+                    if design['revision'] != current['revision']:
+                        self.reply(409, {'error': 'Das Layout wurde inzwischen auf einem anderen Gerät geändert. Bitte zuerst exportieren und die Seite neu laden.'})
+                        return
+                    design['revision'] += 1
+                    temporary = self.server.layout_path.with_suffix('.tmp')
+                    temporary.write_text(json.dumps(design, ensure_ascii=True, allow_nan=False), encoding='utf-8')
+                    temporary.replace(self.server.layout_path)
+                self.reply(200, design)
+            elif path == '/api/github-report':
                 kind = body.get('kind')
                 workflows = {'full': 'actions_spaet.yml', 'fast': 'actions_fast.yml'}
                 if kind not in workflows:
@@ -453,8 +482,10 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                 self.chat(body)
             else:
                 self.reply(404, {'error': 'Nicht gefunden.'})
-        except (ValueError, TypeError, KeyError, AttributeError):
-            self.reply(400, {'error': 'Ungültige Daten. Bitte einen aktuellen Startelf-HTML-Report laden und die Aufstellung prüfen.'})
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            message = (str(exc) if path.startswith('/api/dashboard-layout') else
+                       'Ungültige Daten. Bitte einen aktuellen Startelf-HTML-Report laden und die Aufstellung prüfen.')
+            self.reply(400, {'error': message})
         except (requests.RequestException, TimeoutError):
             self.reply(502, {'error': 'OpenAI ist momentan nicht erreichbar oder die Anfrage dauerte zu lange. Erneut versuchen.'})
         except RuntimeError as exc:

@@ -19,6 +19,8 @@
       <div class="header-actions">
         <div class="report-actions" aria-label="Prognose und Planung">
           <a class="button primary" href="planner">Startelf planen</a>
+          <a class="button secondary" href="editor">Dashboard bearbeiten</a>
+          <button id="toggle-custom-layout" class="button secondary" type="button" hidden>Standardansicht</button>
           <button id="run-full-report" class="button secondary" type="button">Vollreport</button>
           <button id="run-fast-report" class="button secondary" type="button">Fast 1T</button>
         </div>
@@ -29,6 +31,7 @@
       </div>
     </header>
 
+    <section id="custom-dashboard" class="custom-dashboard" aria-label="Mein Dashboard" hidden></section>
     <section class="metrics" aria-label="Kennzahlen">
       <article class="metric metric-budget">
         <span class="metric-label"><span class="metric-icon" aria-hidden="true">€</span>Verfügbares Budget</span>
@@ -121,6 +124,8 @@
   <script id="data" type="application/json">__PAYLOAD__</script>
   <script>window.KICKBASE_DASHBOARD=__SETTINGS__;</script>
   <link rel="stylesheet" href="dashboard.css">
+  <link rel="stylesheet" href="dashboard_editor.css">
+  <script src="dashboard_layout.js"></script>
   <script src="dashboard.js"></script>
 </body>
 </html>

@@ -309,4 +309,24 @@
   $('run-fast-report').onclick=()=>startGitHubReport('fast',$('run-fast-report'));
   $('live-status').textContent=settings.liveMessage||data.generated||'Reportstand geladen';
   renderForecastStatus();render();renderValueHistory();renderManagerBudgets();renderRecentTransfers();
+  // Custom designs use exactly the same renderer as the editor preview.
+  (async()=>{
+    const L=window.KaneLayout, host=$('custom-dashboard'),toggle=$('toggle-custom-layout');
+    if(!L||!host||!toggle)return;
+    try{
+      const design=await L.json('api/dashboard-layout');if(!design.enabled)return;
+      const source={report:data,api:{}},mobile=matchMedia('(max-width:899px)');let custom=true;
+      const layout=()=>design[mobile.matches?'mobile':'desktop'];
+      const paint=()=>{if(!layout())return;host.hidden=!custom;document.querySelector('.app-shell').classList.toggle('custom-layout-active',custom);toggle.textContent=custom?'Standardansicht':'Mein Layout';L.render(host,layout(),source);};
+      if(!layout())return;toggle.hidden=false;toggle.onclick=()=>{custom=!custom;paint();};paint();
+      await L.liveData(source);await Promise.all([design.desktop&&L.boundData(source,design.desktop),design.mobile&&L.boundData(source,design.mobile)]);paint();
+      mobile.addEventListener('change',paint);
+      // Refresh visible bindings without disturbing the stored layout.
+      let refreshing=false;
+      setInterval(async()=>{if(document.hidden||!custom||refreshing)return;refreshing=true;
+        try{source.report=await L.json('api/dashboard-data');await L.liveData(source);await L.boundData(source,layout());paint();}
+        catch{/* Keep the last successful data if the add-on is temporarily offline. */}finally{refreshing=false;}
+      },60000);
+    }catch(error){$('live-status').textContent+=' · Eigenes Layout nicht geladen: '+error.message;}
+  })();
 })();
