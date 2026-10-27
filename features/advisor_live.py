@@ -19,6 +19,7 @@ from features.player_details import build_details
 from kickbase_api.config import BASE_URL, get_cdn_url
 from features.cash_reconstruction import fetch_manager_transfers
 from features.lineup_optimizer import forecast_horizon_from_matchdays, market_context
+from features.predictions.predictions import normalize_player_status
 
 
 BERLIN = ZoneInfo('Europe/Berlin')
@@ -780,7 +781,7 @@ class LiveKickbase:
                     player['minutes'] = round(float(live_profile['sec']) / 60)
                 status = live_profile.get('st', live_profile.get('status'))
                 if status is not None:
-                    player['status'] = status
+                    player['status'] = normalize_player_status(status)
                 # The market/squad endpoint is refreshed for every page load
                 # and therefore remains the source of truth for current MV.
                 if live_profile.get('pim'):

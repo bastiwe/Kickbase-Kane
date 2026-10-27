@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.67
+
+- Ersetzt die bisherigen Desktop-Spielfeldkarten durch kompakte, vertikale Matchday-Karten nach der gelieferten Referenz.
+- Zeigt Spielerfoto, Startelfindikator, Nachname, nächsten Gegner samt Tabellenplatz, Durchschnittspunkte, Marktwert, Status und die letzten drei Spiele (neuestes oben).
+
 ## 0.2.66
 
 - Übernimmt die bewährte Bild-/Wappenkomposition der Platzauswahl unverändert für Desktop-Startelfkarten.
