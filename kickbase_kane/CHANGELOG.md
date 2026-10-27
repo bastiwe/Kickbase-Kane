@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.65
+
+- Richtet Spielerbild und Vereinswappen auf Desktop-Startelfkarten weiter links wie in „Letzte Transfers“ aus.
+- Liest den sichtbaren Managernamen aus der Kickbase-Transferhistorie, sodass Verkäufe an Kickbase ihr G/V ausweisen.
+
 ## 0.2.64
 
 - Fixiert Marktwert und Overpay der letzten Transfers auf den Wert zum Transferzeitpunkt.

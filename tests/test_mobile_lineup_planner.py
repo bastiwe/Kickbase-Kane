@@ -110,8 +110,8 @@ class MobileLineupPlannerTests(unittest.TestCase):
         self.assertIn('top:auto;bottom:-26%;width:100%;height:100%', self.template)
         self.assertIn('left:56px;bottom:0;width:auto;height:100%;max-width:192px', self.template)
         self.assertIn('.candidate-option{min-height:210px;', self.template)
-        self.assertIn('.slot .card .player-art{left:-82px;width:200px;height:200%}', self.template)
-        self.assertIn('.slot .card .player-cutout{left:0;max-width:132px}', self.template)
+        self.assertIn('.slot .card .player-art{left:-118px;width:240px;height:200%}', self.template)
+        self.assertIn('.slot .card .player-cutout{left:34px;bottom:0;width:auto;height:100%;max-width:160px;', self.template)
         self.assertIn('@media(max-width:640px){.card,.bank .card{min-height:168px;',
                       self.template)
         self.assertIn('.card .player-art,.candidate-option .player-art{inset:auto auto 0 -100px;width:240px;height:180%',

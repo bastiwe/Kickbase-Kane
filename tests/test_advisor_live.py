@@ -225,7 +225,8 @@ class LiveTests(unittest.TestCase):
         }]}
         history = {'it': [
             {'dt': '2026-10-26T12:00:00Z', 'u': 'Kickbase', 'trp': 9_000_000},
-            {'dt': '2026-10-20T08:00:00Z', 'u': 'Ben', 'trp': 7_000_000},
+            {'dt': '2026-10-20T08:00:00Z', 'u': '3736066', 'unm': 'Ben',
+             'trp': 7_000_000},
         ]}
         client.get = Mock(side_effect=lambda path: history if 'transferHistory' in path else feed)
         client.player_profiles = Mock(return_value={})

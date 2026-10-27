@@ -72,7 +72,7 @@ def local_player_metadata(player_ids):
 def activity_field(value):
     """Return an id/name from the inconsistent activity-feed value shapes."""
     if isinstance(value, dict):
-        for key in ('i', 'id', 'ui', 'u', 'n', 'name', 'v', 'value'):
+        for key in ('n', 'name', 'unm', 'username', 'i', 'id', 'ui', 'u', 'v', 'value'):
             if value.get(key) not in (None, ''):
                 return activity_field(value[key])
         return ''
@@ -81,7 +81,9 @@ def activity_field(value):
 
 def activity_party_matches(value, user_id, user_name):
     if isinstance(value, dict):
-        values = [activity_field(value.get(key)) for key in ('i', 'id', 'ui', 'u', 'n', 'name')]
+        values = [activity_field(value.get(key)) for key in (
+            'i', 'id', 'ui', 'u', 'n', 'name', 'unm', 'username'
+        )]
     else:
         values = [activity_field(value)]
     normalized = {value.casefold() for value in values if value}
@@ -269,7 +271,9 @@ class LiveKickbase:
             except (TypeError, ValueError, OverflowError):
                 if cutoff is not None:
                     continue
-            buyer = entry.get('u') or entry.get('buyer') or entry.get('byr')
+            # Transfer history exposes the manager id as ``u`` and the visible
+            # manager name separately as ``unm``. Match against the full row.
+            buyer = entry
             if not activity_party_matches(buyer, '', manager_name):
                 continue
             price = entry.get('trp', entry.get('price', entry.get('prc')))
