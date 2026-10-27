@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.83
+
+- Zeigt im Editor eine echte Vorschau des vollständigen Dashboards mit aktuellen Report-/API-Daten, Spielerbildern, Vereinswappen und allen passenden Spielerkacheln.
+- Verwendet dabei den ungespeicherten Entwurf und die ausgewählte Desktop-/Mobilansicht in der eingestellten Vorschaubreite; Speichern oder Aktivieren ist dafür nicht nötig.
+- Erhält den Entwurf beim Zurückwechseln zum Bearbeiten. Bearbeitungsleisten und schreibende Dashboard-Aktionen sind in der Vorschau ausgeblendet.
+
 ## 0.2.82
 
 - Bietet das bestehende Dashboard mit den fünf Hauptbereichen Letzte Transfers, Beste Chancen vor MW-Update, Wertentwicklung, Handlungsbedarf und Transfermarkt als Editor-Vorlage an.

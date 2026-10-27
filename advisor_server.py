@@ -189,7 +189,7 @@ class AdvisorHandler(BaseHTTPRequestHandler):
         # specific, so do not add a frame-ancestors directive in that mode.
         # The app has no mapped host port and validates the Ingress user header.
         if os.getenv('KICKBASE_HOME_ASSISTANT') != '1':
-            csp += "; frame-ancestors 'none'"
+            csp += "; frame-ancestors 'self'" if urlsplit(self.path).path == '/preview' else "; frame-ancestors 'none'"
         self.send_header('Content-Security-Policy', csp)
         self.end_headers()
         self.wfile.write(body)
@@ -211,9 +211,9 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             self.reply(403, {'error': 'Nur lokaler Zugriff erlaubt.'})
             return
         path = urlsplit(self.path).path
-        if path in ('/', '/planner', '/editor', '/api/dashboard-data'):
+        if path in ('/', '/preview', '/planner', '/editor', '/api/dashboard-data'):
             self.server.reload_persisted_report()
-        if path == '/':
+        if path in ('/', '/preview'):
             live_message = ''
             with self.server.lock:
                 report, kickbase = self.server.report, self.server.kickbase
@@ -255,7 +255,7 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             with self.server.lock:
                 payload = json.dumps(self.server.report, ensure_ascii=True, allow_nan=False).replace('<', '\\u003c')
                 settings = json.dumps({'csrf': self.server.csrf, 'revision': self.server.revision,
-                                       'liveMessage': live_message}, ensure_ascii=True).replace('<', '\\u003c')
+                                       'liveMessage': live_message, 'preview': path == '/preview'}, ensure_ascii=True).replace('<', '\\u003c')
             template = (APP_ROOT / 'features/trading_dashboard.html').read_text(encoding='utf-8')
             page = template.replace('__PAYLOAD__', payload).replace('__SETTINGS__', settings)
             self.reply(200, page, 'text/html; charset=utf-8')
@@ -280,7 +280,7 @@ class AdvisorHandler(BaseHTTPRequestHandler):
         elif path == '/api/dashboard-data':
             with self.server.lock:
                 self.reply(200, self.server.report)
-        elif path in ('/dashboard.js', '/dashboard.css', '/dashboard_layout.js', '/dashboard_editor.js', '/dashboard_editor.css'):
+        elif path in ('/dashboard.js', '/dashboard.css', '/dashboard_layout.js', '/dashboard_editor.js', '/dashboard_editor.css', '/dashboard_preview.js'):
             name = path.lstrip('/')
             content_type = 'text/javascript; charset=utf-8' if name.endswith('.js') else 'text/css; charset=utf-8'
             self.reply(200, (APP_ROOT / 'features' / name).read_text(encoding='utf-8'), content_type)

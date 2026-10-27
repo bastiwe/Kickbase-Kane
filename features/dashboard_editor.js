@@ -2,13 +2,13 @@
 (async () => {
   const L=window.KaneLayout, $=id=>document.getElementById(id), canvas=$('editor-canvas');
   let data={report:JSON.parse($('data').textContent||'{}'),api:{}}, design, mode='desktop', tileId=null, elementId=null;
-  let dirty=false, preview=false, undo=[], redo=[], catalog=[], busy=false;
+  let dirty=false, preview=false, undo=[], redo=[], catalog=[], busy=false, previewFrame=null;
   const current=()=>design[mode], selectedTile=()=>current().tiles.find(t=>t.id===tileId), selectedElement=()=>selectedTile()?.elements.find(e=>e.id===elementId);
   const status=(text,error=false)=>{$('editor-status').textContent=text;$('editor-status').className=error?'editor-error':'';};
   const request=(path,body)=>L.json(path,{method:'POST',headers:{'Content-Type':'application/json','X-Advisor-Token':window.KICKBASE_DASHBOARD.csrf},body:JSON.stringify(body)});
   const remember=()=>{undo.push(JSON.stringify(design));if(undo.length>40)undo.shift();redo=[];};
   const changed=()=>{dirty=true;$('undo').disabled=!undo.length;$('redo').disabled=!redo.length;status('Ungespeicherte Änderungen · '+(mode==='mobile'?'Mobil':'Desktop'));};
-  function edit(action){if(busy)return;remember();action();changed();render();}
+  function edit(action){if(busy||preview)return;remember();action();changed();render();}
   function overlaps(a,b){return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;}
   function makeRoom(moved){
     const placed=[moved];
@@ -27,18 +27,30 @@
   }
   function renderCanvas(){
     canvas.classList.toggle('editor-editing',!preview);document.body.classList.toggle('editor-preview',preview);
+    canvas.hidden=preview;
+    if(preview){
+      if(!previewFrame){previewFrame=document.createElement('iframe');previewFrame.id='dashboard-preview-frame';previewFrame.title='Dashboard-Vorschau mit echten Daten';previewFrame.setAttribute('sandbox','allow-scripts allow-same-origin');previewFrame.src='preview';canvas.after(previewFrame);canvas.parentElement.scrollTop=0;}
+      previewFrame.style.width=$('preview-width').value+'px';sendPreview();return;
+    }
+    previewFrame?.remove();previewFrame=null;
     L.render(canvas,current(),data,(node,t)=>{
       const tools=document.createElement('div');tools.className='editor-tile-tools';
       const grip=document.createElement('button');grip.className='tile-grip';grip.textContent='⠿ '+t.title;grip.title='Kachel verschieben';tools.append(grip);node.append(tools);
       const handle=document.createElement('button');handle.className='resize-handle tile-resize';handle.setAttribute('aria-label','Kachelgröße ziehen');node.append(handle);
     });updateSelection();
   }
+  function sendPreview(){previewFrame?.contentWindow?.postMessage({type:'kane-preview-design',state:{design:L.clone(design),mode}},location.origin);}
+  window.addEventListener('message',event=>{
+    if(event.origin!==location.origin||!previewFrame||event.source!==previewFrame.contentWindow)return;
+    if(event.data?.type==='kane-preview-ready')sendPreview();
+    if(event.data?.type==='kane-preview-height'&&Number.isFinite(event.data.height))previewFrame.style.height=Math.max(400,Math.min(200000,event.data.height))+'px';
+  });
   function render(){
     $('mode-desktop').setAttribute('aria-pressed',String(mode==='desktop'));$('mode-mobile').setAttribute('aria-pressed',String(mode==='mobile'));
-    $('design-enabled').checked=design.enabled;
+    $('design-enabled').checked=design.enabled;$('design-enabled').disabled=preview;
     $('grid-columns').value=current().columns;$('grid-row-height').value=current().rowHeight;$('grid-gap').value=current().gap;
     $('stage-label').textContent=(mode==='mobile'?'Mobil':'Desktop')+' · '+$('preview-width').value+' px';
-    $('preview').textContent=preview?'Bearbeiten':'Vorschau';$('undo').disabled=!undo.length;$('redo').disabled=!redo.length;
+    $('preview').textContent=preview?'Zurück zum Bearbeiten':'Vorschau';$('preview').setAttribute('aria-pressed',String(preview));$('undo').disabled=preview||!undo.length;$('redo').disabled=preview||!redo.length;
     renderCanvas();$('tile-list').replaceChildren();current().tiles.forEach(t=>{const b=document.createElement('button');b.textContent=t.title;b.setAttribute('aria-pressed',String(t.id===tileId));b.onclick=()=>select(t.id);$('tile-list').append(b);});properties();sourceOptions();
   }
   function field(parent,label,value,callback,options={}){
@@ -190,7 +202,7 @@
   $('add-section').onclick=()=>{const section=$('section-type').value;if(current().tiles.some(t=>t.section===section)){status('Für diesen Hauptbereich gibt es bereits eine Vorlage. Bitte links auswählen.',true);return;}edit(()=>appendTile(L.sectionTile(section,mode==='mobile')));};
   $('dashboard-template').onclick=()=>{if(confirm('Diese Ansicht durch die fünf Hauptbereiche des bestehenden Dashboards ersetzen? Ungespeicherte Änderungen lassen sich danach rückgängig machen.'))edit(()=>{design[mode]=L.seed(data,mode==='mobile');tileId=null;elementId=null;});};
   for(const m of ['desktop','mobile'])$('mode-'+m).onclick=()=>{mode=m;tileId=current().tiles.find(t=>t.section)?.id||null;elementId=null;$('preview-width').value=m==='mobile'?390:1200;canvas.style.width=$('preview-width').value+'px';render();};
-  $('preview-width').onchange=()=>{const width=Math.max(280,Math.min(1920,Number($('preview-width').value)||390));$('preview-width').value=width;canvas.style.width=width+'px';$('stage-label').textContent=(mode==='mobile'?'Mobil':'Desktop')+' · '+width+' px';};
+  $('preview-width').onchange=()=>{const width=Math.max(280,Math.min(1920,Number($('preview-width').value)||390));$('preview-width').value=width;canvas.style.width=width+'px';if(previewFrame)previewFrame.style.width=width+'px';$('stage-label').textContent=(mode==='mobile'?'Mobil':'Desktop')+' · '+width+' px';};
   $('design-enabled').onchange=()=>edit(()=>design.enabled=$('design-enabled').checked);
   for(const [input,key]of [['grid-columns','columns'],['grid-row-height','rowHeight'],['grid-gap','gap']])$(input).onchange=()=>{
     if(!$(input).checkValidity()){$(input).reportValidity();return;}edit(()=>{current()[key]=Number($(input).value);if(key==='columns'){
@@ -200,7 +212,7 @@
   };
   $('undo').onclick=()=>{if(busy||!undo.length)return;redo.push(JSON.stringify(design));design=JSON.parse(undo.pop());changed();render();};
   $('redo').onclick=()=>{if(busy||!redo.length)return;undo.push(JSON.stringify(design));design=JSON.parse(redo.pop());changed();render();};
-  $('preview').onclick=()=>{preview=!preview;render();};
+  $('preview').onclick=()=>{preview=!preview;render();status(preview?'Echte Dashboard-Vorschau · '+(mode==='mobile'?'Mobil':'Desktop')+(dirty?' · Ungespeicherter Entwurf':''):'Bearbeitungsmodus'+(dirty?' · Ungespeicherte Änderungen':''));};
   $('save-design').onclick=async()=>{if(busy)return;busy=true;$('save-design').disabled=true;status('Layout wird gespeichert …');
     // Disable editing during the request so the response cannot overwrite a newer local edit.
     const controls=[...document.querySelectorAll('.editor-workspace input,.editor-workspace button,.editor-workspace select,.editor-header input,.editor-modes button,#preview')];

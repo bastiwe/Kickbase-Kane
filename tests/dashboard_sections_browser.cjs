@@ -34,6 +34,24 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
     assert((await prop('source').locator('option:checked').textContent()).includes('Durchschnittspunkte'));
     await page.getByRole('button',{name:'+ Grafik',exact:true}).click();const png=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=c.height=30;c.getContext('2d').fillRect(0,0,30,30);return c.toDataURL().split(',')[1];});
     await page.locator('#image-file').setInputFiles({name:'pixel.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});await page.waitForFunction(()=>document.querySelector('#editor-status').textContent.includes('Grafik im Entwurf'));assert.match(await selected().locator('img').getAttribute('src'),/^data:image\//);
+    // Preview renders the complete dashboard from the UNSAVED draft, not the
+    // editor placeholders or the saved design. It must never write a layout.
+    const priorPreview=await page.evaluate(()=>fetch('api/dashboard-layout').then(r=>r.json()));
+    await page.locator('#preview').click();const preview=page.frameLocator('#dashboard-preview-frame');
+    await preview.locator('#custom-dashboard [data-section="transfers"] .section-player-card').nth(1).waitFor();
+    assert.equal(await preview.locator('[data-section="roster"] .section-player-card').count(),2);
+    assert(await preview.locator('.metrics').isVisible());assert(await preview.locator('.manager-budget-panel').isVisible());
+    assert(!(await preview.locator('#custom-dashboard').innerText()).includes('{Name}'));
+    const previewNames=preview.locator('[data-section="roster"] .layout-element').filter({hasText:/^(Harry Kane|Joshua Kimmich)$/});
+    assert.equal(await previewNames.count(),2);assert.equal(await previewNames.first().evaluate(n=>getComputedStyle(n).color),'rgb(255, 221, 68)');
+    await page.waitForFunction(()=>{const doc=document.querySelector('#dashboard-preview-frame').contentDocument;return [...doc.querySelectorAll('[data-section="roster"] img')].some(img=>img.complete&&img.naturalWidth>0);});
+    assert.equal(await preview.locator('.resize-handle').count(),0);assert.equal(await preview.locator('.report-actions').isVisible(),false);
+    await page.locator('#mode-mobile').click();await page.waitForFunction(()=>{const doc=document.querySelector('#dashboard-preview-frame').contentDocument;return getComputedStyle(doc.querySelector('[data-section="roster"] .section-player-grid')).gridTemplateColumns.split(' ').length===1;});
+    assert.equal(await page.locator('#dashboard-preview-frame').evaluate(n=>n.getBoundingClientRect().width),390);
+    await page.locator('#mode-desktop').click();await page.waitForFunction(()=>{const doc=document.querySelector('#dashboard-preview-frame').contentDocument;return getComputedStyle(doc.querySelector('[data-section="roster"] .section-player-grid')).gridTemplateColumns.split(' ').length===2;});
+    assert.deepEqual(await page.evaluate(()=>fetch('api/dashboard-layout').then(r=>r.json())),priorPreview,'Preview does not save or activate anything');
+    fs.mkdirSync('test-output',{recursive:true});await preview.locator('[data-section="transfers"]').scrollIntoViewIfNeeded();await page.screenshot({path:'test-output/dashboard-live-preview.png'});
+    await page.locator('#preview').click();assert.equal(await page.locator('#dashboard-preview-frame').count(),0);assert.equal(await page.locator('#editor-canvas .section-player-card').count(),5);assert.equal(await page.locator('#editor-canvas [data-section="roster"] img[src^="data:image/"]').count(),1,'Unsaved upload survives return to editor');
     await page.locator('#mode-mobile').click();await page.locator('#tile-list button').filter({hasText:'Wertentwicklung'}).click();assert.equal(await prop('cardColumns').inputValue(),'1');
     await page.locator('#add-section').click();assert.equal(await page.locator('.layout-section').count(),5,'No duplicate sections');
     await page.locator('#mode-desktop').click();await page.locator('#design-enabled').check();await page.locator('#save-design').click();await saved();
@@ -58,7 +76,8 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
     await page.locator('#toggle-custom-layout').click();assert(await page.locator('#roster-movers').isVisible());await page.locator('#toggle-custom-layout').click();
     await context.route(origin+'/ingress/test/**',async r=>{const u=new URL(r.request().url());const response=await r.fetch({url:origin+u.pathname.replace('/ingress/test','')+u.search});await r.fulfill({response});});
     await page.goto(origin+'/ingress/test/editor');await page.waitForFunction(()=>document.querySelector('#editor-status').textContent.includes('Gespeichertes Layout'));await page.locator('#mode-mobile').click();assert.equal(await page.locator('.section-player-card').count(),5);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    await page.locator('#preview').click();await page.frameLocator('#dashboard-preview-frame').locator('#custom-dashboard [data-section="roster"] .section-player-card').first().waitFor();assert(new URL(await page.locator('#dashboard-preview-frame').evaluate(n=>n.contentWindow.location.href)).pathname==='/ingress/test/preview');await page.locator('#preview').click();
     await page.locator('#save-design').click();await saved();await page.locator('.editor-home').click();await page.locator('#custom-dashboard').waitFor({state:'visible'});assert.equal(new URL(page.url()).pathname,'/ingress/test/');assert.deepEqual(errors,[]);
-    console.log('Section templates OK: one placeholder per heading, filters/zeros, shared styles, dynamic counts/heights, historical transfers, per-section grids, mobile/desktop, upload, persistence, import/export, undo/redo, Ingress, seven widths.');
+    console.log('Section templates and real dashboard preview OK: live images/data, unsaved draft, no auto-save, mode switching, return to editing, shared styles, dynamic counts/heights, transfers, grids, upload, persistence, Ingress, seven widths.');
   }catch(error){console.error('Status:',await page.locator('#editor-status').textContent().catch(()=>''),'Errors:',errors);fs.mkdirSync('test-output',{recursive:true});await page.screenshot({path:'test-output/editor-failure.png'});throw error;}finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exit(1);});

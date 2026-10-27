@@ -314,15 +314,17 @@
     const L=window.KaneLayout, host=$('custom-dashboard'),toggle=$('toggle-custom-layout');
     if(!L||!host||!toggle)return;
     try{
-      const design=await L.json('api/dashboard-layout');if(!design.enabled)return;
+      const channel=window.KANE_PREVIEW;let previewState=channel?await channel.ready:null;
+      let design=previewState?previewState.design:await L.json('api/dashboard-layout');if(!channel&&!design.enabled)return;
       const source={report:data,api:{}},mobile=matchMedia('(max-width:899px)');let custom=true;
-      const layout=()=>design[mobile.matches?'mobile':'desktop'];
+      const layout=()=>design[channel?previewState.mode:mobile.matches?'mobile':'desktop'];
       const paint=()=>{if(!layout())return;const sections=layout().tiles.some(t=>t.section),shell=document.querySelector('.app-shell');
         // Preserve the existing metrics, history chart and manager budgets around the five editable sections.
         if(sections)document.querySelector('.dashboard-grid').append(host);else shell.insertBefore(host,shell.querySelector('.metrics'));
         host.hidden=!custom;shell.classList.toggle('custom-layout-active',custom);shell.classList.toggle('section-layout-active',custom&&sections);
         toggle.textContent=custom?'Standardansicht':'Mein Layout';L.render(host,layout(),source);};
-      if(!layout())return;toggle.hidden=false;toggle.onclick=()=>{custom=!custom;paint();};paint();
+      if(!layout())return;toggle.hidden=!!channel;toggle.onclick=()=>{custom=!custom;paint();};paint();
+      channel?.onChange(state=>{previewState=state;design=state.design;paint();L.boundData(source,layout()).then(paint);});
       mobile.addEventListener('change',paint);
       let lastWidth=0;
       const resizeObserver=new ResizeObserver(entries=>{const width=entries[0].contentRect.width;if(width>0&&Math.abs(width-lastWidth)>.5){lastWidth=width;requestAnimationFrame(paint);}});

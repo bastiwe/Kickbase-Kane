@@ -112,9 +112,21 @@ class EditorApiTests(unittest.TestCase):
         response = requests.get(self.server.origin + '/editor', timeout=5)
         self.assertEqual(response.status_code, 200)
         self.assertNotIn('</script><script>window.bad=true', response.text)
-        for asset in ['dashboard_layout.js', 'dashboard_editor.js', 'dashboard_editor.css']:
+        for asset in ['dashboard_layout.js', 'dashboard_editor.js', 'dashboard_editor.css', 'dashboard_preview.js']:
             self.assertEqual(requests.get(self.server.origin + '/' + asset, timeout=5).status_code, 200)
         self.assertEqual(requests.get(self.server.origin + '/api/dashboard-data', timeout=5).json(), self.report)
+
+    def test_preview_is_real_dashboard_and_can_only_embed_locally(self):
+        response = requests.get(self.server.origin + '/preview', timeout=5)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('"preview": true', response.text)
+        self.assertIn('id="metric-budget"', response.text)
+        self.assertIn('id="custom-dashboard"', response.text)
+        self.assertNotIn('</script><script>window.bad=true', response.text)
+        self.assertIn("frame-ancestors 'self'", response.headers['Content-Security-Policy'])
+        regular = requests.get(self.server.origin + '/editor', timeout=5)
+        self.assertIn("frame-ancestors 'none'", regular.headers['Content-Security-Policy'])
+        self.assertFalse(self.server.layout_path.exists())
 
     def test_save_persists_both_views_and_conflicts_do_not_overwrite(self):
         design = design_fixture()

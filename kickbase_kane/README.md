@@ -65,7 +65,18 @@ das gespeicherte Layout darf insgesamt 1,8 MB und 80 Kacheln je Ansicht enthalte
 Über **Desktop / Mobil** zwei unabhängige Layouts bearbeiten. Die Vorschaubreite
 simuliert das Gerät; das Dashboard verwendet unter 900 Pixeln automatisch das
 Mobil-Layout. **Andere Ansicht übernehmen** kopiert bei Bedarf ein Layout, danach
-kann dessen Raster angepasst werden. **Vorschau** blendet Bearbeitungsgriffe aus.
+kann dessen Raster angepasst werden.
+
+**Vorschau** zeigt ab Version **0.2.83** das vollständige Dashboard mit echten
+Spielerdaten, Spielerbildern, Wappen und allen passenden Spielerkacheln. Verwendet
+wird der aktuelle Entwurf, auch wenn er noch nicht gespeichert oder aktiviert
+ist. Desktop/Mobil und die Vorschaubreite lassen sich weiterhin umschalten.
+Die Vorschau lädt dieselben aktuellen Report-/API-Daten und verwendet dieselben
+Stile und Renderer wie das Dashboard. Ohne Live-Zugriff bleiben die vorhandenen
+Reportdaten nutzbar; nicht verfügbare Werte erscheinen wie im Dashboard als „–“.
+**Zurück zum Bearbeiten** erhält die ungespeicherten Änderungen. Die Vorschau
+speichert nichts automatisch und erlaubt keine Reportstarts oder Navigation
+über Dashboard-Aktionsschaltflächen.
 
 **Mein Layout im Dashboard verwenden** aktivieren und **Speichern** drücken.
 Gespeichert werden immer beide Ansichten; ohne Speichern bleibt es ein Entwurf.

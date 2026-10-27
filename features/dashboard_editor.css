@@ -46,6 +46,11 @@
 .tile-resize{right:-5px!important;bottom:-5px!important;background:#087e5a!important}
 .editor-preview .editor-tile-tools,.editor-preview .resize-handle{display:none}.editor-preview .editor-tile-selected,.editor-preview .editor-element-selected{outline:0}
 .editor-preview .layout-element{cursor:default}.editor-preview .editor-stage-scroll{background:#08131d}
+.dashboard-preview .report-actions{display:none}
+.editor-preview .editor-sidebar,.editor-preview .editor-properties,.editor-preview .editor-stage-area>.editor-hint{display:none}
+.editor-preview .editor-workspace{display:block}
+.editor-preview .editor-stage-scroll{padding:0;max-height:calc(100vh - 190px)}
+#dashboard-preview-frame{display:block;border:0;background:#0b1220;min-height:400px}
 .property-divider{border:0;border-top:1px solid #2c475d;margin:16px 0}.property-elements{display:flex;flex-wrap:wrap;gap:4px}.property-elements button{font-size:12px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .editor-warning{color:#ffc36b!important}.editor-error{color:#ff8c9a!important}
 @media(min-width:1101px){.editor-workspace{align-items:start}.editor-sidebar,.editor-properties{max-height:calc(100vh - 110px);overflow-y:auto;position:sticky;top:110px;padding-bottom:20px}}
