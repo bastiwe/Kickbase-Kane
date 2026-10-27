@@ -40,6 +40,14 @@ def validate_design(body):
             raise ValueError('Ungültige Farbe im Layout.')
         return value
 
+    def changed(value):
+        allowed = {'title', 'order', 'x', 'y', 'w', 'h', 'color', 'opacity', 'cardColumns', 'cardHeight',
+                   'cardGap', 'cardColor', 'cardOpacity', 'text', 'source', 'url', 'background',
+                   'backgroundOpacity', 'fontSize', 'bold', 'radius', 'zoom', 'imageY', 'align', 'fit', 'format'}
+        if not isinstance(value, list) or any(not isinstance(key, str) or key not in allowed for key in value):
+            raise ValueError('Ungültige Standardansicht-Anpassung.')
+        return list(dict.fromkeys(value))
+
     if body.get('version') != 1 or not isinstance(body.get('enabled'), bool):
         raise ValueError('Unbekanntes Layoutformat.')
     result = {'version': 1, 'revision': number(body.get('revision'), 0, 1e12, True), 'enabled': body['enabled']}
@@ -53,8 +61,12 @@ def validate_design(body):
         columns = number(layout.get('columns'), 1, 24, True)
         clean = {'columns': columns, 'rowHeight': number(layout.get('rowHeight'), 10, 150, True),
                  'gap': number(layout.get('gap'), 0, 40, True), 'tiles': []}
+        native = layout.get('native') is True
+        if native:
+            clean['native'] = True
         tile_ids = set()
         sections = set()
+        native_keys = set()
         for tile in layout['tiles']:
             if not isinstance(tile, dict) or not isinstance(tile.get('elements'), list) or len(tile['elements']) > 40:
                 raise ValueError('Maximal 40 Elemente pro Kachel erlaubt.')
@@ -67,6 +79,12 @@ def validate_design(body):
             if item['x'] + item['w'] > columns or item['id'] in tile_ids:
                 raise ValueError('Kachel liegt außerhalb des Rasters oder hat eine doppelte ID.')
             tile_ids.add(item['id'])
+            if native:
+                key = tile.get('nativeKey')
+                if key not in ('budget', 'squad', 'forecast', 'history', 'managers', 'transfers', 'chances', 'roster', 'risks', 'market') or key in native_keys:
+                    raise ValueError('Ungültiger oder doppelter Standardbereich.')
+                native_keys.add(key)
+                item.update(nativeKey=key, order=number(tile.get('order'), 0, 79, True), changed=changed(tile.get('changed', [])))
             if tile.get('section') is not None:
                 section = tile['section']
                 if section not in ('transfers', 'chances', 'roster', 'risks', 'market') or section in sections:
@@ -91,10 +109,16 @@ def validate_design(body):
                      'opacity': number(element.get('opacity'), 0, 1), 'fontSize': number(element.get('fontSize'), 8, 120),
                      'bold': bool(element.get('bold')), 'radius': number(element.get('radius'), 0, 100),
                      'zoom': number(element.get('zoom'), 1, 5), 'imageY': number(element.get('imageY'), 0, 100),
-                     'x': number(element.get('x'), 0, 100), 'y': number(element.get('y'), 0, 100),
-                     'w': number(element.get('w'), 1, 100), 'h': number(element.get('h'), 1, 100)}
-                if e['x'] + e['w'] > 100.01 or e['y'] + e['h'] > 100.01 or e['id'] in element_ids:
+                     'x': number(element.get('x'), -300 if native else 0, 300 if native else 100), 'y': number(element.get('y'), -300 if native else 0, 300 if native else 100),
+                     'w': number(element.get('w'), 1, 600 if native else 100), 'h': number(element.get('h'), 1, 600 if native else 100)}
+                if (not native and (e['x'] + e['w'] > 100.01 or e['y'] + e['h'] > 100.01)) or e['id'] in element_ids:
                     raise ValueError('Element liegt außerhalb der Kachel oder hat eine doppelte ID.')
+                if native:
+                    e.update(nativeKey=text(element.get('nativeKey', ''), 80), label=text(element.get('label', ''), 100),
+                             changed=changed(element.get('changed', [])))
+                    if element.get('scope', 'tile') not in ('tile', 'row'):
+                        raise ValueError('Ungültiger Elementbereich.')
+                    e['scope'] = element.get('scope', 'tile')
                 element_ids.add(e['id'])
                 for key, choices in {'align': ('left', 'center', 'right'), 'fit': ('contain', 'cover'),
                                      'format': ('auto', 'number', 'euro', 'million', 'percent', 'date')}.items():

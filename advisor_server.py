@@ -12,7 +12,7 @@ import threading
 import webbrowser
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qs
 
 from dotenv import load_dotenv
 import requests
@@ -255,7 +255,8 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             with self.server.lock:
                 payload = json.dumps(self.server.report, ensure_ascii=True, allow_nan=False).replace('<', '\\u003c')
                 settings = json.dumps({'csrf': self.server.csrf, 'revision': self.server.revision,
-                                       'liveMessage': live_message, 'preview': path == '/preview'}, ensure_ascii=True).replace('<', '\\u003c')
+                                       'liveMessage': live_message, 'preview': path == '/preview',
+                                       'nativeEditor': path == '/preview' and parse_qs(urlsplit(self.path).query).get('editor') == ['1']}, ensure_ascii=True).replace('<', '\\u003c')
             template = (APP_ROOT / 'features/trading_dashboard.html').read_text(encoding='utf-8')
             page = template.replace('__PAYLOAD__', payload).replace('__SETTINGS__', settings)
             self.reply(200, page, 'text/html; charset=utf-8')
@@ -280,7 +281,7 @@ class AdvisorHandler(BaseHTTPRequestHandler):
         elif path == '/api/dashboard-data':
             with self.server.lock:
                 self.reply(200, self.server.report)
-        elif path in ('/dashboard.js', '/dashboard.css', '/dashboard_layout.js', '/dashboard_editor.js', '/dashboard_editor.css', '/dashboard_preview.js'):
+        elif path in ('/dashboard.js', '/dashboard.css', '/dashboard_layout.js', '/dashboard_editor.js', '/dashboard_editor.css', '/dashboard_preview.js', '/dashboard_native.js'):
             name = path.lstrip('/')
             content_type = 'text/javascript; charset=utf-8' if name.endswith('.js') else 'text/css; charset=utf-8'
             self.reply(200, (APP_ROOT / 'features' / name).read_text(encoding='utf-8'), content_type)

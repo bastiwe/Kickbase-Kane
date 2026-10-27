@@ -6,56 +6,50 @@ Benutzeranmeldung; es wird kein eigener Port am Router freigegeben.
 
 ## Dashboard individuell gestalten
 
-**Dashboard bearbeiten** öffnet den Editor. Ab Version **0.2.82** startet ein neues
-Layout mit den fünf Hauptbereichen des bestehenden Dashboards: **Letzte Transfers**,
-**Beste Chancen vor MW-Update**, **Wertentwicklung**, **Handlungsbedarf** und
-**Transfermarkt**. Kennzahlen, Kaderwertgrafik und Managerbudgets bleiben im
-Dashboard erhalten.
+**Dashboard bearbeiten** öffnet ab Version **0.2.84** die tatsächliche
+Standardansicht mit ihren vorhandenen Kacheln und CSS-Stilen. Bearbeitbar sind
+**Verfügbares Budget**, **Kaderwert**, **Erw. Kader-MW in 1T**, die
+**Kaderwertgrafik**, **Managerbudgets** und die fünf Spielerbereiche
+**Letzte Transfers**, **Beste Chancen vor MW-Update**, **Wertentwicklung**,
+**Handlungsbedarf** und **Transfermarkt**. Ohne Anpassungen verwendet die Vorschau
+bei gleicher Breite das unveränderte Originaldesign.
 
-Pro Hauptbereich wird genau **eine Spielerkachel als Vorlage** bearbeitet,
-unabhängig davon, wie viele Spieler gerade vorhanden sind. Der Editor zeigt
-Platzhalter statt konkreter Spieler. Das Dashboard wiederholt die Vorlage später
-für alle passenden Datensätze. Ein vorhandenes freies Layout bleibt erhalten;
-**Bestehendes Dashboard als Vorlage** ersetzt die aktuell bearbeitete Ansicht
-erst als Entwurf. Zum Umstellen beide Ansichten laden und anschließend speichern.
+Je Spielerbereich erscheint im Bearbeitungsmodus genau **eine Beispielkachel**
+mit echten Daten, Spielerbild und Vereinswappen. Sie ist keine Bindung an einen
+bestimmten Spieler: Änderungen an Bildposition, Größe, Schrift oder Farben gelten
+für alle Spieler dieses Bereichs. Wenn ein Bereich gerade leer ist, zeigt der
+Bearbeitungsmodus nach Möglichkeit einen Spieler aus dem vorhandenen Kader oder
+Markt als Gestaltungsmuster. Die Vorschau zeigt anschließend die tatsächlich
+passenden Datensätze; Datenfilter und Sortierung entsprechen der Standardansicht.
 
-Links lassen sich Rasterspalten, Zeilenhöhe und Abstand der Hauptbereiche
-einstellen. Bereiche am Titelgriff ziehen und am grünen Eckgriff skalieren.
-Rechts legt **Spielerkacheln je Zeile** das Raster innerhalb des ausgewählten
-Bereichs fest. **Spielerkachelhöhe** und **Spielerkachelabstand** gelten für alle
-Spieler dieses Bereichs. Diese Einstellungen sind für Desktop und Mobil getrennt.
-Bei neuen oder entfernten Datensätzen ändern sich Kachelanzahl und Bereichshöhe
-automatisch; folgende Bereiche weichen nach unten aus.
+Ein Element direkt anklicken oder rechts in der Elementliste auswählen. Elemente
+lassen sich am Auswahlrahmen verschieben und am Eckgriff skalieren. Bildversatz
+wird relativ zur vorhandenen Position eingestellt, Breite/Höhe in Prozent der
+Originalgröße (100 %). Auch Schrift, Deckkraft, Hintergrund, Bildausschnitt und
+Rundung können exakt eingestellt werden. Weitere Text-, Daten- und Bildelemente
+lassen sich hinzufügen und werden bei Spielerbereichen automatisch wiederholt.
+Die vorhandenen Datenverknüpfungen bleiben erhalten, solange du sie nicht änderst.
 
-Rechts zeigt die ausgewählte Kachel ihre Elemente und Eigenschaften. Text-, Daten-
-und Bildelemente lassen sich hinzufügen, direkt verschieben und am blauen Eckgriff
-skalieren. Farbe, Schriftgröße, Deckkraft, Rundung, Bildausschnitt und Position
-können auch exakt eingestellt werden. **Nach vorne / Nach hinten** legt fest,
-welche Elemente sich überdecken. Ein Wappen als Bildelement mit 5 % Deckkraft und
-voller Kachelgröße eignet sich beispielsweise als Hintergrund.
+Hauptkacheln am Titelgriff nach oben/unten verschieben oder ihre Reihenfolge und
+Breite rechts einstellen. Erst wenn eine solche Layoutänderung erfolgt, werden
+die Originalkacheln in einem gemeinsamen Raster angeordnet. Unveränderte Bereiche
+behalten zunächst ihr bestehendes Layout. Über **Spielerkacheln je Zeile** und
+**Spielerkachelabstand** lässt sich das innere Raster eines Spielerbereichs
+anpassen. Die Mindesthöhe kann ebenfalls eingestellt werden. Beim Transfermarkt
+wandelt eine explizite Rasteranpassung die bisherigen Tabellenzeilen in Kacheln um.
 
-Bei einer Bereichsvorlage stehen im Quellen-Wähler benannte Platzhalter bereit,
-etwa **Name**, **Nachname**, **Vereinswappen**, **Spielerbild**, **Position**,
-**Marktwert**, **Erw. 1T**, **LI**, **Status**, **Durchschnittspunkte** und **Form 1–3**.
-Für Transfers gibt es zusätzlich Bezahlt, Verkäufer, Käufer, Overpay und G/V des
-Verkäufers. Unter **Weitere Spielerdaten** sind zusätzliche Felder der aktuell
-verfügbaren Datensätze zugänglich. Jeder Platzhalter wird mit den Daten der
-jeweiligen Spielerkachel gefüllt; es wird keine feste Spieler-ID gespeichert.
-**Quelle zuweisen** bindet ein vorhandenes Element, **+ Datenelement** erstellt
-ein neues. Unter **Dashboard-Kennzahlen** stehen auch die berechneten Summen
-bereit. Freie zusätzliche Kacheln können weiterhin auf die kompletten aktuellen
-Report- und API-Antworten zugreifen. Fehlende Werte erscheinen als „–“.
+Benannte Datenquellen wie **Vereinswappen**, **Spielerbild**, **Position**,
+**Marktwert**, **Erw. 1T**, **LI**, **Status** und **Durchschnittspunkte** werden
+je Spieler befüllt. Für Kennzahlen stehen unter **Dashboard-Kennzahlen** die
+berechneten Summen bereit. **Quelle zuweisen** verbindet ein vorhandenes Element,
+**+ Datenelement** ergänzt ein neues. Bei Kickbase-Verkäufen bleibt G/V statt
+Overpay erhalten; der Transfer-Marktwert bleibt der damalige Wert.
 
-Die Datenzuordnung folgt den Bereichen: Transfers stammen aus dem Live-Feed,
-Wertentwicklung enthält den Kader, Transfermarkt die vorhandenen Marktangebote.
-Beste Chancen enthält Angebote mit mindestens 100.000 € erwarteter Steigerung
-und Ablauf vor dem nächsten Berliner MW-Update um 22 Uhr. Handlungsbedarf zeigt
-negative Kaderprognosen und passende Angebote bis zur folgenden Nacht-/Morgenphase.
-Es gibt keine feste Anzahl gespeicherter Spielerkacheln und keine zusätzlichen
-Kachel-Limits im Renderer; der Transfer-Feed liefert aktuell die fünf neuesten
-Transfers. Bei Verkäufen an Kickbase wird Overpay ausgeblendet und stattdessen
-G/V angezeigt. Der Transfer-Marktwert bleibt der damalige Wert. Form 1 ist der
-neueste Spieltag; vorhandene Nullpunkte werden erhalten.
+Ältere freie Layouts bleiben beim Update gespeichert. Im Editor wird zunächst
+die vollständige Standardansicht als ungespeicherter Entwurf angeboten;
+**Rückgängig** bringt den bisherigen Stand zurück. Erst **Speichern** ersetzt
+ihn. **Standardansicht exakt übernehmen** setzt die aktuell bearbeitete Ansicht
+auf das Original zurück, ebenfalls zuerst als rückgängig machbaren Entwurf.
 
 Grafiken können über HTTPS-Adressen oder per Upload eingebunden werden. Uploads
 werden auf maximal 1000 Pixel verkleinert und platzsparend im Layout hinterlegt

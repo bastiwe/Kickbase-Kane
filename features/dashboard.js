@@ -98,6 +98,7 @@
       .filter(p=>prediction(p)!==null && prediction(p)>=TRADING_THRESHOLD && timeValue(deadline(p))<nextUpdate)
       .sort((a,b)=>change(b)-change(a))
       .slice(0,6);
+    if(settings.nativeEditor&&!chosen.length&&(market[0]||players[0]))chosen.push(market[0]||players[0]);
     $('top-chances').innerHTML=chosen.length?chosen.map(p=>'<details class="chance market-history-player" data-player-id="'+escapeHtml(p.id)+'"><summary>'+avatar(p)+'<div class="chance-content"><div class="chance-top">'+playerLabel(p,false)+'<span class="tag">'+escapeHtml(position(p))+'</span></div><div class="chance-change"><span>Erw. MW in 1T</span><strong class="positive">'+forecastText(p)+'</strong></div><div class="chance-details"><span>MW '+euros(mv(p))+'</span><span>Ablauf '+escapeHtml(formatTime(deadline(p)))+'</span></div></div></summary><div class="player-history"><p class="empty">Aufklappen lädt die Tagesänderungen.</p></div></details>').join(''):'<p class="empty">Keine passende Chance vor dem nächsten MW-Update.</p>';
     document.querySelectorAll('.market-history-player').forEach(details=>details.addEventListener('toggle',()=>{if(details.open)loadPlayerHistory(details);}));
   }
@@ -139,6 +140,7 @@
   }
   function renderRoster(){
     const chosen=[...players].sort((a,b)=>change(b)-change(a));
+    if(settings.nativeEditor&&!chosen.length&&market[0])chosen.push(market[0]);
     $('roster-count').textContent=chosen.length+' Spieler';
     const rosterLabel=p=>{
       const profit=number(field(p,'profitLoss','profit_loss'));
@@ -171,6 +173,7 @@
     risky.forEach(p=>rows.push(riskRow(p,'negative','Drohender MW-Verlust','red')));
     beforeUpdate.forEach(p=>rows.push(riskRow(p,'positive','Top-Chance vor 22 Uhr','green')));
     overnight.forEach(p=>rows.push(riskRow(p,'neutral','Nachtgebot 22–09 Uhr','')));
+    if(settings.nativeEditor&&!rows.length&&(players[0]||market[0]))rows.push(riskRow(players[0]||market[0],'neutral','Beispiel für diese Vorlage',''));
     $('timing-risks').innerHTML=rows.length?rows.join(''):'<p class="empty">Kein unmittelbarer Handlungsbedarf erkannt.</p>';
     document.querySelectorAll('.risk-player').forEach(details=>details.addEventListener('toggle',()=>{if(details.open)loadPlayerHistory(details);}));
   }
@@ -223,8 +226,9 @@
     const container=$('recent-transfers');
     try{
       const response=await fetch(apiPath('/api/recent-transfers'),{cache:'no-store'});
-      const payload=await response.json();
-      if(!response.ok)throw new Error(payload.error||'Abruf fehlgeschlagen');
+      let payload=await response.json();
+      if(!response.ok&&!settings.nativeEditor)throw new Error(payload.error||'Abruf fehlgeschlagen');
+      if(settings.nativeEditor&&!payload.transfers?.length){const sample=players[0]||market[0];if(sample)payload={transfers:[{playerId:sample.id,playerName:name(sample),image:image(sample),teamImage:teamImage(sample),price:mv(sample),marketValue:mv(sample),overpay:0,from:'Beispiel',to:'Beispiel',transferredAt:Date.now()}]};}
       const transfers=Array.isArray(payload.transfers)?payload.transfers.slice(0,5):[];
       const stamp=new Date(payload.fetchedAt);
       $('recent-transfers-updated').textContent=Number.isNaN(stamp.getTime())?'Live aus Kickbase':'Live · '+stamp.toLocaleTimeString('de-DE',{timeZone:'Europe/Berlin',hour:'2-digit',minute:'2-digit'})+' Uhr';
@@ -235,7 +239,7 @@
         const secondary=transfer.isKickbaseSale
           ? '<div><span>G/V des Verkäufers</span><strong class="'+(profitLoss===null?'neutral':cls(profitLoss))+'">'+(profitLoss===null?'–':signed(profitLoss))+'</strong></div>'
           : '<div><span>Overpay</span><strong class="'+(overpay===null?'neutral':overpay>0?'negative':overpay<0?'positive':'neutral')+'">'+(overpay===null?'–':signed(overpay))+'</strong></div>';
-        return '<article class="recent-transfer-card">'+avatar({image:transfer.image,teamImage:transfer.teamImage})+'<div class="recent-transfer-content"><div class="recent-transfer-player">'
+        return '<article class="recent-transfer-card" data-player-id="'+escapeHtml(transfer.playerId||'')+'">'+avatar({image:transfer.image,teamImage:transfer.teamImage})+'<div class="recent-transfer-content"><div class="recent-transfer-player">'
           +'<div class="recent-transfer-identity"><div class="name">'+escapeHtml(transfer.playerName||'Unbekannter Spieler')+'</div><div class="transfer-route"><span>'+escapeHtml(transfer.from||'Kickbase')+'</span><b aria-hidden="true">›</b><span>'+escapeHtml(transfer.to||'Kickbase')+'</span></div></div></div>'
           +'<div class="recent-transfer-money"><div><span>Bezahlt</span><strong>'+(number(transfer.price)===null?'–':euros(transfer.price))+'</strong></div>'+secondary+'</div>'
           +'<div class="recent-transfer-footer"><span>'+escapeHtml(relativeTime(transfer.transferredAt))+'</span><span title="Marktwert beim Transfer">MW '+(marketValue===null?'–':euros(marketValue))+'</span></div></div></article>';
@@ -256,6 +260,7 @@
   }
   function renderTable(){
     const rows=sortedMarket().slice(0,50);
+    if(settings.nativeEditor&&!rows.length&&players[0])rows.push(players[0]);
     $('market-table').innerHTML=rows.map(p=>
       '<tr class="market-row" data-player-id="'+escapeHtml(p.id)+'" aria-expanded="false" tabindex="0">'
       +'<td><div class="table-player">'+avatar(p)+'<div><div class="name">'+escapeHtml(name(p))+'</div><div class="sub">'+escapeHtml(club(p))+'</div></div></div></td><td>'+escapeHtml(position(p))+'</td><td>'+euros(mv(p))+'</td><td class="'+cls(change(p))+'">'+signed(change(p))+trendArrow(p)+'</td><td>'+liBadge(p,'')+'</td><td>'+escapeHtml(formatTime(deadline(p)))+'</td></tr>'
@@ -317,8 +322,16 @@
       const channel=window.KANE_PREVIEW;let previewState=channel?await channel.ready:null;
       let design=previewState?previewState.design:await L.json('api/dashboard-layout');if(!channel&&!design.enabled)return;
       const source={report:data,api:{}},mobile=matchMedia('(max-width:899px)');let custom=true;
+      let nativeSession=null;
       const layout=()=>design[channel?previewState.mode:mobile.matches?'mobile':'desktop'];
       const paint=()=>{if(!layout())return;const sections=layout().tiles.some(t=>t.section),shell=document.querySelector('.app-shell');
+        if(layout().native){
+          shell.classList.remove('custom-layout-active','section-layout-active');host.hidden=true;
+          toggle.textContent=custom?'Standardansicht':'Mein Layout';
+          nativeSession ||= window.KaneNative.create(document,source,message=>channel?.send(message));
+          nativeSession.update(custom?layout():null,{editor:!!previewState?.editor,selection:previewState?.selection});return;
+        }
+        nativeSession?.update(null);
         // Preserve the existing metrics, history chart and manager budgets around the five editable sections.
         if(sections)document.querySelector('.dashboard-grid').append(host);else shell.insertBefore(host,shell.querySelector('.metrics'));
         host.hidden=!custom;shell.classList.toggle('custom-layout-active',custom);shell.classList.toggle('section-layout-active',custom&&sections);
@@ -333,7 +346,9 @@
       // Refresh visible bindings without disturbing the stored layout.
       let refreshing=false;
       setInterval(async()=>{if(document.hidden||!custom||refreshing)return;refreshing=true;
-        try{source.report=await L.json('api/dashboard-data');await L.liveData(source);await L.boundData(source,layout());paint();}
+        try{source.report=await L.json('api/dashboard-data');
+          if(layout().native){nativeSession?.update(null);players.splice(0,players.length,...(source.report.players||[]));market.splice(0,market.length,...(source.report.marketPlayers||[]).filter(p=>!p.owned));Object.assign(data,source.report,{players});source.report=data;renderForecastStatus();render();renderValueHistory();renderManagerBudgets();renderRecentTransfers();}
+          await L.liveData(source);await L.boundData(source,layout());paint();}
         catch{/* Keep the last successful data if the add-on is temporarily offline. */}finally{refreshing=false;}
       },60000);
     }catch(error){$('live-status').textContent+=' · Eigenes Layout nicht geladen: '+error.message;}

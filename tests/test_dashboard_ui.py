@@ -56,7 +56,8 @@ class DashboardUiTests(unittest.TestCase):
 
     def test_top_chances_and_recent_transfers_use_half_cropped_artwork(self):
         self.assertIn("<summary>'+avatar(p)+'<div class=\"chance-content\">", self.javascript)
-        self.assertIn("<article class=\"recent-transfer-card\">'+avatar(", self.javascript)
+        self.assertIn('class="recent-transfer-card"', self.javascript)
+        self.assertIn('avatar({image:transfer.image,teamImage:transfer.teamImage})', self.javascript)
         self.assertIn('.chance>summary>.player-art,.recent-transfer-card>.player-art{position:absolute',
                       self.styles)
         self.assertIn('inset:auto auto 0 -140px;width:328px;height:200%', self.styles)

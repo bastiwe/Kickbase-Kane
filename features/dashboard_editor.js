@@ -1,14 +1,18 @@
 'use strict';
 (async () => {
   const L=window.KaneLayout, $=id=>document.getElementById(id), canvas=$('editor-canvas');
-  let data={report:JSON.parse($('data').textContent||'{}'),api:{}}, design, mode='desktop', tileId=null, elementId=null;
-  let dirty=false, preview=false, undo=[], redo=[], catalog=[], busy=false, previewFrame=null;
+  let data={report:JSON.parse($('data').textContent||'{}'),api:{}}, design, mode=matchMedia('(max-width:899px)').matches?'mobile':'desktop', tileId=null, elementId=null;
+  let dirty=false, preview=false, undo=[], redo=[], catalog=[], busy=false, previewFrame=null,nativeFrame=null;
   const current=()=>design[mode], selectedTile=()=>current().tiles.find(t=>t.id===tileId), selectedElement=()=>selectedTile()?.elements.find(e=>e.id===elementId);
   const status=(text,error=false)=>{$('editor-status').textContent=text;$('editor-status').className=error?'editor-error':'';};
   const request=(path,body)=>L.json(path,{method:'POST',headers:{'Content-Type':'application/json','X-Advisor-Token':window.KICKBASE_DASHBOARD.csrf},body:JSON.stringify(body)});
-  const remember=()=>{undo.push(JSON.stringify(design));if(undo.length>40)undo.shift();redo=[];};
   const changed=()=>{dirty=true;$('undo').disabled=!undo.length;$('redo').disabled=!redo.length;status('Ungespeicherte Änderungen · '+(mode==='mobile'?'Mobil':'Desktop'));};
-  function edit(action){if(busy||preview)return;remember();action();changed();render();}
+  function edit(action){if(busy||preview)return;const before=L.clone(design);action();if(JSON.stringify(before)===JSON.stringify(design))return;undo.push(JSON.stringify(before));if(undo.length>40)undo.shift();redo=[];
+    for(const m of ['desktop','mobile'])if(design[m]?.native)for(const t of design[m].tiles){const old=before[m]?.tiles.find(v=>v.id===t.id);if(!old)continue;
+      for(const key of ['title','order','w','h','color','opacity','cardColumns','cardHeight','cardGap','cardColor','cardOpacity'])if(JSON.stringify(t[key])!==JSON.stringify(old[key]))t.changed=[...new Set([...(t.changed||[]),key])];
+      for(const e of t.elements){const previous=old.elements.find(v=>v.id===e.id);if(!previous)continue;for(const key of ['text','source','url','x','y','w','h','color','opacity','background','backgroundOpacity','fontSize','bold','radius','zoom','imageY','align','fit','format'])if(JSON.stringify(e[key])!==JSON.stringify(previous[key]))e.changed=[...new Set([...(e.changed||[]),key])];}
+      if(t.elements.length===old.elements.length&&t.elements.some((e,i)=>e.id!==old.elements[i].id))for(const e of t.elements)e.changed=[...new Set([...(e.changed||[]),'order'])];
+    }changed();render();}
   function overlaps(a,b){return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;}
   function makeRoom(moved){
     const placed=[moved];
@@ -18,7 +22,7 @@
     }
   }
   function appendTile(tile){tile.y=Math.max(0,...current().tiles.map(t=>t.y+t.h));tile.w=Math.min(tile.w,current().columns);current().tiles.push(tile);tileId=tile.id;elementId=null;}
-  function select(t,e=null){tileId=t; elementId=e; updateSelection();properties();sourceOptions();}
+  function select(t,e=null){tileId=t; elementId=e; updateSelection();properties();sourceOptions();if(nativeFrame)sendPreview(nativeFrame,true);}
   function updateSelection(){
     canvas.querySelectorAll('.layout-tile').forEach(n=>n.classList.toggle('editor-tile-selected',n.dataset.tile===tileId));
     canvas.querySelectorAll('.layout-element').forEach(n=>{const selected=n.dataset.element===elementId&&n.closest('.layout-tile').dataset.tile===tileId;
@@ -33,15 +37,34 @@
       previewFrame.style.width=$('preview-width').value+'px';sendPreview();return;
     }
     previewFrame?.remove();previewFrame=null;
+    canvas.classList.toggle('native-editor-canvas',!!current().native);
+    if(current().native){
+      if(!nativeFrame){nativeFrame=document.createElement('iframe');nativeFrame.id='native-editor-frame';nativeFrame.title='Standard-Dashboard bearbeiten';nativeFrame.setAttribute('sandbox','allow-scripts allow-same-origin');nativeFrame.src='preview?editor=1';canvas.replaceChildren(nativeFrame);}
+      canvas.style.width=$('preview-width').value+'px';sendPreview(nativeFrame,true);return;
+    }
+    nativeFrame?.remove();nativeFrame=null;
     L.render(canvas,current(),data,(node,t)=>{
       const tools=document.createElement('div');tools.className='editor-tile-tools';
       const grip=document.createElement('button');grip.className='tile-grip';grip.textContent='⠿ '+t.title;grip.title='Kachel verschieben';tools.append(grip);node.append(tools);
       const handle=document.createElement('button');handle.className='resize-handle tile-resize';handle.setAttribute('aria-label','Kachelgröße ziehen');node.append(handle);
     });updateSelection();
   }
-  function sendPreview(){previewFrame?.contentWindow?.postMessage({type:'kane-preview-design',state:{design:L.clone(design),mode}},location.origin);}
+  function sendPreview(frame=previewFrame,editor=false){frame?.contentWindow?.postMessage({type:'kane-preview-design',state:{design:L.clone(design),mode,editor,selection:{tileId,elementId}}},location.origin);}
   window.addEventListener('message',event=>{
-    if(event.origin!==location.origin||!previewFrame||event.source!==previewFrame.contentWindow)return;
+    if(event.origin!==location.origin)return;
+    if(nativeFrame&&event.source===nativeFrame.contentWindow){
+      const msg=event.data;if(msg?.type==='kane-preview-ready')sendPreview(nativeFrame,true);
+      if(msg?.type==='kane-preview-height'&&Number.isFinite(msg.height))nativeFrame.style.height=Math.max(400,Math.min(200000,msg.height))+'px';
+      if(msg?.type==='kane-native-select'){
+        const tile=current().tiles.find(t=>t.id===msg.tileId);if(!tile)return;tileId=tile.id;elementId=msg.elementId;
+        const e=tile.elements.find(e=>e.id===msg.elementId);if(e&&msg.values)for(const [k,v]of Object.entries(msg.values))if(!(e.changed||[]).includes(k))e[k]=v;
+        properties();sourceOptions();
+      }
+      if(msg?.type==='kane-native-change'){const tile=current().tiles.find(t=>t.id===msg.tileId),target=msg.elementId?tile?.elements.find(e=>e.id===msg.elementId):tile;const patch=Object.fromEntries(Object.entries(msg.patch||{}).filter(([key,v])=>['x','y','w','h'].includes(key)&&Number.isFinite(v)).map(([key,v])=>[key,Math.round(v*10)/10]));if(target)edit(()=>Object.assign(target,patch));}
+      if(msg?.type==='kane-native-reorder')edit(()=>{const ordered=[...current().tiles].sort((a,b)=>a.order-b.order),tile=ordered.find(t=>t.id===msg.tileId);if(tile){ordered.splice(ordered.indexOf(tile),1);ordered.splice(msg.index,0,tile);ordered.forEach((t,i)=>t.order=i);}});
+      return;
+    }
+    if(!previewFrame||event.source!==previewFrame.contentWindow)return;
     if(event.data?.type==='kane-preview-ready')sendPreview();
     if(event.data?.type==='kane-preview-height'&&Number.isFinite(event.data.height))previewFrame.style.height=Math.max(400,Math.min(200000,event.data.height))+'px';
   });
@@ -51,6 +74,8 @@
     $('grid-columns').value=current().columns;$('grid-row-height').value=current().rowHeight;$('grid-gap').value=current().gap;
     $('stage-label').textContent=(mode==='mobile'?'Mobil':'Desktop')+' · '+$('preview-width').value+' px';
     $('preview').textContent=preview?'Zurück zum Bearbeiten':'Vorschau';$('preview').setAttribute('aria-pressed',String(preview));$('undo').disabled=preview||!undo.length;$('redo').disabled=preview||!redo.length;
+    $('add-tile').disabled=!!current().native;
+    const choice=$('section-type').value;$('section-type').replaceChildren();for(const [key,title]of Object.entries(current().native?Object.fromEntries(Object.entries(window.KaneNative.defs).map(([key,def])=>[key,def.title])):L.sections)){const option=document.createElement('option');option.value=key;option.textContent=title;$('section-type').append(option);}$('section-type').value=choice||$('section-type').options[0]?.value;
     renderCanvas();$('tile-list').replaceChildren();current().tiles.forEach(t=>{const b=document.createElement('button');b.textContent=t.title;b.setAttribute('aria-pressed',String(t.id===tileId));b.onclick=()=>select(t.id);$('tile-list').append(b);});properties();sourceOptions();
   }
   function field(parent,label,value,callback,options={}){
@@ -73,28 +98,29 @@
     field(root,'Kacheltitel',t.title,v=>t.title=v,{key:'tile-title'});
     field(root,'Kachelfarbe',t.color,v=>t.color=v,{type:'color',key:'tile-color'});
     field(root,'Kachel-Deckkraft',t.opacity,v=>t.opacity=v,{type:'range',min:0,max:1,step:.01,key:'tile-opacity'});
-    for(const [key,label,min,max]of [['x','Spalte (ab 0)',0,current().columns-t.w],['y','Zeile (ab 0)',0,1000],['w','Breite (Spalten)',1,current().columns],['h','Höhe (Zeilen)',1,30]]){
+    if(current().native)field(root,'Reihenfolge',t.order,v=>t.order=v,{type:'number',min:0,max:79,step:1,key:'tile-order'});
+    for(const [key,label,min,max]of (current().native?[['w','Breite (Spalten)',1,current().columns],['h','Mindesthöhe (Zeilen)',1,30]]:[['x','Spalte (ab 0)',0,current().columns-t.w],['y','Zeile (ab 0)',0,1000],['w','Breite (Spalten)',1,current().columns],['h','Höhe (Zeilen)',1,30]])){
       field(root,label,t[key],v=>{t[key]=v;t.x=Math.min(t.x,current().columns-t.w);makeRoom(t);},{type:'number',min,max,step:1,key:'tile-'+key});
     }
     if(t.section){
       const note=document.createElement('p');note.className='editor-hint';note.textContent='Eine Vorlage für alle Spieler dieses Bereichs. Im Dashboard: '+L.sectionItems(data,t.section).length+' passende Datensätze. Die Kachelanzahl wird automatisch bestimmt.';root.append(note);
       field(root,'Spielerkacheln je Zeile',t.cardColumns,v=>t.cardColumns=v,{type:'number',min:1,max:8,step:1,key:'cardColumns'});
-      field(root,'Spielerkachelhöhe (px)',t.cardHeight,v=>{t.cardHeight=v;t.h=Math.ceil((v+76+current().gap)/(current().rowHeight+current().gap));makeRoom(t);},{type:'number',min:80,max:600,step:1,key:'cardHeight'});
+      field(root,current().native?'Spielerkachel-Mindesthöhe (px)':'Spielerkachelhöhe (px)',t.cardHeight,v=>{t.cardHeight=v;if(!current().native){t.h=Math.ceil((v+76+current().gap)/(current().rowHeight+current().gap));makeRoom(t);}},{type:'number',min:80,max:600,step:1,key:'cardHeight'});
       field(root,'Spielerkachelabstand (px)',t.cardGap,v=>t.cardGap=v,{type:'number',min:0,max:40,step:1,key:'cardGap'});
       field(root,'Spielerkachelfarbe',t.cardColor,v=>t.cardColor=v,{type:'color',key:'cardColor'});
       field(root,'Spielerkachel-Deckkraft',t.cardOpacity,v=>t.cardOpacity=v,{type:'range',min:0,max:1,step:.01,key:'cardOpacity'});
-    }else{
+    }else if(!current().native){
     const rows=collections();field(root,'Datensatz-Liste',t.collection,v=>{t.collection=v;const entries=L.valueAt(data,v);t.record=entries?.length?L.rowKey(entries[0],0):'';},
       {choices:[['','Kein Spieler / Datensatz'],...rows.map(c=>[c.path,c.label])],key:'collection'});
     const entries=L.valueAt(data,t.collection);
     if(Array.isArray(entries))field(root,'Datensatz',t.record,v=>t.record=v,{choices:entries.map((r,i)=>[L.rowKey(r,i),String(r?.name||r?.playerName||r?.id||'Eintrag '+(i+1))]),key:'record'});
     }
     const actions=document.createElement('div');actions.className='editor-buttons';root.append(actions);
-    if(!t.section)button(actions,'Kachel duplizieren',()=>edit(()=>{const copy=L.clone(t);copy.id=L.id();copy.elements.forEach(e=>e.id=L.id());appendTile(copy);}));
+    if(!t.section&&!current().native)button(actions,'Kachel duplizieren',()=>edit(()=>{const copy=L.clone(t);copy.id=L.id();copy.elements.forEach(e=>e.id=L.id());appendTile(copy);}));
     button(actions,'Kachel löschen',()=>edit(()=>{current().tiles=current().tiles.filter(v=>v!==t);tileId=null;elementId=null;}));
     divider(root);
     const elements=document.createElement('div');elements.className='property-elements';root.append(elements);
-    t.elements.forEach((e,i)=>{const label=e.source.startsWith('/item/')?e.source.slice(6).replace(/~1/g,'/').replace(/~0/g,'~'):e.text||e.source||e.type;const b=button(elements,(i+1)+'. '+label.slice(0,40),()=>select(t.id,e.id));b.setAttribute('aria-pressed',String(e.id===elementId));});
+    t.elements.forEach((e,i)=>{const label=e.label||(e.source.startsWith('/item/')?e.source.slice(6).replace(/~1/g,'/').replace(/~0/g,'~'):e.text||e.source||e.type);const b=button(elements,(i+1)+'. '+label.slice(0,40),()=>select(t.id,e.id));b.setAttribute('aria-pressed',String(e.id===elementId));});
     const add=document.createElement('div');add.className='editor-buttons';root.append(add);
     for(const[type,label]of [['text','+ Text'],['data','+ Daten'],['image','+ Grafik']])button(add,label,()=>edit(()=>{const e=L.element(type);t.elements.push(e);elementId=e.id;}));
     const e=selectedElement();if(!e)return;divider(root);
@@ -105,7 +131,7 @@
       if(e.type==='data')field(root,'Format',e.format,v=>e.format=v,{key:'format',choices:[['auto','Originalwert'],['number','Zahl'],['euro','Euro'],['million','Millionen €'],['percent','Prozent'],['date','Datum / Uhrzeit']]});
     }
     if(e.type==='image'){
-      field(root,'Bildadresse',e.url,v=>e.url=v,{key:'url'});
+      field(root,'Bildadresse',e.url,v=>{e.url=v;if(v)e.source='';},{key:'url'});
       button(root,'Grafik hochladen …',()=>$('image-file').click());
       field(root,'Bildanpassung',e.fit,v=>e.fit=v,{key:'fit',choices:[['contain','Vollständig'],['cover','Fläche ausfüllen']]});
       field(root,'Zoom',e.zoom,v=>e.zoom=v,{type:'number',min:1,max:5,step:.1,key:'zoom'});
@@ -120,13 +146,13 @@
     field(root,'Element-Hintergrund',e.background,v=>e.background=v,{type:'color',key:'background'});
     field(root,'Hintergrund-Deckkraft',e.backgroundOpacity,v=>e.backgroundOpacity=v,{type:'range',min:0,max:1,step:.01,key:'backgroundOpacity'});
     field(root,'Rundung (px)',e.radius,v=>e.radius=v,{type:'number',min:0,max:100,key:'radius'});
-    for(const[key,label]of [['x','Links (%)'],['y','Oben (%)'],['w','Breite (%)'],['h','Höhe (%)']])field(root,label,e[key],v=>{
-      e[key]=v;e.x=Math.min(e.x,100-e.w);e.y=Math.min(e.y,100-e.h);e.w=Math.min(e.w,100-e.x);e.h=Math.min(e.h,100-e.y);
-    },{type:'number',min:key==='w'||key==='h'?1:0,max:100,step:.1,key});
+    for(const[key,label]of [['x',current().native&&e.nativeKey?'Versatz links (%)':'Links (%)'],['y',current().native&&e.nativeKey?'Versatz oben (%)':'Oben (%)'],['w','Breite (%)'],['h','Höhe (%)']])field(root,label,e[key],v=>{
+      e[key]=v;if(!current().native){e.x=Math.min(e.x,100-e.w);e.y=Math.min(e.y,100-e.h);e.w=Math.min(e.w,100-e.x);e.h=Math.min(e.h,100-e.y);}
+    },{type:'number',min:key==='w'||key==='h'?1:current().native?-300:0,max:current().native?key==='w'||key==='h'?600:300:100,step:.1,key});
     const ea=document.createElement('div');ea.className='editor-buttons';root.append(ea);
     button(ea,'Nach vorne',()=>edit(()=>{t.elements=t.elements.filter(v=>v!==e);t.elements.push(e);}));
     button(ea,'Nach hinten',()=>edit(()=>{t.elements=t.elements.filter(v=>v!==e);t.elements.unshift(e);}));
-    button(ea,'Duplizieren',()=>edit(()=>{const copy=L.clone(e);copy.id=L.id();copy.x=Math.min(100-copy.w,copy.x+3);copy.y=Math.min(100-copy.h,copy.y+3);t.elements.push(copy);elementId=copy.id;}));
+    button(ea,'Duplizieren',()=>edit(()=>{const copy=L.clone(e);copy.id=L.id();copy.nativeKey='';copy.x=current().native?8:Math.min(100-copy.w,copy.x+3);copy.y=current().native?12:Math.min(100-copy.h,copy.y+3);t.elements.push(copy);elementId=copy.id;}));
     button(ea,'Element löschen',()=>edit(()=>{t.elements=t.elements.filter(v=>v!==e);elementId=null;}));
   }
   function templateFields(t){
@@ -199,9 +225,9 @@
   $('apply-source').onclick=()=>{const e=selectedElement(),source=$('source-picker').value;if(!e||!source){status('Zuerst ein Daten- oder Bildelement und eine Quelle auswählen.',true);return;}if(e.type==='text'){status('Bitte ein Daten- oder Bildelement wählen.',true);return;}edit(()=>e.source=source);};
   $('add-source').onclick=()=>{const t=selectedTile(),source=$('source-picker').value;if(!t||!source){status('Zuerst eine Kachel und eine Quelle auswählen.',true);return;}edit(()=>{const e=L.element('data',{source});t.elements.push(e);elementId=e.id;});};
   $('add-tile').onclick=()=>edit(()=>appendTile(L.tile({w:mode==='mobile'?current().columns:Math.min(3,current().columns),elements:[L.element('text')]})));
-  $('add-section').onclick=()=>{const section=$('section-type').value;if(current().tiles.some(t=>t.section===section)){status('Für diesen Hauptbereich gibt es bereits eine Vorlage. Bitte links auswählen.',true);return;}edit(()=>appendTile(L.sectionTile(section,mode==='mobile')));};
-  $('dashboard-template').onclick=()=>{if(confirm('Diese Ansicht durch die fünf Hauptbereiche des bestehenden Dashboards ersetzen? Ungespeicherte Änderungen lassen sich danach rückgängig machen.'))edit(()=>{design[mode]=L.seed(data,mode==='mobile');tileId=null;elementId=null;});};
-  for(const m of ['desktop','mobile'])$('mode-'+m).onclick=()=>{mode=m;tileId=current().tiles.find(t=>t.section)?.id||null;elementId=null;$('preview-width').value=m==='mobile'?390:1200;canvas.style.width=$('preview-width').value+'px';render();};
+  $('add-section').onclick=()=>{const section=$('section-type').value;if(current().tiles.some(t=>t.section===section||t.nativeKey===section)){status('Für diesen Hauptbereich gibt es bereits eine Vorlage. Bitte links auswählen.',true);return;}edit(()=>{const tile=current().native?window.KaneNative.seed(data,mode==='mobile').tiles.find(t=>t.nativeKey===section):L.sectionTile(section,mode==='mobile');appendTile(tile);});};
+  $('dashboard-template').onclick=()=>{if(confirm('Diese Ansicht als Entwurf durch die vollständige Standardansicht ersetzen? Bisherige Änderungen lassen sich rückgängig machen.'))edit(()=>{design[mode]=L.seed(data,mode==='mobile');tileId=current().tiles[0]?.id;elementId=null;});};
+  for(const m of ['desktop','mobile'])$('mode-'+m).onclick=()=>{mode=m;tileId=(current().native?current().tiles[0]:current().tiles.find(t=>t.section))?.id||null;elementId=null;$('preview-width').value=m==='mobile'?390:1480;canvas.style.width=$('preview-width').value+'px';render();};
   $('preview-width').onchange=()=>{const width=Math.max(280,Math.min(1920,Number($('preview-width').value)||390));$('preview-width').value=width;canvas.style.width=width+'px';if(previewFrame)previewFrame.style.width=width+'px';$('stage-label').textContent=(mode==='mobile'?'Mobil':'Desktop')+' · '+width+' px';};
   $('design-enabled').onchange=()=>edit(()=>design.enabled=$('design-enabled').checked);
   for(const [input,key]of [['grid-columns','columns'],['grid-row-height','rowHeight'],['grid-gap','gap']])$(input).onchange=()=>{
@@ -237,9 +263,13 @@
   $('refresh-sources').onclick=refresh;
   window.addEventListener('beforeunload',event=>{if(dirty){event.preventDefault();event.returnValue='';}});
   try{design=await L.json('api/dashboard-layout');const fresh=!design.desktop&&!design.mobile;
+    $('preview-width').value=Math.max(280,Math.min(1480,innerWidth));canvas.style.width=$('preview-width').value+'px';
+    const previous=L.clone(design),upgrade=['desktop','mobile'].filter(m=>design[m]&&!design[m].native);
+    for(const m of upgrade)design[m]=window.KaneNative.seed(data,m==='mobile');
+    if(upgrade.length){undo=[JSON.stringify(previous)];dirty=true;}
     design.desktop ||= L.seed(data);design.mobile ||= L.seed(data,true);buildCatalog();
-    for(const [key,title]of Object.entries(L.sections)){const option=document.createElement('option');option.value=key;option.textContent=title;$('section-type').append(option);}tileId=current().tiles.find(t=>t.section)?.id||null;render();
-    status(fresh?'Bereichsvorlagen geladen. Je Hauptbereich eine Spielerkachel mit Platzhaltern gestalten und speichern.':current().tiles.some(t=>t.section)?'Gespeichertes Layout mit Bereichsvorlagen geladen.':'Gespeichertes Layout geladen. Über „Bestehendes Dashboard als Vorlage“ die fünf Bereichsvorlagen laden.');
+    tileId=(current().native?current().tiles[0]:current().tiles.find(t=>t.section))?.id||null;render();
+    status(upgrade.length?'Original-Standardansicht als Entwurf geladen. Der bisher gespeicherte Stand bleibt bis zum Speichern erhalten und ist über Rückgängig erreichbar.':fresh?'Original-Standardansicht geladen. Alle Hauptkacheln und je eine Spielervorlage mit echten Bildern sind bearbeitbar.':'Gespeichertes Layout der Standardansicht geladen.');
     const errors=await L.liveData(data);await Promise.all([L.boundData(data,design.desktop),L.boundData(data,design.mobile)]);buildCatalog();properties();sourceOptions();
     if(errors.length)$('source-status').textContent+=' Einige API-Quellen sind momentan nicht verfügbar; der Report bleibt nutzbar.';
   }catch(error){status('Editor konnte nicht geladen werden: '+error.message,true);document.querySelectorAll('button,input,select').forEach(c=>c.disabled=true);}

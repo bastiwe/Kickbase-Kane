@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.84
+
+- Bearbeitet die tatsächliche Standardansicht mit ihren vorhandenen HTML-Kacheln und CSS-Stilen, einschließlich Budget, Kaderwert, Kaderprognose, Kaderwertgrafik und Managerbudgets. Unveränderte Vorlagen erhalten das Originaldesign.
+- Zeigt je Spielerbereich genau eine Beispielkachel mit echtem Spielerbild und Vereinswappen zum Ausrichten. Positions-, Größen-, Schrift- und Farbänderungen gelten für alle Spieler dieses Bereichs.
+- Unterstützt Auswählen, Ziehen und Skalieren direkt in der Standardansicht sowie zusätzliche Text-, Daten- und Bildelemente. Desktop-/Mobilansichten bleiben getrennt; Desktop startet mit der tatsächlichen Maximalbreite von 1.480 px.
+- Öffnet ältere freie Layouts zunächst als reversible Standardansicht-Entwürfe. Der gespeicherte Stand bleibt bis zum ausdrücklichen Speichern erhalten und ist über Rückgängig erreichbar.
+
 ## 0.2.83
 
 - Zeigt im Editor eine echte Vorschau des vollständigen Dashboards mit aktuellen Report-/API-Daten, Spielerbildern, Vereinswappen und allen passenden Spielerkacheln.

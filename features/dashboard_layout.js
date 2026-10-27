@@ -112,6 +112,7 @@ window.KaneLayout = (() => {
       element('data',{text:'Ø Punkte: ',source:'/item/season',format:'number',x:7,y:78,w:90,h:15,fontSize:14})]});
   }
   function seed(data, mobile=false) {
+    if(window.KaneNative)return window.KaneNative.seed(data,mobile);
     const columns=mobile?4:12;
     const layout={columns,rowHeight:32,gap:12,tiles:[]};
     for(const [index,key]of Object.keys(sections).entries()){
@@ -237,5 +238,5 @@ window.KaneLayout = (() => {
     }
     await Promise.all([...requests.values()].map(run=>run()));
   }
-  return {id,clone,escapeToken,rowKey,valueAt,context,enrich,sections,aliases,sectionItems,sectionTile,normalizeItem,placeholderItem,runtimeLayout,safeImage,rgba,format,element,tile,playerTile,seed,render,positionTile,positionElement,gridStyle,json,liveData,boundData};
+  return {id,clone,escapeToken,rowKey,valueAt,context,enrich,sections,aliases,sectionItems,sectionTile,normalizeItem,placeholderItem,runtimeLayout,safeImage,rgba,format,element,tile,playerTile,seed,render,renderElement,positionTile,positionElement,gridStyle,json,liveData,boundData};
 })();

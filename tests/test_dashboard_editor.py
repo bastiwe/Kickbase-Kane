@@ -23,6 +23,26 @@ def design_fixture():
 
 
 class DesignValidationTests(unittest.TestCase):
+    def test_original_dashboard_overrides_are_preserved_without_capturing_players(self):
+        design = design_fixture()
+        layout = design['desktop']
+        layout['native'] = True
+        tile = layout['tiles'][0]
+        tile.update(nativeKey='budget', order=0, changed=['color'])
+        element = tile['elements'][0]
+        element.update(nativeKey='value', label='Budget', scope='tile', changed=['x', 'w'], x=-7, w=130)
+        clean = validate_design(design)
+        self.assertTrue(clean['desktop']['native'])
+        self.assertEqual(clean['desktop']['tiles'][0]['elements'][0]['x'], -7)
+        self.assertEqual(clean['desktop']['tiles'][0]['elements'][0]['w'], 130)
+        self.assertEqual(clean['desktop']['tiles'][0]['changed'], ['color'])
+        self.assertEqual(validate_design(clean), clean)
+        for patch in [{'nativeKey': 'body'}, {'changed': ['cssText']}]:
+            invalid = copy.deepcopy(design)
+            invalid['desktop']['tiles'][0].update(patch)
+            with self.assertRaises(ValueError):
+                validate_design(invalid)
+
     def test_repeated_sections_roundtrip_and_never_bind_concrete_players(self):
         design = design_fixture()
         tile = design['desktop']['tiles'][0]

@@ -4,10 +4,10 @@
 if(window.KICKBASE_DASHBOARD?.preview){
   document.body.classList.add('dashboard-preview');
   document.querySelectorAll('.report-actions button').forEach(button=>button.disabled=true);
-  document.addEventListener('click',event=>{if(event.target.closest('a'))event.preventDefault();});
+  document.addEventListener('click',event=>{if(event.target.closest('a,.report-actions')){event.preventDefault();event.stopImmediatePropagation();}},true);
   let resolve,received=false;
   const listeners=new Set(),ready=new Promise(done=>resolve=done);
-  window.KANE_PREVIEW={ready,onChange:listener=>listeners.add(listener)};
+  window.KANE_PREVIEW={ready,onChange:listener=>listeners.add(listener),send:message=>parent.postMessage(message,location.origin)};
   window.addEventListener('message',event=>{
     if(event.origin!==location.origin||event.source!==parent||parent===window||event.data?.type!=='kane-preview-design')return;
     const state=event.data.state;
