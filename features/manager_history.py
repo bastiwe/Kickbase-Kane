@@ -237,10 +237,9 @@ def mvp_events(day, entries):
 
 
 def goal_machine_events(day, entries):
-    """Award most starting-eleven goals; uncertain lineups remain unresolved."""
+    """Award every manager tied for most starting-eleven goals the full prize."""
     usable = bool(entries) and all(
         not entry['roster']['issues'] and not entry.get('fetch_errors')
-        and finite(entry.get('md', {}).get('mdp'))
         and finite(entry.get('lineup', {}).get('goals_min'))
         and entry['lineup']['goals_min'] == entry['lineup']['goals_max']
         for entry in entries.values()
@@ -249,22 +248,18 @@ def goal_machine_events(day, entries):
     finalists = []
     if usable and max(totals.values(), default=0) > 0:
         most_goals = max(totals.values())
-        leaders = [name for name, total in totals.items() if total == most_goals]
-        most_points = max(entries[name]['md']['mdp'] for name in leaders)
-        finalists = [name for name in leaders if entries[name]['md']['mdp'] == most_points]
+        finalists = [name for name, total in totals.items() if total == most_goals]
     winner = finalists[0] if len(finalists) == 1 else None
     result = []
     for name in entries:
-        unresolved_tie = len(finalists) > 1 and name in finalists
-        amount = None if not usable else (250_000 if name == winner else 0)
-        amount_max = 250_000 if unresolved_tie else amount
+        amount = None if not usable else (250_000 if name in finalists else 0)
         result.append({
             'key': f'{name}:md:{day}:goal_machine', 'manager': name,
             'kind': 'Tormaschine', 'day': day,
-            'status': 'offen' if not usable or unresolved_tie else 'geschätzt',
-            'amount': amount, 'amount_max': amount_max,
-            'goals_by_manager': totals, 'winner': winner,
-            'rule': 'meiste Tore der aktiven Startelf zum Anpfiff; bei Torgleichstand mehr Managerpunkte',
+            'status': 'offen' if not usable else 'geschätzt',
+            'amount': amount, 'amount_max': amount,
+            'goals_by_manager': totals, 'winner': winner, 'winners': finalists,
+            'rule': 'meiste Tore der aktiven Startelf zum Anpfiff; bei Torgleichstand volle Prämie für alle Führenden',
         })
     return result
 

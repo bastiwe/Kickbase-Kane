@@ -158,7 +158,7 @@ class ManagerHistoryTests(unittest.TestCase):
         self.assertEqual(events['A']['amount'], 1_000_000)
         self.assertEqual(events['B']['amount'], 0)
 
-    def test_goal_machine_uses_starting_goals_and_manager_points_as_tiebreaker(self):
+    def test_goal_machine_rewards_equal_starting_goals_despite_different_manager_points(self):
         base = {'roster': {'issues': []}, 'fetch_errors': []}
         entries = {
             'A': {**base, 'goals': {'one': 2, 'bench': 3}, 'md': {'mdp': 1_000},
@@ -170,10 +170,10 @@ class ManagerHistoryTests(unittest.TestCase):
         }
         events = {event['manager']: event for event in goal_machine_events(3, entries)}
         self.assertEqual(events['B']['amount'], 250_000)
-        self.assertEqual(events['A']['amount'], 0)
+        self.assertEqual(events['A']['amount'], 250_000)
         self.assertEqual(events['C']['amount'], 0)
 
-    def test_goal_machine_keeps_equal_goals_and_points_open(self):
+    def test_goal_machine_rewards_all_managers_with_equal_goals_and_points(self):
         base = {'roster': {'issues': []}, 'fetch_errors': [], 'md': {'mdp': 1_000},
                 'lineup': {'goals_min': 1, 'goals_max': 1}}
         entries = {
@@ -181,9 +181,18 @@ class ManagerHistoryTests(unittest.TestCase):
             'B': {**base, 'goals': {'two': 1}},
         }
         events = {event['manager']: event for event in goal_machine_events(3, entries)}
-        self.assertEqual(events['A']['status'], 'offen')
-        self.assertEqual(events['A']['amount'], 0)
-        self.assertEqual(events['A']['amount_max'], 250_000)
+        for event in events.values():
+            self.assertEqual(event['status'], 'geschätzt')
+            self.assertEqual(event['amount'], 250_000)
+            self.assertEqual(event['amount_max'], 250_000)
+            self.assertEqual(event['winners'], ['A', 'B'])
+
+    def test_goal_machine_does_not_reward_a_goalless_matchday(self):
+        entry = {'roster': {'issues': []}, 'fetch_errors': [],
+                 'lineup': {'goals_min': 0, 'goals_max': 0}}
+        for event in goal_machine_events(7, {'A': entry, 'B': entry}):
+            self.assertEqual(event['amount'], 0)
+            self.assertEqual(event['winners'], [])
 
     def test_goal_machine_does_not_award_uncertain_lineup_goals(self):
         entry = {'roster': {'issues': []}, 'fetch_errors': [], 'md': {'mdp': 1_000},

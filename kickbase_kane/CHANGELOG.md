@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.73
+
+- Vergibt bei Torgleichstand für Tormaschine die volle Prämie von 250.000 € an alle Manager mit der höchsten positiven Startelf-Torzahl, unabhängig von ihren Managerpunkten.
+- Berechnet die Erfolgsboni und Kontostandsschätzungen vergangener Spieltage entsprechend neu.
+
 ## 0.2.72
 
 - Ruft historische Startaufstellungen, Spielerpunkte und Torereignisse je Manager und Spieltag direkt aus dem Kickbase-Teamcenter ab.
