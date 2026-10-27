@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.66
+
+- Übernimmt die bewährte Bild-/Wappenkomposition der Platzauswahl unverändert für Desktop-Startelfkarten.
+- Verhindert beim Fixieren eines bereits aufgestellten Spielers eine Neuberechnung und Umsortierung der Startelf.
+
 ## 0.2.65
 
 - Richtet Spielerbild und Vereinswappen auf Desktop-Startelfkarten weiter links wie in „Letzte Transfers“ aus.
