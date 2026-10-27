@@ -124,6 +124,21 @@ def activity_market_value_day(value):
     return activity_time.date().isoformat()
 
 
+def recent_form_points(profile, limit=3):
+    """Return Kickbase profile form points; ``ph`` is newest-first."""
+    values = []
+    for entry in profile.get('ph', []) if isinstance(profile, dict) else []:
+        if not isinstance(entry, dict) or entry.get('p') is None:
+            continue
+        try:
+            values.append(float(entry['p']))
+        except (TypeError, ValueError):
+            continue
+        if len(values) >= limit:
+            break
+    return values
+
+
 def normalize_lineup(payload):
     """Normalize the v4 slot-based lineup, including empty starting slots."""
     if not isinstance(payload, dict):
@@ -768,11 +783,10 @@ class LiveKickbase:
                 previous = old.get(player['id'], {})
                 live_item = raw[player['id']]
                 live_profile = live_profiles.get(player['id'], live_item)
-                live_ph = [entry.get('p') for entry in live_profile.get('ph', [])
-                           if isinstance(entry, dict) and entry.get('p') is not None]
+                live_ph = recent_form_points(live_profile)
                 if live_ph:
-                    player['recent'] = [float(value) for value in live_ph[-3:]]
-                    player['l3'] = sum(player['recent']) / len(player['recent'])
+                    player['recentForm'] = live_ph
+                    player['l3'] = sum(live_ph) / len(live_ph)
                 if live_profile.get('ap') is not None:
                     player['season'] = float(live_profile['ap'])
                 if live_profile.get('tp') is not None:
@@ -796,7 +810,7 @@ class LiveKickbase:
                 if not raw[player['id']].get('ln') and previous.get('name') and not re.fullmatch(r'Spieler\s+\d+', previous['name']):
                     player['name'] = previous['name']
                 for field in ('l3', 'season', 'average', 'li', 'change', 'lastMvChange', 'opponent',
-                              'matchdayChange', 'recent', 'previous', 'history', 'fixtures',
+                              'matchdayChange', 'recent', 'recentForm', 'previous', 'history', 'fixtures',
                               'minutes', 'cards', 'goals', 'assists', 'purchasePrice', 'profitLoss',
                               'teamImage'):
                     if player.get(field) is None and previous.get(field) is not None:

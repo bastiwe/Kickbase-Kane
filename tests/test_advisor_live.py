@@ -5,12 +5,16 @@ from unittest.mock import Mock, patch
 
 import requests
 
-from features.advisor_live import LiveKickbase
+from features.advisor_live import LiveKickbase, recent_form_points
 from features.ai_advisor import prepare_context, ask_advisor
 from test_ai_advisor import fixture
 
 
 class LiveTests(unittest.TestCase):
+    def test_profile_form_is_read_newest_first(self):
+        profile = {'ph': [{'p': 90}, {'p': 345}, {'p': 214}, {'p': 294}, {'p': 209}]}
+        self.assertEqual(recent_form_points(profile), [90.0, 345.0, 214.0])
+
     def setup_live(self, acquired=False):
         report, state = fixture()
         report.update(user='me', league='league')
@@ -25,6 +29,7 @@ class LiveTests(unittest.TestCase):
                      '/leagues/league/squad': {'it': squad}, '/leagues/league/market': {'it': market},
                      '/leagues/league/me/budget': {'b': 70}}
         client.get = Mock(side_effect=lambda path: responses[path])
+        client.player_profiles = Mock(return_value={})
         return client, report, state
 
     def test_live_values_replace_snapshot_without_mutation_and_exclude_owned_market(self):

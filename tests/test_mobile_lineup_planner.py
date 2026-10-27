@@ -55,8 +55,19 @@ class MobileLineupPlannerTests(unittest.TestCase):
         self.assertIn('rank=fixture.rank==null?null:Number(fixture.rank)', self.template)
         self.assertIn('class="lineup-key-stats"', self.template)
         self.assertIn('class="lineup-status ', self.template)
-        self.assertIn("slice(-3).reverse()", self.template)
+        self.assertIn('p.recentForm.slice(0,3)', self.template)
+        self.assertIn("venueCode=/^heim/i.test(venue)?'H'", self.template)
+        self.assertIn("venueCode.toUpperCase()+')'", self.template)
         self.assertIn('.slot .desktop-lineup-card{position:relative;display:flex;', self.template)
+
+    def test_desktop_bank_uses_matchday_cards_with_sale_and_keep_actions(self):
+        self.assertIn('class="bank-entry desktop-bank-entry"', self.template)
+        self.assertIn('.bank{grid-template-columns:repeat(4,minmax(0,1fr))', self.template)
+        self.assertIn('.desktop-bank-entry .desktop-lineup-card{position:relative;display:flex;',
+                      self.template)
+        self.assertIn('.desktop-bank-entry .plan-actions{display:grid!important;', self.template)
+        self.assertIn('data-sell="', self.template)
+        self.assertIn('data-lock="', self.template)
 
     def test_profit_loss_is_shown_on_cards_and_candidate_picker(self):
         self.assertGreaterEqual(self.template.count("' · G/V '+profit"), 1)
@@ -126,7 +137,8 @@ class MobileLineupPlannerTests(unittest.TestCase):
         self.assertIn('left:56px;bottom:0;width:auto;height:100%;max-width:192px', self.template)
         self.assertIn('.candidate-option{min-height:210px;', self.template)
         self.assertIn('.slot .player-art,.slot .card-copy,.slot .money{display:none}', self.template)
-        self.assertIn('.slot .lineup-photo{display:grid;width:70px;height:70px;', self.template)
+        self.assertIn('.slot .lineup-photo{display:grid;width:76px;height:76px;', self.template)
+        self.assertIn('height:138%;max-width:138%', self.template)
         self.assertIn('@media(max-width:640px){.card,.bank .card{min-height:168px;',
                       self.template)
         self.assertIn('.card .player-art,.candidate-option .player-art{inset:auto auto 0 -100px;width:240px;height:180%',

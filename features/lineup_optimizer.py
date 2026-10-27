@@ -303,6 +303,7 @@ def history_context(history, player_id):
             'cards': number(row.get('k') if 'k' in row else row.get('cards')),
         })
     result = {'recent': [number(v) for v in recent['p']],
+              'recentForm': [number(v) for v in recent['p'].iloc[::-1]],
               'l3': number(recent['p'].mean()) if not recent.empty else None,
               'season': number(current['p'].mean()) if not current.empty else None,
               'average': number(previous['p'].mean()) if not previous.empty else None,

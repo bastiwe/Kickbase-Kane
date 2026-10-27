@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.68
+
+- Kennzeichnet den nächsten Gegner auf den Matchday-Karten mit H oder A für Heim- und Auswärtsspiele.
+- Liest die letzten drei Kickbase-Punktwerte in der korrekten Reihenfolge (aktuellstes Spiel zuerst).
+- Vergrößert die Spielerbilder im runden Porträtbereich für besser erkennbare Gesichter.
+- Verwendet die vertikalen Matchday-Karten auch für Bankspieler und integriert auf Desktop die Aktionen Verkauf und Halten; mobil bleiben die Wischgesten erhalten.
+
 ## 0.2.67
 
 - Ersetzt die bisherigen Desktop-Spielfeldkarten durch kompakte, vertikale Matchday-Karten nach der gelieferten Referenz.
