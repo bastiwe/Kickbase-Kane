@@ -2,15 +2,13 @@ from datetime import datetime, timedelta
 from email.message import EmailMessage
 from html import escape
 from numbers import Number
-from pathlib import Path
 from zoneinfo import ZoneInfo
 import json
 import smtplib
 import os
 import pandas as pd
 from features.predictions.predictions import REMOVED_REPORT_COLUMNS
-from features.player_upgrades import player_upgrades
-from features.manager_history import render_audit
+from features.report_lineup import attachment_payload, best_budget_lineup, number
 
 COLUMN_LABELS = {
     "recommendation": "Action",
@@ -171,19 +169,6 @@ POSITION_LABELS = {
     "4": "ST",
 }
 
-FORMATIONS = [
-    ("4-4-2", {1: 1, 2: 4, 3: 4, 4: 2}),
-    ("3-4-3", {1: 1, 2: 3, 3: 4, 4: 3}),
-    ("5-3-2", {1: 1, 2: 5, 3: 3, 4: 2}),
-    ("5-4-1", {1: 1, 2: 5, 3: 4, 4: 1}),
-    ("3-6-1", {1: 1, 2: 3, 3: 6, 4: 1}),
-    ("4-2-4", {1: 1, 2: 4, 3: 2, 4: 4}),
-    ("4-3-3", {1: 1, 2: 4, 3: 3, 4: 3}),
-    ("3-5-2", {1: 1, 2: 3, 3: 5, 4: 2}),
-    ("4-5-1", {1: 1, 2: 4, 3: 5, 4: 1}),
-    ("5-2-3", {1: 1, 2: 5, 3: 2, 4: 3}),
-]
-
 BACKTEST_SUMMARY_PATH = "model_backtest_summary.json"
 
 
@@ -199,7 +184,7 @@ def load_backtest_summary():
         return None
 
 def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
-    """Sends an email with the provided DataFrames as HTML tables."""
+    """Send the compact HTML report; optional optimizer paths supply analysis data only."""
 
     if not email:
         print("\nNo email provided, skipping email sending.")
@@ -221,20 +206,6 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
     msg["Subject"] = f"Kickbase: {today}"
     msg["From"] = EMAIL_ADDRESS
     msg["To"] = email
-
-    comparable_budgets = (
-        not budget_df.empty and "User" in budget_df and "Available Budget" in budget_df
-        and budget_df["Available Budget"].notna().all()
-        and not budget_df.attrs.get("manager_audit")
-    )
-    top_budget = (
-        budget_df.loc[budget_df["Available Budget"].idxmax(), "User"]
-        if comparable_budgets else "Nicht bestimmbar"
-    )
-    manager_audit_html = (
-        render_audit(budget_df.attrs["manager_audit"])
-        if budget_df.attrs.get("manager_audit") else ""
-    )
 
     backtest_summary = load_backtest_summary()
 
@@ -622,267 +593,63 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
     def build_lineup_advice():
         if squad_df.empty or "position" not in squad_df:
             return ""
-
-        def numeric_or_none(value):
-            if isinstance(value, Number) and value == value:
-                return float(value)
-            if value is None:
-                return None
-            try:
-                normalized = str(value).strip()
-                if normalized in {"", "-", "nan", "NaN", "None"}:
-                    return None
-                if "," in normalized:
-                    normalized = normalized.replace(".", "").replace(",", ".")
-                return float(normalized)
-            except (TypeError, ValueError):
-                return None
-
-        def has_points(column):
-            return column in squad_df and squad_df[column].apply(lambda value: numeric_or_none(value) is not None).any()
-
-        def score_label(column):
-            return {
-                "last_3_points": "letzte 3 Spiele",
-                "current_season_points": "aktuelle Saison",
-                "last_season_avg_points": "Vorsaison Ø",
-                "last_season_points": "Vorsaison gesamt",
-                "kickbase_average_points": "Saison-Punkteschnitt je Einsatz",
-                "lineup_score": "beste verfügbare Punktebasis",
-            }.get(column, "Punktebasis")
-
-        def best_lineup(score_column):
-            if score_column not in squad_df:
-                return None
-
-            pool = squad_df.copy()
-            if "player_status" in pool:
-                pool = pool[~pool["player_status"].isin([
-                    "Verletzt", "Reha", "Rotgesperrt", "Gelb-Rot-Sperre",
-                    "Nicht im Kader", "Nicht in Liga", "Abwesend",
-                ])].copy()
-            pool["_lineup_score"] = pool[score_column].apply(lambda value: numeric_or_none(value))
-            for fallback_column in ["last_season_avg_points", "mv"]:
-                if fallback_column not in pool:
-                    pool[fallback_column] = 0
-            if not pool["_lineup_score"].notna().any():
-                return None
-
-            options = []
-            for formation, required in FORMATIONS:
-                selected_parts = []
-                complete = True
-                for pos, amount in required.items():
-                    position_pool = pool[pool["position"].map(canonical_position) == pos].copy()
-                    position_pool = position_pool.sort_values(
-                        ["_lineup_score", "last_season_avg_points", "mv"],
-                        ascending=[False, False, False],
-                    )
-                    if len(position_pool) < amount:
-                        complete = False
-                        break
-                    selected_parts.append(position_pool.head(amount))
-                if not complete:
-                    continue
-
-                selected = pd.concat(selected_parts)
-                total = selected["_lineup_score"].fillna(0).sum()
-                options.append((formation, total, selected))
-
-            if not options:
-                return None
-            return sorted(options, key=lambda item: item[1], reverse=True)[0]
-
-        def lineup_players_html(selected):
-            rows = []
-            for _, row in selected.sort_values(["position", "_lineup_score"], ascending=[True, False]).iterrows():
-                name = escape(player_name(row))
-                url = player_url(row)
-                name_html = (
-                    f'<a href="{escape(url, quote=True)}" target="_blank" style="color:#111827;text-decoration:none;font-weight:700;">{name}</a>'
-                    if url else f'<b>{name}</b>'
-                )
-                rows.append(
-                    '<span style="display:inline-block;background:#ffffff;border:1px solid #e5e7eb;'
-                    'border-radius:6px;padding:5px 7px;margin:3px;font-size:12px;white-space:nowrap;">'
-                    f'{position_label(row.get("position"))} {name_html} '
-                    f'<span style="color:#6b7280;">{format_number(row.get("_lineup_score"))}</span>'
-                    '</span>'
-                )
-            return "".join(rows)
-
-        squad_positions = squad_df["position"].map(canonical_position)
-        counts = {pos: int((squad_positions == pos).sum()) for pos in [1, 2, 3, 4]}
-        possible = []
-        missing_by_formation = []
-        for name, required in FORMATIONS:
-            missing = {pos: max(0, required[pos] - counts.get(pos, 0)) for pos in required}
-            missing_total = sum(missing.values())
-            if missing_total == 0:
-                possible.append(name)
-            missing_by_formation.append((name, missing_total, missing))
-
-        best_options = sorted(missing_by_formation, key=lambda item: (item[1], item[0]))[:3]
-        possible_text = ", ".join(possible) if possible else "noch keine"
-        counts_text = " / ".join(f"{POSITION_LABELS[pos]} {counts.get(pos, 0)}" for pos in [1, 2, 3, 4])
-
-        usable_score_columns = [
-            column
-            for column in [
-                "kickbase_average_points",
-                "last_3_points",
-                "current_season_points",
-                "last_season_avg_points",
-                "last_season_points",
-                "lineup_score",
-            ]
-            if has_points(column)
-        ]
-
-        primary = None
-        primary_column = usable_score_columns[0] if usable_score_columns else "lineup_score"
-        for score_column in usable_score_columns:
-            primary = best_lineup(score_column)
-            if primary:
-                primary_column = score_column
-                break
-        if primary is None:
-            primary = best_lineup("lineup_score")
-            primary_column = "lineup_score"
-
-        secondary = None
-        secondary_column = primary_column
-        for score_column in usable_score_columns:
-            if score_column == primary_column:
-                continue
-            secondary = best_lineup(score_column)
-            if secondary:
-                secondary_column = score_column
-                break
-
-        print(
-            "Squad lineup analysis: "
-            f"counts={counts_text}, usable score columns={usable_score_columns or ['none']}, "
-            f"selected basis={primary_column if primary else 'none'}, "
-            f"formation={primary[0] if primary else 'none'}."
+        payload = attachment_payload(attachment_path)
+        if payload is not None:
+            pool, cash = payload["players"], payload.get("budget")
+        else:
+            pool = []
+            for index, row in squad_df.iterrows():
+                pool.append({
+                    "id": str(row.get("player_id", index)), "name": player_name(row),
+                    "owned": True, "position": canonical_position(row.get("position")),
+                    "mv": number(row.get("mv")),
+                    "season": number(row.get("kickbase_average_points")),
+                    "l3": number(row.get("last_3_points")),
+                    "li": number(row.get("starter_rate")),
+                    "change": number(row.get("predicted_mv_target")), "fixtures": [],
+                })
+            own_name = budget_df.attrs.get("own_user")
+            own = budget_df[budget_df["User"] == own_name] if own_name and "User" in budget_df else budget_df.iloc[:0]
+            if own.empty and "Cash Basis" in budget_df:
+                own = budget_df[budget_df["Cash Basis"].astype(str).str.startswith("API")]
+            if own.empty and len(budget_df) == 1:
+                own = budget_df
+            cash = number(own.iloc[0].get("Budget")) if len(own) == 1 else None
+        choice = best_budget_lineup(pool, cash)
+        if choice is None:
+            message = ("Keine vollständige Startelf mit Restbudget ≥ 0 € nach Bankverkäufen möglich."
+                       if number(cash) is not None else
+                       "Beste Elf nicht berechenbar: eigener Kontostand fehlt.")
+            content = '<p style="font-size:13px;">' + message + '</p>'
+        else:
+            players_html = "".join(
+                '<span style="display:inline-block;background:#fff;border:1px solid #e5e7eb;'
+                'border-radius:6px;padding:5px 7px;margin:3px;font-size:12px;">'
+                + position_label(p.get("position")) + ' <b>' + escape(str(p.get("name") or "Spieler"))
+                + '</b></span>' for p in choice["players"]
+            )
+            sales = ", ".join(str(p.get("name") or "Spieler") for p in choice["sales"])
+            content = (
+                '<p style="font-size:14px;"><b>Beste Elf: ' + escape(choice["formation"]) + '</b>'
+                ' · Dashboard-Bewertung: ' + format_number(choice["score"]) + '</p>'
+                '<div>' + players_html + '</div>'
+                '<p style="font-size:13px;"><b>Restbudget nach Bankverkäufen: '
+                + format_number(choice["budget"]) + ' €</b></p>'
+                '<p style="font-size:12px;color:#6b7280;">'
+                + ('Eingeplante Verkäufe zum Marktwert: ' + escape(sales) + '.'
+                   if sales else 'Keine Bankverkäufe erforderlich.') + '</p>'
+            )
+        return (
+            '<div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;'
+            'padding:14px 16px;margin:0 0 24px 0;">'
+            '<h3 style="color:#1f2933;margin:0 0 10px 0;font-size:16px;">Kaderanalyse</h3>'
+            '<p style="font-size:12px;color:#6b7280;">Bewertung wie im HA-Startelfplaner; '
+            'Restbudget mindestens 0 €. Nicht aufgestellte Spieler werden als Verkäufe zum Marktwert eingeplant.</p>'
+            + content + '</div>'
         )
-
-        if primary:
-            primary_formation, primary_total, primary_selected = primary
-            primary_html = (
-                '<div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;padding:11px 12px;margin:10px 0;">'
-                '<div style="font-size:12px;color:#6b7280;font-weight:800;text-transform:uppercase;">Beste Elf</div>'
-                f'<div style="font-size:18px;color:#111827;font-weight:900;margin-top:3px;">{escape(primary_formation)} '
-                f'<span style="font-size:13px;color:#6b7280;font-weight:700;">nach {escape(score_label(primary_column))}: {format_number(primary_total)}</span></div>'
-                f'<div style="margin-top:8px;">{lineup_players_html(primary_selected)}</div>'
-                '</div>'
-            )
-        else:
-            primary_html = (
-                '<div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;padding:11px 12px;margin:10px 0;">'
-                '<b>Beste Elf:</b> Noch keine vollständige Formation mit verwertbaren Punktdaten berechenbar.'
-                '</div>'
-            )
-
-        secondary_html = ""
-        if secondary and secondary_column != primary_column:
-            secondary_formation, secondary_total, secondary_selected = secondary
-            secondary_html = (
-                '<div style="font-size:13px;color:#374151;margin:8px 0 0 0;">'
-                f'<b>Vergleich nach {escape(score_label(secondary_column))}:</b> {escape(secondary_formation)} '
-                f'mit {format_number(secondary_total)} Punkten. '
-                f'<span style="color:#6b7280;">{escape(", ".join(player_name(row) for _, row in secondary_selected.iterrows()))}</span>'
-                '</div>'
-            )
-
-        squad_size = len(squad_df)
-        squad_slots_left = max(0, 16 - squad_size)
-        if squad_size >= 16:
-            squad_size_style = "background:#fee2e2;color:#991b1b;"
-        elif squad_size >= 14:
-            squad_size_style = "background:#fef3c7;color:#92400e;"
-        else:
-            squad_size_style = "background:#dcfce7;color:#166534;"
-
-        team_limit_html = ""
-        if "team_name" in squad_df:
-            team_counts = squad_df["team_name"].dropna().astype(str).value_counts().sort_index()
-            team_chips = []
-            for team, amount in team_counts.items():
-                if amount >= 3:
-                    style = "background:#fee2e2;color:#991b1b;"
-                elif amount == 2:
-                    style = "background:#fef3c7;color:#92400e;"
-                else:
-                    style = "background:#f3f4f6;color:#374151;"
-                team_chips.append(
-                    f'<span style="display:inline-block;{style}font-weight:700;border-radius:999px;'
-                    f'padding:4px 9px;margin:2px;white-space:nowrap;">{escape(team)} {amount}/3</span>'
-                )
-            team_limit_html = "".join(team_chips)
-
-        needs = []
-        for _, _, missing in best_options:
-            for pos, amount in missing.items():
-                needs.extend([pos] * amount)
-        needed_positions = []
-        for pos in [1, 2, 3, 4]:
-            if pos in needs:
-                needed_positions.append(pos)
-
-        upgrades = player_upgrades(
-            primary[2], market_df, canonical_position,
-            squad_df.get("player_id", pd.Series(dtype=object)),
-        ) if primary else []
-        market_rows = []
-        for duel in upgrades[:3]:
-            candidate, starter = duel["candidate"], duel["starter"]
-            price = numeric_or_none(candidate.get("mv"))
-            sale_value = numeric_or_none(starter.get("mv"))
-            cost = (
-                f' Marktwertdifferenz: {format_number(price - sale_value)} € vor Overpay.'
-                if price is not None and sale_value is not None else ""
-            )
-            market_rows.append(
-                f'<li><b>{escape(player_name(candidate))}</b> statt '
-                f'<b>{escape(player_name(starter))}</b> '
-                f'({position_label(duel["position"])}): '
-                f'{duel["target"]:.1f} statt {duel["current"]:.1f} Punkte je Einsatz '
-                f'(<b>+{duel["gain"]:.1f}</b>, {escape(duel["basis"])}).{cost}</li>'
-            )
-        if primary:
-            need_label = "Spielervergleich"
-            need_reason = (
-                "Positionsgleiche Alternativen zur unten gezeigten rechnerischen Elf. "
-                "Verglichen werden einzelne Spieler auf derselben Saisonbasis. "
-                "Historische Punkteschnitte sind keine Prognose; Budget und geplante Verkäufe "
-                "sind in dieser Elf nicht berücksichtigt."
-            )
-        else:
-            need_label = "Startelf unvollständig"
-            need_reason = "Ohne vollständige berechenbare Elf ist kein konkreter Tauschvergleich möglich."
-        strengthen_html = primary_html
-        market_html = (
-            '<ul style="margin:8px 0 0 18px;padding:0;font-size:13px;color:#374151;">'
-            + "".join(market_rows) + "</ul>"
-            if market_rows else
-            '<p style="font-size:13px;color:#6b7280;margin:8px 0 0 0;">'
-            'Kein positionsgleicher Marktspieler im Report mit höherem vergleichbarem '
-            'Punkteschnitt je Einsatz.</p>'
-        )
-
-        return f"""
-            <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin:0 0 24px 0;">
-                <h3 style="color:#1f2933;margin:0 0 10px 0;font-size:16px;">Kaderanalyse</h3>
-                <p style="font-size:13px;color:#374151;margin:0 0 4px 0;"><b>Verstärkungspotenzial:</b> {need_label}. {need_reason}</p>
-                {strengthen_html}
-                <p style="font-size:13px;color:#374151;margin:0 0 4px 0;"><b>Mögliche Tausche:</b></p>
-                {market_html}
-            </div>
-        """
 
     def prepare_df(df):
-        result = df.drop(columns=REMOVED_REPORT_COLUMNS + ["top_player_tag"], errors="ignore").copy()
+        result = df.drop(columns=REMOVED_REPORT_COLUMNS + ["top_player_tag", "player_id", "Cash Basis"], errors="ignore").copy()
 
         if {"starter_rate", "recent_starts", "recent_apps"}.issubset(result.columns):
             result["starter_rate"] = result.apply(
@@ -947,6 +714,11 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
             ],
             errors="ignore",
         )
+
+        if "player_status" in result and "starter_rate" in result:
+            columns = [col for col in result.columns if col != "starter_rate"]
+            columns.insert(columns.index("player_status") + 1, "starter_rate")
+            result = result[columns]
 
         for col in result.columns:
             if col in {"recommendation", "risk", "top_player_tag", "buy_type", "buy_priority", "prediction_confidence", "sell_advice", "team_limit_warning", "opponent_pressure", "player_status"}:
@@ -1059,75 +831,6 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
             f'<tbody>{"".join(rows)}</tbody>{footer_html}</table></div>'
         )
 
-    action_legend = f"""
-        <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin:0 0 24px 0;">
-            <h3 style="color:#1f2933;margin:0 0 10px 0;font-size:16px;">Legende</h3>
-            <p style="font-size:13px;color:#4b5563;margin:0 0 8px 0;">
-                Erw. 1T zeigt die geschätzte Änderung für den nächsten Marktwertsprung.
-            </p>
-            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
-                <b>Markt:</b>
-                Markt-Empfehlungen zeigen ausschließlich positive 1T-Prognosen, sortiert nach Ablauf.
-                Die Top-3-Kacheln schließen bekannte Ausfälle aus; sie sind keine langfristige sportliche Kaufbewertung.
-            </p>
-
-
-
-
-            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
-                <b>Status:</b>
-                Kommt aus dem Kickbase-Spielerstatus im Markt- oder Kaderpayload.
-                {badge("Fit")} ist unkritisch; {badge("Angeschlagen")} / {badge("Gelbsperre")} sind Warnsignale;
-                {badge("Verletzt")} / {badge("Reha")} / Sperren werden aus Top-Chance-Kacheln ausgeschlossen.
-            </p>
-
-            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
-                <b>Kaderanalyse:</b>
-                Zeigt die rechnerische Elf, bevorzugt nach aktuellem Saison-Punkteschnitt je Einsatz;
-                bei fehlender Datenbasis folgen letzte 3 Spiele, Saisonpunkte und Vorsaisonwerte.
-                Tauschvorschläge vergleichen einzelne positionsgleiche Spieler auf derselben Saisonbasis
-                anhand von Punkten je Einsatz, nicht anhand von Positionsgruppen oder Punktesummen.
-                Die Tauschhinweise vergleichen nur positionsgleiche Spieler und schließen Verletzte sowie bereits eigene Spieler aus.
-            </p>
-
-
-
-
-            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
-                <b>Risiko:</b>
-                {badge("Before MV update")} bedeutet, dass das Angebot vor der nächsten Marktwert-Neuberechnung um 22:00 Uhr abläuft.
-                Dann kaufst du noch ohne den neuen Marktwert zu kennen.
-                {badge("Night expiry")} bedeutet, dass das Angebot in der kommenden Nacht bis 09:00 Uhr ausläuft; solche Gebote solltest du am Vorabend erledigen.
-            </p>
-            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
-                <b>LI-Signal:</b>
-                LI % kommt ausschließlich aus der öffentlichen LigaInsider-Spielerseite im Bereich Einsatzquote.
-                {badge("LI-Spielerseite")} bedeutet: LI % ist die Startelfquote aus dem Einsatzquote-Block der Spielerseite.
-                Teamseiten-Fallbacks wie {badge("LI-Startelf")} oder {badge("LI-Kader")} setzen keine künstliche Prozentzahl mehr.
-                Das ist eine Historienquote, keine offizielle Kickbase- oder LigaInsider-Prognose für den nächsten Spieltag.
-            </p>
-            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
-                <b>Kaderlimits:</b>
-                Maximal 16 Spieler insgesamt und maximal 3 Spieler pro Verein.
-                {badge("füllt 3/3")} warnt, dass der Kauf deinen dritten Spieler dieses Vereins belegt.
-                {badge("Vereinslimit voll")} bedeutet, dass der Verein in deinem Kader bereits bei 3/3 steht.
-            </p>
-            <p style="font-size:13px;color:#374151;margin:0 0 6px 0;">
-                <b>Zeilenfarben:</b>
-                <span style="display:inline-block;background:#ecfdf5;color:#166534;font-weight:700;border-radius:6px;padding:3px 7px;">grün</span>
-                bedeutet: Du hast aktuell ein Gebot auf den Marktspieler platziert.
-                <span style="display:inline-block;background:#fff7ed;color:#92400e;font-weight:700;border-radius:6px;padding:3px 7px;">orange</span>
-                bedeutet: Der Kaderspieler ist aktuell zum Transfer angeboten.
-            </p>
-            <p style="font-size:13px;color:#374151;margin:0;">
-                <b>Eigener Kader:</b>
-                {badge("Sell")} erwartete Änderung <= -200.000 oder <= -2,00%;
-                {badge("Consider sell")} erwartete Änderung <= -75.000 oder <= -0,75%;
-                {badge("Keep")} erwartete Änderung >= 100.000 oder >= 1,00%;
-                {badge("Hold")} neutraler Bereich.
-            </p>
-        </div>
-    """
     action_overview = build_action_overview()
     lineup_advice = build_lineup_advice()
     squad_change_summary = build_squad_change_summary()
@@ -1152,16 +855,11 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
 
         {action_overview}
         
-        <div style="display:block;margin:16px 0 24px 0;">
-            <span style="display:inline-block;background:#eef2ff;color:#263a8b;padding:8px 10px;border-radius:6px;margin:4px;font-size:13px;">Höchste Kaufkraft: <b>{top_budget}</b></span>
-        </div>
-
         {lineup_advice}
 
         <h3 style="color: #2c3e50; margin-top: 30px;">Manager-Budgets</h3>
-        <p style="font-size: 14px; color: #333;">Nur dein eigener Kontostand stammt direkt aus der API. Fremde Kontostände werden aus 80 Mio. Startcash, 100 Mio. Startkader, Transferhistorie, Profilgewinn und nachvollziehbaren Bonusannahmen geschätzt. Belegte, geschätzte und offene Erfolge werden darunter getrennt ausgewiesen.</p>
+        <p style="font-size: 14px; color: #333;">Nur dein eigener Kontostand stammt direkt aus der API. Fremde Kontostände werden aus 80 Mio. Startcash, 100 Mio. Startkader, Transferhistorie, Profilgewinn und nachvollziehbaren Bonusannahmen geschätzt. Die Erfolgsberechnung erfolgt im Hintergrund.</p>
         {style_df(budget_df)}
-        {manager_audit_html}
 
         <h3 style="color: #2c3e50; margin-top: 30px;">Aktuelle Markt-Empfehlungen</h3>
         <p style="font-size: 14px; color: #333;">Fremde Marktangebote, sortiert nach Ablauf. Erw. 1T zeigt die erwartete nächste Marktwertänderung.</p>
@@ -1174,7 +872,6 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
 
         {style_df(squad_df)}
 
-        {action_legend}
 
         <p style="margin-top: 20px; font-size: 14px;">Viele Grüße<br><b>Dein KickAdvisor Bot</b></p>
         
@@ -1191,8 +888,6 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
     </html>
     """, subtype="html")
 
-    attach_file(msg, attachment_path)
-
     try:
         with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
             smtp.starttls()
@@ -1205,29 +900,3 @@ def send_mail(budget_df, market_df, squad_df, email, attachment_path=None):
     except smtplib.SMTPException as e:
         print(f"\nEmail sending failed, skipping email sending: {e}")
         return
-
-
-def attach_file(msg, attachment_path):
-    if not attachment_path:
-        return
-
-    if isinstance(attachment_path, (list, tuple)):
-        for path in attachment_path:
-            attach_file(msg, path)
-        return
-
-    path = Path(attachment_path)
-    if not path.exists():
-        print(f"\nWarning: Email attachment not found, skipping: {path}")
-        return
-
-    try:
-        msg.add_attachment(
-            path.read_bytes(),
-            maintype="text",
-            subtype="html",
-            filename=path.name,
-        )
-        print(f"Email attachment added: {path}.")
-    except OSError as error:
-        print(f"\nWarning: Could not attach file to email: {error}")

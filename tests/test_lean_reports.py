@@ -175,22 +175,46 @@ class LeanReportTests(unittest.TestCase):
     def test_mail_has_no_removed_fields_including_cards_and_legend(self):
         market = prepare_market_report(add_recommendation_columns(players(), True, report_only=True), pd.DataFrame())
         squad = add_recommendation_columns(players(), False, report_only=True)
-        hidden = ['player_id', 'expires_before_mv_update', 'expires_overnight']
+        hidden = ['expires_before_mv_update', 'expires_overnight']
         market = market.drop(columns=hidden + ['purchase_price', 'squad_profit_loss', 'is_listed_for_sale'])
         squad = squad.drop(columns=hidden + ['expires_at', 'risk', 'has_open_bid'])
         budget = pd.DataFrame([{'User': 'Testmanager', 'Budget': 1000000, 'Team Value': 120000000, 'Max Negative': -39600000, 'Available Budget': 40600000}])
         budget.loc[1] = {'User': 'Sebastian', 'Budget': float('nan'),
                          'Team Value': 257589532, 'Max Negative': -85004546,
                          'Available Budget': float('nan')}
+        budget['Cash Basis'] = 'Schätzung'
+        budget.attrs['manager_audit'] = {'events': [{'kind': 'Erfolgsprotokoll'}]}
         with patch.dict(os.environ, {'EMAIL_USER': 'test@example.com', 'EMAIL_PASS': 'fake'}), patch('features.notifier.smtplib.SMTP') as smtp:
             send_mail(budget, market, squad, 'test@example.com')
         message = smtp.return_value.__enter__.return_value.send_message.call_args.args[0]
         html = message.get_body(preferencelist=('html',)).get_content()
         for label in ['Kaufart', 'Vertrauen', 'Gegnerdruck', 'Max. Gebot', 'MW-Tendenz', 'Pkt. Vors.', 'Erw. %', 'Sieggebot', 'Overpay', 'Kaufpriorität']:
             self.assertFalse(label in html, f'Removed label still visible: {label}')
-        self.assertIn('Nicht bestimmbar', html)
+        for removed in ['Höchste Kaufkraft', 'Nicht bestimmbar', 'Cash-Basis',
+                        'Cash-Rekonstruktion', 'Erfolgsprotokoll', '>Legende<', '>player_id<']:
+            self.assertNotIn(removed, html)
+        self.assertIn('player_id', squad.columns)
+        self.assertIn('Cash Basis', budget.columns)
         self.assertIn('80 Mio. Startcash', html)
         self.assertIn('LI %', html)
+        from html.parser import HTMLParser
+        class Headers(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.active, self.labels = False, []
+            def handle_starttag(self, tag, attrs):
+                self.active = tag == 'th'
+            def handle_endtag(self, tag):
+                if tag == 'th':
+                    self.active = False
+            def handle_data(self, value):
+                if self.active:
+                    self.labels.append(value)
+        headers = Headers()
+        headers.feed(html)
+        for index, label in enumerate(headers.labels):
+            if label == 'Status':
+                self.assertEqual(headers.labels[index + 1], 'LI %')
         for label in ['>Action<', 'Verkaufsampel', '>Limit<', 'Action-Legende', 'Verkaufschecks']:
             self.assertNotIn(label, html)
         self.assertIn('Summe', html)

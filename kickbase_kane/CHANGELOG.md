@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.75
+
+- Strafft die Vollreport-Mail: entfernt höchste Kaufkraft, Cash-Basis, Cash-/Erfolgsprotokoll, interne Spieler-IDs und Legende; zeigt LI direkt neben Status.
+- Berechnet die beste Startelf mit der Bewertung des HA-Planers und mindestens 0 € Restbudget nach Bankverkäufen über alle Formationen.
+- Entfernt den Optimierer-Anhang aus der Vollreport-Mail; seine Daten bleiben intern für Kaderanalyse und HA-Sync verfügbar.
+
 ## 0.2.74
 
 - Startet Vollreports täglich um 06:30, 14:00 und 22:10 Uhr (Europe/Berlin) über den HA-Addon-Timer.
