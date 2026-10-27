@@ -105,6 +105,22 @@ def activity_day(value):
         return ''
 
 
+def activity_market_value_day(value):
+    """Return the market-value snapshot that was active when a transfer happened."""
+    try:
+        activity_time = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+        if activity_time.tzinfo is None:
+            activity_time = activity_time.replace(tzinfo=timezone.utc)
+        activity_time = activity_time.astimezone(BERLIN)
+    except (TypeError, ValueError, OverflowError):
+        return ''
+    # Kickbase updates market values at 22:00 Berlin time. Until then the
+    # previous calendar day's history entry is the value used for the trade.
+    if activity_time.hour < 22:
+        activity_time -= timedelta(days=1)
+    return activity_time.date().isoformat()
+
+
 def normalize_lineup(payload):
     """Normalize the v4 slot-based lineup, including empty starting slots."""
     if not isinstance(payload, dict):
@@ -147,6 +163,7 @@ class LiveKickbase:
         self.purchase_price_cache = {}
         self.purchase_price_lock = threading.Lock()
         self.recent_transfers_cache = {}
+        self.recent_transfer_values = {}
         self.recent_transfers_lock = threading.Lock()
 
     def player_profiles(self, player_ids):
@@ -223,6 +240,44 @@ class LiveKickbase:
                     with self.purchase_price_lock:
                         self.purchase_price_cache[(str(league_id), player_id, str(user_id))] = (now, price)
         return prices
+
+    def player_purchase_price_before(self, league_id, player_id, manager_name, transferred_at):
+        """Find what a manager paid before a later sale back to Kickbase."""
+        payload = self.get(
+            '/leagues/' + quote(str(league_id), safe='') + '/players/'
+            + quote(str(player_id), safe='') + '/transferHistory?start=0'
+        )
+        entries = payload.get('it', [])
+        if not isinstance(entries, list):
+            return None
+        try:
+            cutoff = datetime.fromisoformat(str(transferred_at).replace('Z', '+00:00'))
+            if cutoff.tzinfo is None:
+                cutoff = cutoff.replace(tzinfo=timezone.utc)
+            cutoff = cutoff.astimezone(timezone.utc)
+        except (TypeError, ValueError, OverflowError):
+            cutoff = None
+        for entry in sorted(entries, key=lambda item: str(item.get('dt') or ''), reverse=True):
+            if not isinstance(entry, dict):
+                continue
+            try:
+                entry_time = datetime.fromisoformat(str(entry.get('dt')).replace('Z', '+00:00'))
+                if entry_time.tzinfo is None:
+                    entry_time = entry_time.replace(tzinfo=timezone.utc)
+                if cutoff is not None and entry_time.astimezone(timezone.utc) >= cutoff:
+                    continue
+            except (TypeError, ValueError, OverflowError):
+                if cutoff is not None:
+                    continue
+            buyer = entry.get('u') or entry.get('buyer') or entry.get('byr')
+            if not activity_party_matches(buyer, '', manager_name):
+                continue
+            price = entry.get('trp', entry.get('price', entry.get('prc')))
+            try:
+                return float(price)
+            except (TypeError, ValueError):
+                return None
+        return None
 
     def player_market_changes(self, player_ids):
         """Read the last completed market-value movement for players."""
@@ -418,6 +473,10 @@ class LiveKickbase:
                 market_value = float(market_value)
             except (TypeError, ValueError):
                 market_value = None
+            seller = activity_field(value(
+                data, 'slr', 'seller', 'sellerName', 'seller_name', 'su'))
+            buyer = activity_field(value(
+                data, 'byr', 'buyer', 'buyerName', 'buyer_name', 'bu'))
             parsed.append({
                 'playerId': player_id,
                 'playerName': activity_field(value(
@@ -426,10 +485,9 @@ class LiveKickbase:
                     data, 'pim', 'image', 'imageUrl', 'image_url')),
                 'teamImage': activity_field(value(
                     data, 'tim', 'teamImage', 'teamImageUrl', 'team_image_url')),
-                'from': activity_field(value(
-                    data, 'slr', 'seller', 'sellerName', 'seller_name', 'su')) or 'Kickbase',
-                'to': activity_field(value(
-                    data, 'byr', 'buyer', 'buyerName', 'buyer_name', 'bu')) or 'Kickbase',
+                'from': seller or 'Kickbase',
+                'to': buyer or 'Kickbase',
+                'isKickbaseSale': bool(seller and not buyer),
                 'price': round(price) if price is not None else None,
                 'marketValue': market_value,
                 'transferredAt': entry.get('dt'),
@@ -438,11 +496,9 @@ class LiveKickbase:
         player_ids = {item['playerId'] for item in parsed if item['playerId']}
         profiles = self.player_profiles(player_ids) if player_ids else {}
         local_metadata = local_player_metadata(player_ids)
-        missing_market_values = {
-            item['playerId'] for item in parsed
-            if item['playerId'] and item['marketValue'] is None
-        }
-        histories = self.player_market_histories(missing_market_values) if missing_market_values else {}
+        # The activity feed's ``mv`` field is live and can change retroactively
+        # at 22:00. Always prefer the dated history entry for the transfer time.
+        histories = self.player_market_histories(player_ids) if player_ids else {}
         epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
         for item in parsed:
@@ -460,8 +516,14 @@ class LiveKickbase:
                 item['teamImage'] or profile.get('tim') or stored.get('team_image_url') or ''
             )
             item['teamImage'] = get_cdn_url(team_image_path) or ''
-            if item['marketValue'] is None and player_id in histories:
-                transfer_day = activity_day(item['transferredAt'])
+            snapshot_key = (cache_key, str(item['transferredAt']), player_id,
+                            item['price'], item['from'], item['to'])
+            with self.recent_transfers_lock:
+                snapshot = self.recent_transfer_values.get(snapshot_key)
+            if snapshot is not None:
+                item['marketValue'] = snapshot
+            elif player_id in histories:
+                transfer_day = activity_market_value_day(item['transferredAt'])
                 candidates = []
                 for history_entry in histories[player_id]:
                     if not isinstance(history_entry, dict):
@@ -482,6 +544,19 @@ class LiveKickbase:
                 item['price'] - item['marketValue']
                 if item['price'] is not None and item['marketValue'] is not None else None
             )
+            if item['marketValue'] is not None:
+                with self.recent_transfers_lock:
+                    self.recent_transfer_values.setdefault(snapshot_key, item['marketValue'])
+            item['profitLoss'] = None
+            if item['isKickbaseSale'] and player_id and item['price'] is not None:
+                try:
+                    purchase_price = self.player_purchase_price_before(
+                        cache_key, player_id, item['from'], item['transferredAt']
+                    )
+                except (requests.RequestException, RuntimeError, ValueError, KeyError, TypeError):
+                    purchase_price = None
+                if purchase_price is not None:
+                    item['profitLoss'] = item['price'] - round(purchase_price)
 
         result = {
             'transfers': parsed,

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.64
+
+- Fixiert Marktwert und Overpay der letzten Transfers auf den Wert zum Transferzeitpunkt.
+- Zeigt bei Verkäufen an Kickbase den Gewinn oder Verlust des Verkäufers statt eines bedeutungslosen Overpays.
+- Führt eine eigenständige, kompaktere Kartenkomposition für Smartphones ein.
+- Verkleinert Bildfläche und Kartenhöhe im Startelfplaner, ohne Spieler und Vereinswappen zu trennen.
+- Gibt Namen und Kennzahlen in der mobilen Wertentwicklung durch gestapelte Inhalte wieder ausreichend Platz.
+- Strafft mobile Transfermarktkarten und erhält die vertikale, überlauffreie Darstellung.
+
 ## 0.2.63
 
 - Rückt Spieler und Vereinswappen in der gemeinsamen Kartenkomposition etwas nach rechts, sodass die Spielergesichter vollständig sichtbar bleiben.

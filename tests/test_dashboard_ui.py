@@ -44,7 +44,15 @@ class DashboardUiTests(unittest.TestCase):
         self.assertIn("const relativeTime = value =>", self.javascript)
         self.assertIn("transfer.from||'Kickbase'", self.javascript)
         self.assertIn('transfer.overpay', self.javascript)
+        self.assertIn('transfer.isKickbaseSale', self.javascript)
+        self.assertIn('G/V des Verkäufers', self.javascript)
+        self.assertIn('transfer.profitLoss', self.javascript)
         self.assertIn('.recent-transfer-grid', self.styles)
+
+    def test_mobile_roster_keeps_name_and_forecast_in_separate_rows(self):
+        self.assertIn('.roster-player .name{overflow:visible;white-space:normal', self.styles)
+        self.assertIn('.roster-player .roster-values{width:100%;margin-top:3px;', self.styles)
+        self.assertIn('flex-direction:row;justify-content:space-between', self.styles)
 
     def test_top_chances_and_recent_transfers_use_half_cropped_artwork(self):
         self.assertIn("<summary>'+avatar(p)+'<div class=\"chance-content\">", self.javascript)
@@ -77,6 +85,10 @@ class DashboardUiTests(unittest.TestCase):
         self.assertIn('.table-wrap tr.market-row{display:grid;width:100%', self.styles)
         self.assertIn('.table-wrap tr.market-history-row[hidden]{display:none!important}', self.styles)
         self.assertIn('html,body{max-width:100%;overflow-x:hidden}', self.styles)
+        self.assertIn('/* Compact smartphone cards:', self.styles)
+        self.assertIn('left:-100px;width:240px;height:180%', self.styles)
+        self.assertIn('.table-player{min-height:160px;padding:12px 6px 12px 140px}',
+                      self.styles)
 
     def test_player_art_layers_cutout_over_club_crest(self):
         self.assertIn("const teamImage = p =>", self.javascript)

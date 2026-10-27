@@ -187,6 +187,55 @@ class LiveTests(unittest.TestCase):
         self.assertTrue(first['teamImage'].endswith('/teams/7.png'))
         client.get.assert_called_once_with('/leagues/league/activitiesFeed?max=100')
 
+    def test_recent_transfer_market_value_is_historical_and_stays_frozen(self):
+        client = LiveKickbase('PRIVATE_EMAIL', 'PRIVATE_PASSWORD')
+        feed_market_value = [11_000_000]
+        client.get = Mock(side_effect=lambda path: {'af': [{
+            't': 15, 'dt': '2026-10-26T10:00:00Z', 'data': {
+                'pi': '7', 'pn': 'Stable Value', 'byr': 'Anna',
+                'trp': 12_000_000, 'mv': feed_market_value[0],
+            },
+        }]})
+        client.player_profiles = Mock(return_value={})
+        epoch = date(1970, 1, 1)
+        history_market_value = [10_000_000]
+        client.player_market_histories = Mock(side_effect=lambda ids: {'7': [{
+            'dt': (date(2026, 10, 25) - epoch).days,
+            'mv': history_market_value[0],
+        }]})
+
+        first = client.recent_transfers('league')['transfers'][0]
+        self.assertEqual(first['marketValue'], 10_000_000)
+        self.assertEqual(first['overpay'], 2_000_000)
+
+        client.recent_transfers_cache.clear()
+        feed_market_value[0] = 12_000_000
+        history_market_value[0] = 12_000_000
+        second = client.recent_transfers('league')['transfers'][0]
+        self.assertEqual(second['marketValue'], 10_000_000)
+        self.assertEqual(second['overpay'], 2_000_000)
+
+    def test_kickbase_sale_returns_seller_profit_instead_of_overpay_context(self):
+        client = LiveKickbase('PRIVATE_EMAIL', 'PRIVATE_PASSWORD')
+        feed = {'af': [{
+            't': 15, 'dt': '2026-10-26T12:00:00Z', 'data': {
+                'pi': '9', 'pn': 'Sold Player', 'slr': 'Ben',
+                'trp': 9_000_000, 'mv': 9_000_000,
+            },
+        }]}
+        history = {'it': [
+            {'dt': '2026-10-26T12:00:00Z', 'u': 'Kickbase', 'trp': 9_000_000},
+            {'dt': '2026-10-20T08:00:00Z', 'u': 'Ben', 'trp': 7_000_000},
+        ]}
+        client.get = Mock(side_effect=lambda path: history if 'transferHistory' in path else feed)
+        client.player_profiles = Mock(return_value={})
+        client.player_market_histories = Mock(return_value={})
+
+        transfer = client.recent_transfers('league')['transfers'][0]
+
+        self.assertTrue(transfer['isKickbaseSale'])
+        self.assertEqual(transfer['profitLoss'], 2_000_000)
+
     @patch('features.ai_advisor.requests.post')
     def test_web_search_enabled_and_citations_returned(self, post):
         post.return_value = Mock(status_code=200)

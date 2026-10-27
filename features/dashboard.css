@@ -135,3 +135,21 @@ h1{font-size:clamp(25px,3vw,34px);line-height:1.1;letter-spacing:-.035em}.eyebro
 .roster-player .list-row .player-cutout,.risk-player .list-row .player-cutout,.table-player .player-cutout{position:absolute;z-index:1;left:64px;bottom:0;width:auto;height:100%;max-width:216px;object-fit:contain;object-position:left bottom;filter:drop-shadow(5px 4px 8px rgba(0,0,0,.55))}
 .table-player{min-height:210px;padding:16px 14px 16px 200px}
 @media(max-width:640px){.roster-player .list-row,.risk-player .list-row{min-height:200px;padding:14px 34px 14px 174px}.roster-player .list-row .player-art,.risk-player .list-row .player-art,.table-player .player-art{left:-120px;width:288px;height:200%}.roster-player .list-row .player-cutout,.risk-player .list-row .player-cutout,.table-player .player-cutout{left:56px;max-width:192px}.table-wrap tr.market-row{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:4px}.table-wrap .market-row>td:first-child{grid-column:1/-1;grid-row:1}.table-wrap .market-row>td:nth-child(2){grid-column:1;grid-row:2;text-align:left}.table-wrap .market-row>td:nth-child(3){grid-column:2;grid-row:2}.table-wrap .market-row>td:nth-child(4){grid-column:1/-1;grid-row:3}.table-wrap .market-row>td:nth-child(5){grid-column:1/-1;grid-row:4;padding-left:0}.table-wrap .market-row>td:nth-child(6){grid-column:1/-1;grid-row:5;padding-left:0}.table-player{min-height:200px;padding:14px 8px 14px 174px}}
+
+/* Compact smartphone cards: readable copy, shorter rows, same artwork hierarchy. */
+@media(max-width:640px){
+  .chance>summary{min-height:170px;padding:12px 10px 12px 140px}
+  .recent-transfer-content{min-height:190px;padding:12px 10px 10px 140px}
+  .chance>summary>.player-art,.recent-transfer-card>.player-art,.roster-player .list-row .player-art,.risk-player .list-row .player-art,.table-player .player-art{left:-100px;width:240px;height:180%}
+  .chance>summary>.player-art .player-cutout,.recent-transfer-card>.player-art .player-cutout,.roster-player .list-row .player-cutout,.risk-player .list-row .player-cutout,.table-player .player-cutout{left:48px;max-width:160px}
+  .roster-player .list-row,.risk-player .list-row{min-height:170px;padding:12px 32px 12px 140px;grid-template-columns:1fr;align-content:center;gap:8px}
+  .roster-values,.risk-player .risk-values,#timing-risks .risk-values{align-items:flex-start;padding-left:0}
+  .roster-statline{gap:5px;font-size:9px}
+  .table-wrap tr.market-row{padding:8px 0;row-gap:2px}
+  .table-player{min-height:160px;padding:12px 6px 12px 140px}
+  .roster-player .player{display:block;width:100%}
+  .roster-player .player>div{width:100%}
+  .roster-player .name{overflow:visible;white-space:normal;line-height:1.25}
+  .roster-player .roster-values{width:100%;margin-top:3px;padding-top:7px;border-top:1px solid var(--line);flex-direction:row;justify-content:space-between;align-items:baseline;gap:10px}
+  .roster-player .roster-values .sub,.roster-player .roster-values .list-value{position:static;white-space:nowrap}
+}

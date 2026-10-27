@@ -231,9 +231,13 @@
       container.innerHTML=transfers.length?transfers.map(transfer=>{
         const overpay=number(transfer.overpay);
         const marketValue=number(transfer.marketValue);
+        const profitLoss=number(transfer.profitLoss);
+        const secondary=transfer.isKickbaseSale
+          ? '<div><span>G/V des Verkäufers</span><strong class="'+(profitLoss===null?'neutral':cls(profitLoss))+'">'+(profitLoss===null?'–':signed(profitLoss))+'</strong></div>'
+          : '<div><span>Overpay</span><strong class="'+(overpay===null?'neutral':overpay>0?'negative':overpay<0?'positive':'neutral')+'">'+(overpay===null?'–':signed(overpay))+'</strong></div>';
         return '<article class="recent-transfer-card">'+avatar({image:transfer.image,teamImage:transfer.teamImage})+'<div class="recent-transfer-content"><div class="recent-transfer-player">'
           +'<div class="recent-transfer-identity"><div class="name">'+escapeHtml(transfer.playerName||'Unbekannter Spieler')+'</div><div class="transfer-route"><span>'+escapeHtml(transfer.from||'Kickbase')+'</span><b aria-hidden="true">›</b><span>'+escapeHtml(transfer.to||'Kickbase')+'</span></div></div></div>'
-          +'<div class="recent-transfer-money"><div><span>Bezahlt</span><strong>'+(number(transfer.price)===null?'–':euros(transfer.price))+'</strong></div><div><span>Overpay</span><strong class="'+(overpay===null?'neutral':overpay>0?'negative':overpay<0?'positive':'neutral')+'">'+(overpay===null?'–':signed(overpay))+'</strong></div></div>'
+          +'<div class="recent-transfer-money"><div><span>Bezahlt</span><strong>'+(number(transfer.price)===null?'–':euros(transfer.price))+'</strong></div>'+secondary+'</div>'
           +'<div class="recent-transfer-footer"><span>'+escapeHtml(relativeTime(transfer.transferredAt))+'</span><span title="Marktwert beim Transfer">MW '+(marketValue===null?'–':euros(marketValue))+'</span></div></div></article>';
       }).join(''):'<p class="empty">Im Kickbase-Aktivitätenfeed wurden noch keine Transfers gefunden.</p>';
     }catch(error){
