@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.76
+
+- Verwendet die Desktop-Matchday-Kacheln auch im mobilen Startelfplaner und auf der Bank, als einspaltige Liste über die verfügbare Displaybreite.
+- Optimiert mobile Schriftgrößen, Budgetanzeige und Bedienelemente; Verkauf und Halten bleiben per Wischgeste steuerbar.
+
 ## 0.2.75
 
 - Strafft die Vollreport-Mail: entfernt höchste Kaufkraft, Cash-Basis, Cash-/Erfolgsprotokoll, interne Spieler-IDs und Legende; zeigt LI direkt neben Status.
