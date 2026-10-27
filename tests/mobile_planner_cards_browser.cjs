@@ -11,12 +11,15 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
     const portrait = process.env.PLANNER_REAL_ARTWORK
       ? 'https://kickbase.b-cdn.net/content/file/b41a70e2188a4c72aa165cfc7606c3e9.png'
       : 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120"><path fill="#e23a48" d="M5 120V95Q50 65 95 95V120Z"/><ellipse cx="50" cy="65" rx="23" ry="29" fill="#d9af89"/></svg>');
+    const portraits = process.env.PLANNER_REAL_ARTWORK ? [portrait,
+      'https://kickbase.b-cdn.net/content/file/8558eff47626439593b2acd71e400ab3.png',
+      'https://kickbase.b-cdn.net/content/file/98ea8901b970421b88f6a41a3137142f.png'] : [portrait];
     const positions = [1, ...Array(5).fill(2), ...Array(6).fill(3), ...Array(3).fill(4)];
     const players = positions.map((position, i) => ({
       id: String(i), name: ['Alexander Lange', 'Maximilian Mittelstädt', 'Michael Olise'][i % 3],
       position, owned: true, mv: 12000000, season: 150 + i, l3: 110 + i,
       li: 90, status: i === 2 ? 'Angeschlagen' : 'Fit', recentForm: [0, 271, 195],
-      fixtures: [{opponent: 'Mönchengladbach', venue: 'Auswärts', rank: 12}], image: portrait, teamImage: crest,
+      fixtures: [{opponent: 'Mönchengladbach', venue: 'Auswärts', rank: 12}], image: portraits[i % portraits.length], teamImage: crest,
     }));
     const template = fs.readFileSync('features/mobile_lineup_planner.html', 'utf8')
       .replace('<head>', '<head><base href="http://planner.test/">')
@@ -46,6 +49,9 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
           crestIsBackground: getComputedStyle(card.querySelector('.lineup-crest')).zIndex === '-1',
           photoZoom: card.querySelector('.lineup-photo img').getBoundingClientRect().height /
                      card.querySelector('.lineup-photo').getBoundingClientRect().height,
+          photoPosition: getComputedStyle(card.querySelector('.lineup-photo')).position,
+          photoTop: card.querySelector('.lineup-photo img').getBoundingClientRect().top -
+                    card.querySelector('.lineup-photo').getBoundingClientRect().top,
         })),
         bankActions: getComputedStyle(document.querySelector('.bank .plan-actions')).display,
       }));
@@ -60,8 +66,9 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
                      right: el.getBoundingClientRect().right + scrollX})).slice(0, 30)})));
       assert.equal(metrics.overflow, false, `page overflow at ${width}`);
       assert.ok(metrics.cards.every(card => card.detailsVisible && card.oldTextHidden));
-      assert.ok(metrics.cards.every(card => card.crestOpacity === '0.2' && card.crestIsBackground));
+      assert.ok(metrics.cards.every(card => card.crestOpacity === '0.05' && card.crestIsBackground));
       assert.ok(metrics.cards.every(card => card.photoZoom > 1.5));
+      assert.ok(metrics.cards.every(card => card.photoPosition === 'relative' && card.photoTop < 0));
       if (width < 900) {
         assert.equal(metrics.slotsDisplay, 'grid');
         assert.equal(metrics.bankActions, 'none');
@@ -120,6 +127,10 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
           style: '.top,.overlay,.toast{visibility:hidden !important}'});
         await page.locator('.bank .card').first().screenshot({path: `test-output/planner-bank-${width}.png`,
           style: '.top,.overlay,.toast{visibility:hidden !important}'});
+        if (width === 1280) for (let i = 0; i < 3; i++) {
+          await page.locator('.slot .card').nth(i).screenshot({path: `test-output/planner-face-${i}.png`,
+            style: '.top,.overlay,.toast{visibility:hidden !important}'});
+        }
       }
       assert.deepEqual(errors, []);
       results.push({width, overflow: metrics.overflow, cards: metrics.cards.length});

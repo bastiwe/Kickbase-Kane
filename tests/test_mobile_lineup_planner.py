@@ -138,7 +138,7 @@ class MobileLineupPlannerTests(unittest.TestCase):
         self.assertIn('.candidate-option{min-height:210px;', self.template)
         self.assertIn('.slot .player-art,.slot .card-copy,.slot .money{display:none}', self.template)
         self.assertIn('.slot .lineup-photo{display:grid;width:76px;height:76px;', self.template)
-        self.assertIn('height:166%;max-width:166%', self.template)
+        self.assertIn('top:-20%;width:320%;height:auto;max-width:none', self.template)
         self.assertIn('@media(max-width:640px){.card,.bank .card{min-height:168px;',
                       self.template)
         self.assertIn('.card .player-art,.candidate-option .player-art{inset:auto auto 0 -100px;width:240px;height:180%',

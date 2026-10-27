@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.79
+
+- Reduziert die Vereinswappen im Kachelhintergrund auf 5 % Deckkraft.
+- Vergrößert den Kopfbereich der Spielerporträts deutlich und positioniert ihn höher im Kreis, sowohl in Startelf- als auch Bankkacheln.
+
 ## 0.2.78
 
 - Zentriert die Desktop-Positionsreihen mit kompakteren Abständen zwischen den Spielerkacheln.
