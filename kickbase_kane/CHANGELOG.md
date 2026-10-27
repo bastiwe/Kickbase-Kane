@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.80
+
+- Verkleinert die Porträts leicht, sodass etwas Trikokragen sichtbar wird; die Skalierung ist oben verankert und verschiebt die Köpfe nicht nach unten.
+
 ## 0.2.79
 
 - Reduziert die Vereinswappen im Kachelhintergrund auf 5 % Deckkraft.

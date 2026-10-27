@@ -50,6 +50,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
           photoZoom: card.querySelector('.lineup-photo img').getBoundingClientRect().height /
                      card.querySelector('.lineup-photo').getBoundingClientRect().height,
           photoPosition: getComputedStyle(card.querySelector('.lineup-photo')).position,
+          photoOrigin: getComputedStyle(card.querySelector('.lineup-photo img')).transformOrigin,
           photoTop: card.querySelector('.lineup-photo img').getBoundingClientRect().top -
                     card.querySelector('.lineup-photo').getBoundingClientRect().top,
         })),
@@ -69,6 +70,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
       assert.ok(metrics.cards.every(card => card.crestOpacity === '0.05' && card.crestIsBackground));
       assert.ok(metrics.cards.every(card => card.photoZoom > 1.5));
       assert.ok(metrics.cards.every(card => card.photoPosition === 'relative' && card.photoTop < 0));
+      assert.ok(metrics.cards.every(card => card.photoOrigin.endsWith(' 0px')));
       if (width < 900) {
         assert.equal(metrics.slotsDisplay, 'grid');
         assert.equal(metrics.bankActions, 'none');
