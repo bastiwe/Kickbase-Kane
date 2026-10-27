@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.72
+
+- Ruft historische Startaufstellungen, Spielerpunkte und Torereignisse je Manager und Spieltag direkt aus dem Kickbase-Teamcenter ab.
+- Prüft Spielerlisten und Punktesumme gegen die finalen Managerpunkte und archiviert die API-Belege dauerhaft.
+- Berechnet Erfolgsboni und geschätzte Managerkontostände für alle abgeschlossenen Spieltage neu; Rekonstruktionen dienen nur noch als gekennzeichneter Ersatz bei fehlenden API-Daten.
+
 ## 0.2.71
 
 - Berücksichtigt für MVP und Tormaschine ausschließlich die aktive Startelf zum Spieltagsbeginn; Bankspieler lösen keine Spieltagsboni aus.

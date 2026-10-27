@@ -141,7 +141,34 @@ def confirmed_lineup(roster, confirmation):
     return roster
 
 
-def lineup_estimate(players, points, actual_points, issues=(), goals=None):
+def teamcenter_entry(payload, manager_id, expected_points):
+    """Validate the requested historical XI against its final manager score."""
+    manager = next((u for u in payload.get('us', [])
+                    if str(u.get('i')) == str(manager_id)), None)
+    if manager is None or not isinstance(manager.get('lp'), list):
+        raise ValueError('Historische Startelf fehlt im Teamcenter')
+    ids = [str(pid) for pid in manager['lp']]
+    players = payload.get('lp')
+    if (not isinstance(players, list) or len(ids) > 11 or len(set(ids)) != len(ids)
+            or any(not isinstance(p, dict) or p.get('i') is None for p in players)):
+        raise ValueError('Ungültige historische Startelf')
+    by_id = {str(p['i']): p for p in players}
+    if len(by_id) != len(players) or set(by_id) != set(ids):
+        raise ValueError('Teamcenter-Spieler passen nicht zum angefragten Manager')
+    points = {pid: p.get('p', 0) for pid, p in by_id.items()}
+    if (not all(finite(value) for value in points.values())
+            or not finite(expected_points) or manager.get('mdp') != expected_points
+            or sum(points.values()) != expected_points):
+        raise ValueError('Startelfpunkte weichen von finalen Managerpunkten ab')
+    goals = {pid: (sum(str(code) == '1' for code in p['k'])
+                   if isinstance(p.get('k'), list) else None)
+             for pid, p in by_id.items()}
+    return {'roster': {'players': ids, 'locked_lineup': ids, 'fixed_lineup': True,
+                       'issues': [], 'basis': 'historische Startelf aus Kickbase-Teamcenter'},
+            'points': points, 'goals': goals, 'fetch_errors': []}
+
+
+def lineup_estimate(players, points, actual_points, issues=(), goals=None, fixed_lineup=False):
     """Conditional model bounds, not confidence bounds or confirmed lineups.
 
     Null/missing match points may stand for a non-playing footballer; treating
@@ -153,16 +180,18 @@ def lineup_estimate(players, points, actual_points, issues=(), goals=None):
               'bonus_min': None, 'bonus_max': None, 'always_selected': [],
               'possibly_selected': [], 'formation_checked': False,
               'goals_min': None, 'goals_max': None}
-    if issues or not 11 <= len(players) <= 20 or not finite(actual_points):
+    valid_size = 0 <= len(players) <= 11 if fixed_lineup else 11 <= len(players) <= 20
+    if issues or not valid_size or not finite(actual_points):
         return result
     always, possible, rewards, goal_totals = set(players), set(), [], []
-    for chosen in combinations(players, 11):
+    choices = [tuple(players)] if fixed_lineup else combinations(players, 11)
+    for chosen in choices:
         if sum(points.get(pid) or 0 for pid in chosen) != actual_points:
             continue
         result['solutions'] += 1
         always.intersection_update(chosen)
         possible.update(chosen)
-        peak = max(points.get(pid) or 0 for pid in chosen)
+        peak = max((points.get(pid) or 0 for pid in chosen), default=0)
         rewards.append(sum(bonus for threshold, bonus in PLAYER_TIERS if peak >= threshold))
         if goals is not None and all(finite(goals.get(pid)) for pid in chosen):
             goal_totals.append(sum(goals[pid] for pid in chosen))
@@ -284,6 +313,7 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
             store.observe(scope, run, 'capture_summary', 'league', now, summary)
             return summary
         events, rows, audits, rounds = [], [], {}, {}
+        teamcenter_errors = {}
         own_name, own_cash = None, None
         try:
             own_name = get('/user/settings')['u']['unm']
@@ -341,6 +371,26 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
                     # Save future/current schedules as well as settled rosters.
                     if timestamp(md['md']) > now:
                         continue
+                    settled = ((md.get('cur') is False or int(md.get('day', -1)) in settled_days)
+                               and finite(md.get('mdp')))
+                    historical = None
+                    if settled:
+                        key = f'teamcenter:{data["id"]}:{md["day"]}'
+                        try:
+                            payload = store.cached(scope, key, now, timedelta(hours=12))
+                            if payload is None:
+                                payload = get(f'/leagues/{league_id}/users/{data["id"]}/teamcenter?dayNumber={md["day"]}')
+                            historical = teamcenter_entry(payload, data['id'], md['mdp'])
+                            store.cache(scope, key, now, payload)
+                            store.observe(scope, run, 'teamcenter', f'{data["id"]}:{md["day"]}', now, payload)
+                        except Exception as error:
+                            teamcenter_errors[f'{name}:{md["day"]}'] = f'{type(error).__name__}: {error}'
+                    if historical is not None:
+                        roster = historical['roster']
+                        store.observe(scope, run, 'matchday_roster', f'{data["id"]}:{md["day"]}', now,
+                                      dict(roster, kickoff=md['md'], day=md['day']))
+                        rounds.setdefault(md['day'], {})[name] = {'md': md, **historical}
+                        continue
                     snapshot = store.kickoff_squad(scope, data['id'], md['day'])
                     if snapshot:
                         squad_players = snapshot['squad']['it']
@@ -356,19 +406,23 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
                         roster = confirmed_lineup(roster, confirmation)
                     store.observe(scope, run, 'matchday_roster', f"{data['id']}:{md['day']}", now,
                                   dict(roster, kickoff=md['md'], day=md['day']))
-                    if (md.get('cur') is not False and int(md.get('day', -1)) not in settled_days) or 'mdp' not in md:
+                    if not settled:
                         continue
                     rounds.setdefault(md['day'], {})[name] = {'md': md, 'roster': roster}
-                    from features.budgets import MATCHDAY_POINT_BONUSES
-                    for kind, amount in [('Spieltagssieg', 1_000_000 if md.get('tw') else 0),
-                                         ('Spieltagspunkte', sum(b for t, b in MATCHDAY_POINT_BONUSES if md['mdp'] >= t))]:
-                        events.append({'key': f'{name}:md:{md["day"]}:{kind}', 'manager': name,
-                                       'kind': kind, 'status': 'geschätzt', 'day': md['day'],
-                                       'amount': amount, 'amount_max': amount, 'evidence': md})
             except Exception as error:
                 errors[name] = f'{type(error).__name__}: {error}'
 
-        player_ids = {pid for entries in rounds.values() for e in entries.values() for pid in e['roster']['players']}
+        from features.budgets import MATCHDAY_POINT_BONUSES
+        for day, entries in rounds.items():
+            for name, entry in entries.items():
+                md = entry['md']
+                for kind, amount in [('Spieltagssieg', 1_000_000 if md.get('tw') else 0),
+                                     ('Spieltagspunkte', sum(b for t, b in MATCHDAY_POINT_BONUSES if md['mdp'] >= t))]:
+                    events.append({'key': f'{name}:md:{day}:{kind}', 'manager': name,
+                                   'kind': kind, 'status': 'geschätzt', 'day': day,
+                                   'amount': amount, 'amount_max': amount, 'evidence': md})
+        player_ids = {pid for entries in rounds.values() for e in entries.values()
+                      if not e['roster'].get('fixed_lineup') for pid in e['roster']['players']}
         performance, player_errors = {}, {}
         for pid in sorted(player_ids):
             key = 'player:' + pid
@@ -386,14 +440,14 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
             performance[pid] = payload
         for day, entries in rounds.items():
             for name, entry in entries.items():
-                points = {}
-                for pid in entry['roster']['players']:
+                points = entry.get('points', {})
+                for pid in ([] if entry['roster'].get('fixed_lineup') else entry['roster']['players']):
                     matches = [m for s in performance.get(pid, []) for m in s.get('ph', [])
                                if m.get('day') == day and m.get('md')
                                and timestamp(m['md']) >= timestamp(start_date) and timestamp(m['md']) <= now]
                     points[pid] = sum(m['p'] for m in matches) if matches and all(finite(m.get('p')) for m in matches) else None
                 entry['points'] = points
-                entry['goals'] = {
+                entry['goals'] = entry.get('goals') if entry['roster'].get('fixed_lineup') else {
                     pid: (None if pid in player_errors else sum(
                         1 for season in performance.get(pid, [])
                         for match in season.get('ph', [])
@@ -410,9 +464,10 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
                               else entry['roster']['players'])
                 entry['lineup'] = lineup_estimate(candidates, points, entry['md']['mdp'],
                                                   entry['roster']['issues'] + entry['fetch_errors'],
-                                                  goals=entry['goals'])
+                                                  goals=entry['goals'],
+                                                  fixed_lineup=entry['roster'].get('fixed_lineup', False))
                 entry['lineup']['basis'] = (entry['roster']['basis']
-                                            if candidates is not entry['roster']['players']
+                                            if entry['roster'].get('fixed_lineup') or candidates is not entry['roster']['players']
                                             else 'aus Kader und Managerpunkten rekonstruiert')
                 store.observe(scope, run, 'lineup_estimate', f"{managers[name]['id']}:{day}", now, entry)
                 estimate = entry['lineup']
@@ -478,8 +533,9 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
                                    'Sieg-, Saisonpunkt-, Transferanzahl- und Kadergrößen-Meilensteine',
                                    'MVP innerhalb der Liga ausschließlich aus aktiven Startelfspielern',
                                    'Tormaschine aus Startelf, Torcodes und Managerpunkten',
-                                   'Fehlende Spielerpunkte als null; Formation nicht geprüft'],
-                   'errors': dict(errors, player_performance=player_errors), 'managers': audits,
+                                   'Historische Startelf und Punkte aus Kickbase-Teamcenter; bei Abrufproblemen gekennzeichnete Rekonstruktion',
+                                   'Fehlende Einsatzpunkte als null; Startelfsumme gegen finale Managerpunkte geprüft'],
+                   'errors': dict(errors, player_performance=player_errors, teamcenter=teamcenter_errors), 'managers': audits,
                    'manager_budgets': manager_budgets,
                    'events': events, 'unresolved_categories': UNRESOLVED}
         store.observe(scope, run, 'audit', 'league', now, summary)

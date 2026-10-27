@@ -3,16 +3,83 @@ from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from features.cash_reconstruction import BERLIN
 from features.manager_history import (
     HistoryStore, audit_managers, goal_machine_events, historical_roster,
-    lineup_estimate, mvp_events, settled_matchday_days, confirmed_lineup,
+    lineup_estimate, mvp_events, settled_matchday_days, confirmed_lineup, teamcenter_entry,
 )
 from manager_history import kickoff_due
 
 
 class ManagerHistoryTests(unittest.TestCase):
+    def teamcenter(self):
+        return {'us': [{'i': '1', 'lp': list(range(1, 12)), 'mdp': 1100}],
+                'lp': [{'i': str(i), 'p': 100, 'k': []} for i in range(1, 12)],
+                'nlp': [{'i': 'bench', 'p': 500, 'k': [1, 1, 1]}]}
+
+    def test_teamcenter_uses_historical_starters_not_bench(self):
+        entry = teamcenter_entry(self.teamcenter(), '1', 1100)
+        self.assertEqual(len(entry['points']), 11)
+        self.assertNotIn('bench', entry['points'])
+        self.assertEqual(sum(entry['goals'].values()), 0)
+
+    def test_teamcenter_rejects_mismatched_scores_and_player_sets(self):
+        with self.assertRaises(ValueError):
+            teamcenter_entry(self.teamcenter(), '1', 1200)
+        payload = self.teamcenter()
+        payload['lp'][0]['i'] = 'bench'
+        with self.assertRaises(ValueError):
+            teamcenter_entry(payload, '1', 1100)
+
+    def test_known_historical_lineup_can_have_empty_slots_and_zero_appearances(self):
+        payload = {'us': [{'i': '1', 'lp': [1, 2], 'mdp': 100}],
+                   'lp': [{'i': '1', 'p': 100, 'k': []}, {'i': '2', 'k': []}]}
+        entry = teamcenter_entry(payload, '1', 100)
+        estimate = lineup_estimate(entry['roster']['players'], entry['points'], 100,
+                                   goals=entry['goals'], fixed_lineup=True)
+        self.assertEqual(estimate['solutions'], 1)
+        self.assertEqual(estimate['goals_min'], 0)
+
+    def test_audit_replaces_reconstruction_with_api_history_without_double_counting(self):
+        now = datetime(2026, 9, 1, 20, 0, tzinfo=BERLIN)
+        responses = {
+            '/leagues/l/ranking': {'us': [{'i': '1', 'n': 'Anna'}]},
+            '/leagues/l/managers/1/dashboard': {'tv': 100, 'prft': 0},
+            '/leagues/l/managers/1/squad': {'it': []},
+            '/leagues/l/managers/1/performance': {'it': [{'sid': '42', 'it': [
+                {'day': 1, 'md': '2026-08-28T18:30:00Z', 'mdp': 1100,
+                 'cur': False, 'tw': True}]}]},
+            '/user/settings': {'u': {'unm': 'Anna'}},
+            '/leagues/l/me/budget': {'b': 123},
+            '/leagues/l/settings': {}, '/leagues/l/user/achievements': {},
+            '/leagues/l/activitiesFeed?max=5000': {'af': []},
+            '/leagues/l/users/1/teamcenter?dayNumber=1': self.teamcenter(),
+        }
+        def get(url):
+            return responses[url]
+        with tempfile.TemporaryDirectory() as folder, patch(
+                'features.manager_history.fetch_manager_transfers', return_value=[]):
+            args = dict(history_path=Path(folder) / 'history.sqlite3',
+                        output_dir=Path(folder) / 'output', now=now)
+            first = audit_managers(get, 'l', '2026-08-15', **args).attrs['manager_audit']
+            second = audit_managers(get, 'l', '2026-08-15', **args).attrs['manager_audit']
+            self.assertEqual(first['errors']['teamcenter'], {})
+            self.assertEqual(first['errors']['player_performance'], {})
+            self.assertEqual(first['managers']['Anna']['additional_bonus_min'], 0)
+            self.assertEqual(first['managers']['Anna']['matchday_wins'], 1_000_000)
+            self.assertEqual(first['managers']['Anna']['matchday_thresholds'], 250_000)
+            self.assertEqual(first['managers']['Anna']['estimated_cash'],
+                             second['managers']['Anna']['estimated_cash'])
+            self.assertEqual(len(first['events']), len(second['events']))
+            db = sqlite3.connect(args['history_path'])
+            try:
+                raw = db.execute("SELECT COUNT(*) FROM observations WHERE kind='teamcenter'").fetchone()[0]
+                self.assertEqual(raw, 2)
+            finally:
+                db.close()
+
     def test_ranking_event_finalizes_current_matchday(self):
         feed = {'af': [
             {'t': 17, 'dt': '2026-10-26T17:57:50Z', 'data': {'day': 7, 'pl': 1}},
