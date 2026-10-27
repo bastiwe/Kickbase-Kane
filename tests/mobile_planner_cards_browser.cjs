@@ -70,6 +70,29 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
         assert.equal(metrics.bankActions, 'grid');
         assert.ok(metrics.cards.every(card => card.width <= 178));
       }
+      // Holding a starter must be visible too, and removing hold clears the edge.
+      const starterId = await page.locator('.slot .card').first().getAttribute('data-player');
+      const swipeStarter = dx => page.locator(`.slot [data-player="${starterId}"]`).evaluate((el, distance) => {
+        const start = new Touch({identifier: 2, target: el, clientX: 180, clientY: 80});
+        const end = new Touch({identifier: 2, target: el, clientX: 180 + distance, clientY: 80});
+        el.dispatchEvent(new TouchEvent('touchstart', {bubbles: true, touches: [start]}));
+        el.dispatchEvent(new TouchEvent('touchmove', {bubbles: true, touches: [end]}));
+        el.dispatchEvent(new TouchEvent('touchend', {bubbles: true, changedTouches: [end]}));
+      }, dx);
+      await swipeStarter(-130);
+      const heldStarter = page.locator(`.slot [data-player="${starterId}"]`);
+      assert.match(await heldStarter.getAttribute('class'), /locked/);
+      const edge = await heldStarter.evaluate(el => ({
+        color: getComputedStyle(el).borderLeftColor, width: getComputedStyle(el).borderLeftWidth,
+      }));
+      assert.equal(edge.color, 'rgb(38, 208, 126)');
+      assert.equal(edge.width, '4px');
+      if (width === 390 || width === 1280) {
+        await heldStarter.screenshot({path: `test-output/planner-held-starter-${width}.png`});
+      }
+      await swipeStarter(130);
+      assert.doesNotMatch(await heldStarter.getAttribute('class'), /locked/);
+      assert.equal(await page.locator('.slot .card').count(), 11);
       if (width === 390 || width === 1280) {
         await page.locator('.slot .card').first().screenshot({path: `test-output/planner-card-${width}.png`});
         await page.locator('.bank .card').first().screenshot({path: `test-output/planner-bank-${width}.png`});

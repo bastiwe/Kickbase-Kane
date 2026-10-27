@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.77
+
+- Zeigt den grünen Halten-Rand auch bei Startelfspielern im mobilen und Desktop-Startelfplaner; die Markierung wird beim Aufheben wieder entfernt.
+
 ## 0.2.76
 
 - Verwendet die Desktop-Matchday-Kacheln auch im mobilen Startelfplaner und auf der Bank, als einspaltige Liste über die verfügbare Displaybreite.
