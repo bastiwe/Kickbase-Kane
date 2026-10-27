@@ -1,5 +1,5 @@
 name: Kickbase Kane
-version: "0.2.73"
+version: "0.2.74"
 slug: kickbase_kane
 description: Privates Kickbase-Trading-Dashboard mit taeglichen Marktwertprognosen.
 url: https://github.com/bastiwe/Kickbase-Kane
@@ -25,7 +25,7 @@ options:
   email_pass: ""
   openai_api_key: ""
   openai_model: "gpt-5-mini"
-  report_times: "21:40,22:10"
+  report_times: "06:30,14:00,22:10"
   github_forecast_token: ""
   github_forecast_repository: "bastiwe/Kickbase-Kane"
   github_forecast_sync_seconds: 300

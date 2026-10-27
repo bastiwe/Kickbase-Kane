@@ -30,7 +30,11 @@ if [ -z "$KICK_LEAGUE_START_DATE" ] || [ "$KICK_LEAGUE_START_DATE" = "null" ]; t
   export KICK_LEAGUE_START_DATE="2026-08-15"
 fi
 if [ -z "$KICKBASE_REPORT_TIMES" ] || [ "$KICKBASE_REPORT_TIMES" = "null" ]; then
-  export KICKBASE_REPORT_TIMES="21:40,22:10"
+  export KICKBASE_REPORT_TIMES="06:30,14:00,22:10"
+fi
+# Migrate the former default; preserve all other individually configured slots.
+if [ "$KICKBASE_REPORT_TIMES" = "21:40,22:10" ]; then
+  export KICKBASE_REPORT_TIMES="06:30,14:00,22:10"
 fi
 if [ -z "$GITHUB_FORECAST_SYNC_SECONDS" ] || [ "$GITHUB_FORECAST_SYNC_SECONDS" = "null" ]; then
   export GITHUB_FORECAST_SYNC_SECONDS="300"
@@ -41,10 +45,10 @@ fi
 cd /data
 
 if [ -n "$GITHUB_FORECAST_TOKEN" ] && [ "$GITHUB_FORECAST_TOKEN" != "null" ]; then
-  bashio::log.info "GitHub-Prognose-Sync aktiv; lokale Modellberechnung ist deaktiviert."
+  bashio::log.info "GitHub-Prognose-Sync aktiv; der HA-Timer fordert Vollreports direkt in GitHub an."
   python /app/features/github_forecast_sync.py &
 else
   bashio::log.info "Kein GitHub-Prognose-Token konfiguriert; lokale Vollreports bleiben aktiv."
-  python /app/addon_schedule_reports.py &
 fi
+python /app/addon_schedule_reports.py &
 exec python /app/advisor_server.py --port 8099 --no-browser

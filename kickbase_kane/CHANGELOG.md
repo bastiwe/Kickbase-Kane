@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.74
+
+- Startet Vollreports täglich um 06:30, 14:00 und 22:10 Uhr (Europe/Berlin) über den HA-Addon-Timer.
+- Aktiviert den Timer auch mit GitHub-Sync: Reports werden direkt per Workflow-Dispatch angefordert, ohne GitHub-Token lokal berechnet.
+- Ergänzt persistente Startprotokolle, begrenzte Wiederholungen und 15 Minuten Nachholzeit nach kurzen Neustarts.
+- Migriert den bisherigen Standardzeitplan automatisch und dokumentiert die erforderlichen GitHub-Tokenrechte.
+
 ## 0.2.73
 
 - Vergibt bei Torgleichstand für Tormaschine die volle Prämie von 250.000 € an alle Manager mit der höchsten positiven Startelf-Torzahl, unabhängig von ihren Managerpunkten.
