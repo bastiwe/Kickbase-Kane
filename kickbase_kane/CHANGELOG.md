@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.89
+
+- Bewertet die aktive Formationskachel anhand der tatsächlich aufgestellten Elf und ihres aktuellen Restbudgets. Spielerwechsel, Halten-/Startelf-Flags und Änderungen der Budgetgrenze wirken sich unmittelbar auf Farbe, Punkte und Budget-Tooltip aus.
+- Schließt gehaltene Spieler, fixierte Starter und simulierte Käufe zuverlässig aus den Verkaufserlösen aus. Gehaltene Spieler können weiterhin auf der Bank oder in der Startelf stehen.
+- Bevorzugt beim Einsetzen fixierter Starter eine Aufstellung innerhalb der Budgetgrenze und schützt fixierte Starter auch beim Ziehen auf die Bank.
+
 ## 0.2.88
 
 - Ersetzt die feste 5-Mio.-Minus-Option im Startelfplaner durch ein frei wählbares erlaubtes Minus in Euro mit Übernehmen-Button. Der Startwert bleibt 5 Mio. €; 0 € erlaubt kein Minus.

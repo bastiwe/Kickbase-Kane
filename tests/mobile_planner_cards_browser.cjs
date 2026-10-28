@@ -201,7 +201,56 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
       assert.match(await active.textContent(), /bis 0/);
     }
     await budgetPage.close();
-    console.log(JSON.stringify({layouts: results, customBudget: 'passed'}));
+    const flagPage = await browser.newPage({viewport: {width: 1280, height: 900}});
+    await flagPage.route('http://planner.test/**', route => route.fulfill({
+      contentType: 'application/json', body: JSON.stringify({formation: '4-4-2', players: []}),
+    }));
+    const flagPlayers = [1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4].map((position, i) => ({
+      id: String(i), name: `Player ${i}`, position, mv: 1000000, season: 100, l3: 100,
+    }));
+    flagPlayers.push({id: 'star', name: 'Star', position: 2, mv: 20000000, season: 200, l3: 200});
+    const flagTemplate = () => template.replace(JSON.stringify({players, budget: 5000000, marketPlayers: []}),
+      JSON.stringify({players: flagPlayers, budget: -12000000, marketPlayers: []}));
+    await flagPage.setContent(flagTemplate());
+    const activeFlagForm = flagPage.locator('#forms .active');
+    await flagPage.locator('[data-form="4-4-2"]').click();
+    assert.match(await activeFlagForm.getAttribute('class'), /form-green/);
+    await flagPage.locator('[data-lock="star"]').click();
+    assert.match(await activeFlagForm.getAttribute('class'), /form-yellow/);
+    assert.match(await flagPage.locator('#budget').textContent(), /-12\.000\.000/);
+    await flagPage.locator('[data-lock="star"]').click();
+    await flagPage.locator('[data-sell="star"]').click();
+    assert.match(await activeFlagForm.getAttribute('class'), /form-green/);
+    await flagPage.locator('.bank [data-player="star"] .lineup-name').click();
+    await flagPage.locator('[data-slot="1"] .lineup-name').click();
+    assert.match(await activeFlagForm.getAttribute('class'), /form-yellow/);
+    assert.match(await activeFlagForm.getAttribute('title'), /-11\.000\.000/);
+    assert.match(await activeFlagForm.textContent(), /1\.200 Ø-Pkt/);
+    await flagPage.locator('[data-start="star"]').click();
+    assert.match(await activeFlagForm.getAttribute('class'), /form-yellow/);
+    await flagPage.evaluate(() => {
+      const dataTransfer = new DataTransfer();
+      document.querySelector('[data-player="star"]').dispatchEvent(new DragEvent('dragstart', {bubbles: true, dataTransfer}));
+      document.querySelector('#bank').dispatchEvent(new DragEvent('drop', {bubbles: true, dataTransfer}));
+    });
+    assert.equal(await flagPage.locator('.slot [data-player="star"]').count(), 1);
+    assert.equal(await flagPage.locator('.slot .card').count(), 11);
+    // Multiple pins must change the formation and then show the actual forced deficit.
+    flagPlayers.push({id: 'mid5', name: 'Fifth midfielder', position: 3, mv: 20000000, season: 50, l3: 50});
+    await flagPage.setContent(flagTemplate());
+    await flagPage.locator('[data-form="4-4-2"]').click();
+    for (const id of ['5', '6', '7', '8', 'mid5']) await flagPage.locator(`[data-start="${id}"]`).click();
+    assert.notEqual(await activeFlagForm.getAttribute('data-form'), '4-4-2');
+    assert.match(await activeFlagForm.getAttribute('class'), /form-green/);
+    await flagPage.locator('[data-start="star"]').click();
+    assert.match(await activeFlagForm.getAttribute('class'), /form-yellow/);
+    assert.match(await activeFlagForm.getAttribute('title'), /-10\.000\.000/);
+    assert.match(await flagPage.locator('[data-form="4-4-2"]').getAttribute('class'), /form-red/);
+    for (const id of ['5', '6', '7', '8', 'mid5', 'star']) {
+      assert.equal(await flagPage.locator(`.slot [data-player="${id}"]`).count(), 1);
+    }
+    await flagPage.close();
+    console.log(JSON.stringify({layouts: results, customBudget: 'passed', liveFlagsAndSwaps: 'passed'}));
   } finally {
     await browser.close();
   }

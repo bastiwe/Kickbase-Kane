@@ -23,7 +23,8 @@ function planner(budget = -12000000, extraPlayers = []) {
       getElementById: element, documentElement: element('root')},
     window: {}, addEventListener() {}, setTimeout() {}, clearTimeout() {},
   });
-  vm.runInContext(script + `globalThis.api={formationState, selectFormation, best, currentBudget, lineupProbability, lineupFinancials,
+  vm.runInContext(script + `globalThis.api={formationState, selectFormation, best, currentBudget, lineupProbability, lineupFinancials, toggleStarter, place,
+    currentForm: ()=>form,
     deficit: applyBudgetLimit, lock: id=>locked.add(id), force: id=>forced.add(id),
     buy: (id,cost)=>purchases.set(id,cost), selected: ()=>sel};})();`, context);
   return context.api;
@@ -98,7 +99,8 @@ test('custom confirmed deficit controls formation choices and best eleven', () =
   p.best();
   assert.equal(p.currentBudget(), -11000000);
   assert.equal(p.deficit('10999999'), true);
-  assert.equal(p.formationState('4-4-2').choice.ids.includes('star'), false);
+  assert.equal(p.formationState('4-4-2').kind, 'form-yellow');
+  assert.equal(p.formationState('4-4-2', false).choice.ids.includes('star'), false);
   p.selectFormation('4-4-2');
   assert.equal(p.currentBudget(), 8000000);
   p.best();
@@ -160,6 +162,53 @@ test('held players and forced starters cannot be sold to fund an alternative', (
   forced.force('0');
   forced.force('1');
   assert.equal(forced.formationState('4-3-3').kind, 'form-red');
+});
+
+test('active formation reacts to swaps even if another affordable lineup is possible', () => {
+  const p = planner();
+  p.selectFormation('4-4-2');
+  assert.equal(p.currentBudget(), 8000000);
+  p.place('star', 1);
+  assert.equal(p.currentBudget(), -11000000);
+  assert.equal(p.formationState('4-4-2').kind, 'form-yellow');
+  assert.equal(p.formationState('4-4-2').averagePoints, 1200);
+  assert.equal(p.formationState('4-4-2', false).kind, 'form-green');
+  p.place('1', 1);
+  assert.equal(p.formationState('4-4-2').kind, 'form-green');
+  assert.equal(p.formationState('4-4-2').averagePoints, 1100);
+});
+
+test('held bench players never finance the budget, including after a swap', () => {
+  const p = planner();
+  p.selectFormation('4-4-2');
+  p.lock('star'); // The stale sale entry must no longer count.
+  assert.equal(p.currentBudget(), -12000000);
+  assert.equal(p.formationState('4-4-2').kind, 'form-yellow');
+  p.place('star', 1);
+  assert.equal(p.currentBudget(), -11000000);
+  assert.equal(p.selected().includes('star'), true);
+  p.place('1', 1);
+  assert.equal(p.currentBudget(), -12000000);
+  assert.equal(p.selected().includes('star'), false);
+});
+
+test('multiple starter pins change formation and immediately expose the resulting deficit', () => {
+  const p = planner(-12000000, [
+    {id: 'mid5', name: 'Fifth midfielder', position: 3, mv: 20000000, season: 50, l3: 50},
+  ]);
+  p.selectFormation('4-4-2');
+  for (const id of ['5', '6', '7', '8', 'mid5']) p.toggleStarter(id);
+  assert.notEqual(p.currentForm(), '4-4-2');
+  for (const id of ['5', '6', '7', '8', 'mid5']) assert.equal(p.selected().includes(id), true);
+  assert.equal(p.formationState(p.currentForm()).kind, 'form-green');
+  p.toggleStarter('star');
+  assert.equal(p.selected().includes('star'), true);
+  assert.equal(p.currentBudget(), -10000000);
+  assert.equal(p.formationState(p.currentForm()).kind, 'form-yellow');
+  assert.equal(p.formationState('4-4-2').kind, 'form-red');
+  p.toggleStarter('star');
+  p.best();
+  assert.equal(p.formationState(p.currentForm()).kind, 'form-green');
 });
 
 test('simulated purchases are paid even when benched and never counted as sale proceeds', () => {
