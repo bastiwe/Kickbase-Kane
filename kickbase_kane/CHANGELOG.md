@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.85
+
+- Wählt im Startelfplaner die punktestärkste vollständige Elf innerhalb der erlaubten Budgetgrenze und übernimmt diese beim Anklicken einer Formation.
+- Zeigt Formationen nur gelb, wenn keine vollständige Elf die Budgetgrenze erreicht. Mit „Bis 5 Mio. € Minus erlauben“ sind Endbudgets ab -5 Mio. € grün, andernfalls ab 0 €.
+- Berücksichtigt fixierte Startelfspieler, gehaltene Spieler und simulierte Käufe bei der Budgetprüfung; simulierte Käufe werden nicht als mögliche Verkaufserlöse gerechnet.
+
 ## 0.2.84
 
 - Bearbeitet die tatsächliche Standardansicht mit ihren vorhandenen HTML-Kacheln und CSS-Stilen, einschließlich Budget, Kaderwert, Kaderprognose, Kaderwertgrafik und Managerbudgets. Unveränderte Vorlagen erhalten das Originaldesign.
