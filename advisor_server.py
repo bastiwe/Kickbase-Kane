@@ -281,7 +281,7 @@ class AdvisorHandler(BaseHTTPRequestHandler):
         elif path == '/api/dashboard-data':
             with self.server.lock:
                 self.reply(200, self.server.report)
-        elif path in ('/dashboard.js', '/dashboard.css', '/dashboard_layout.js', '/dashboard_editor.js', '/dashboard_editor.css', '/dashboard_preview.js', '/dashboard_native.js'):
+        elif path in ('/dashboard.js', '/dashboard.css', '/dashboard_layout.js', '/dashboard_editor.js', '/dashboard_editor.css', '/dashboard_preview.js', '/dashboard_native.js', '/planner_details.js', '/planner_details.css'):
             name = path.lstrip('/')
             content_type = 'text/javascript; charset=utf-8' if name.endswith('.js') else 'text/css; charset=utf-8'
             self.reply(200, (APP_ROOT / 'features' / name).read_text(encoding='utf-8'), content_type)
@@ -302,6 +302,13 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                     self.reply(502, {'error': 'Kickbase-Spielerdetails derzeit nicht abrufbar. Bitte erneut öffnen.'})
         elif path.startswith('/api/player-market-history/'):
             player_id = path.rsplit('/', 1)[-1]
+            try:
+                limit = int(parse_qs(urlsplit(self.path).query).get('limit', ['4'])[0])
+                if not 1 <= limit <= 365:
+                    raise ValueError
+            except ValueError:
+                self.reply(400, {'error': 'Die Anzahl der Marktwerttage muss zwischen 1 und 365 liegen.'})
+                return
             with self.server.lock:
                 client = self.server.kickbase
                 known = {
@@ -315,7 +322,7 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                 self.reply(404, {'error': 'Spieler nicht im aktuellen Kader oder Markt.'})
             else:
                 try:
-                    self.reply(200, client.player_daily_market_changes(player_id))
+                    self.reply(200, client.player_daily_market_changes(player_id, limit=limit))
                 except (requests.RequestException, RuntimeError, ValueError, KeyError, TypeError):
                     self.server.log_event('ERROR Spieler-Marktwerthistorie nicht geladen')
                     self.reply(502, {'error': 'Marktwerthistorie derzeit nicht abrufbar.'})

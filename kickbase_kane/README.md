@@ -81,6 +81,22 @@ Export/Import sichert das Layout als JSON-Datei; Import wird erst mit Speichern
 übernommen. Rückgängig/Wiederholen gilt für Änderungen seit dem letzten Speichern.
 Bei einem Speicherkonflikt zuerst den Entwurf exportieren und die Seite neu laden.
 
+## Spielerdetails im Startelfplaner
+
+Ein Klick auf das Spielerbild öffnet die Detailansicht, sowohl in Startelf und Bank
+als auch im Auswahlfenster für einen freien Platz. Der Bildklick verändert die
+Aufstellung nicht. Im Auswahlfenster übernimmt ein Klick auf die übrige Kachel den
+Spieler; eine zusätzliche Spalte zeigt seine nächsten drei Gegner mit Tabellenplatz,
+Heim-/Auswärtsangabe und Termin.
+
+Die Detailansicht zeigt verfügbare Kickbase-Daten zu Performance, Marktwertverlauf,
+Punkten, Minuten, Toren, Vorlagen und Karten sowie die vorhandene Erw.-1T-Prognose
+und G/V. Leistungsbalken lassen sich für Spieldetails anklicken oder antippen.
+Marktwertzeiträume und die Ansicht der letzten acht Spiele bzw. der aktuellen
+Saison sind umschaltbar. Desktop verwendet drei Spalten, mobil stehen die Bereiche
+kompakt untereinander. Fehlende Werte erscheinen als „–“; nicht abrufbare Live-Daten
+werden kenntlich gemacht. Die Ansicht benötigt keine zusätzlichen API-Schlüssel.
+
 ## Einrichtung
 
 Nach Installation in Home Assistant unter **Einstellungen -> Apps -> Kickbase Kane

@@ -5,6 +5,14 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 (async () => {
   const browser = await chromium.launch({channel: process.env.BROWSER_CHANNEL || 'msedge', headless: true});
   try {
+    const respond = route => {
+      const file = new URL(route.request().url()).pathname.split('/').pop();
+      if (['planner_details.js', 'planner_details.css'].includes(file)) return route.fulfill({
+        contentType: file.endsWith('.js') ? 'text/javascript' : 'text/css',
+        body: fs.readFileSync('features/' + file, 'utf8'),
+      });
+      return route.fulfill({contentType: 'application/json', body: JSON.stringify({formation: '4-4-2', players: []})});
+    };
     const crest = process.env.PLANNER_REAL_ARTWORK
       ? 'https://kickbase.b-cdn.net/content/file/ff70df040a9f4179a7b45219225a2273.svg'
       : 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="48" fill="#2364b5"/><circle cx="50" cy="50" r="35" fill="none" stroke="white" stroke-width="10"/></svg>');
@@ -33,9 +41,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
       const page = await browser.newPage({viewport: {width, height: 900}, hasTouch: width < 900});
       const errors = [];
       page.on('pageerror', error => errors.push(error.message));
-      await page.route('http://planner.test/**', route => route.fulfill({
-        contentType: 'application/json', body: JSON.stringify({formation: '4-4-2', players: []}),
-      }));
+      await page.route('http://planner.test/**', respond);
       await page.setContent(template);
       await page.locator('#best').click();
       if (width >= 900) await page.locator('[data-form="3-6-1"]').click();
@@ -171,9 +177,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
       await page.close();
     }
     const budgetPage = await browser.newPage({viewport: {width: 390, height: 900}, hasTouch: true});
-    await budgetPage.route('http://planner.test/**', route => route.fulfill({
-      contentType: 'application/json', body: JSON.stringify({formation: '4-4-2', players: []}),
-    }));
+    await budgetPage.route('http://planner.test/**', respond);
     await budgetPage.setContent(template.replace('"budget":5000000', '"budget":-50000001'));
     const formation = budgetPage.locator('[data-form="4-4-2"]');
     const limit = budgetPage.locator('#deficit');
@@ -202,9 +206,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
     }
     await budgetPage.close();
     const flagPage = await browser.newPage({viewport: {width: 1280, height: 900}});
-    await flagPage.route('http://planner.test/**', route => route.fulfill({
-      contentType: 'application/json', body: JSON.stringify({formation: '4-4-2', players: []}),
-    }));
+    await flagPage.route('http://planner.test/**', respond);
     const flagPlayers = [1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4].map((position, i) => ({
       id: String(i), name: `Player ${i}`, position, mv: 1000000, season: 100, l3: 100,
     }));

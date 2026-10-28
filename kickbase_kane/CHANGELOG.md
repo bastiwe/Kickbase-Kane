@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.90
+
+- Ergänzt in „… für freien Platz wählen“ die nächsten drei Gegner mit Heim-/Auswärtsangabe, Tabellenplatz und Termin. Fehlende Spielpläne werden bei Bedarf geladen und pro Team zwischengespeichert.
+- Öffnet beim Klick auf das Spielerbild eine Detailansicht für Startelf-, Bank- und Auswahlspieler: Profil, LI-Status, nächste Gegner, Spieltagsperformance, Marktwertverlauf, Kennzahlen und letzte Tagesänderungen. Desktop zeigt drei Spalten; mobil werden die Bereiche kompakt untereinander angeordnet.
+- Bietet auswählbare Marktwertzeiträume, letzte acht Spiele oder die aktuelle Saison und antippbare Leistungsbalken mit Spieldetails. Fehlende Daten werden gekennzeichnet; das Öffnen der Ansicht verändert die Startelf nicht.
+
 ## 0.2.89
 
 - Bewertet die aktive Formationskachel anhand der tatsächlich aufgestellten Elf und ihres aktuellen Restbudgets. Spielerwechsel, Halten-/Startelf-Flags und Änderungen der Budgetgrenze wirken sich unmittelbar auf Farbe, Punkte und Budget-Tooltip aus.

@@ -6,7 +6,7 @@ from features.player_details import build_details
 class PlayerDetailTests(unittest.TestCase):
     def test_live_fields_minutes_events_and_schedule(self):
         now = datetime(2026, 9, 12, tzinfo=timezone.utc)
-        profile = {'tid': '2', 'sec': 11508, 'g': 0, 'a': 2, 'y': 0, 'r': 0, 'ap': 279}
+        profile = {'tid': '2', 'sec': 11508, 'g': 0, 'a': 2, 'y': 0, 'r': 0, 'ap': 279, 'tp': 558}
         games = [
             {'mi': '1', 'md': '2026-09-05T16:30:00Z', 'mdst': 2, 'p': 254, 'mp': "96'", 'pt': '2', 't1': '8', 't2': '2', 'k': [3, 3]},
             {'mi': '2', 'md': '2026-09-13T15:30:00Z', 'mdst': 0, 't1': '8', 't2': '2'},
@@ -24,6 +24,9 @@ class PlayerDetailTests(unittest.TestCase):
         self.assertEqual(result['fixtures'][0]['date'], '13.09.2026, 17:30')
         self.assertEqual(result['fixtures'][1]['venue'], 'Heim')
         self.assertEqual(result['l3'], 254)
+        self.assertEqual(result['totalPoints'], 558)
+        self.assertEqual(result['seasonLabel'], '2026/2027')
+        self.assertEqual(result['performance'][0]['points'], 254)
 
     def test_missing_values_not_zero(self):
         result = build_details({}, {'it': []}, {'it': []})
@@ -31,3 +34,18 @@ class PlayerDetailTests(unittest.TestCase):
         self.assertIsNone(result['goals'])
         self.assertIsNone(result['cards'])
         self.assertEqual(result['history'], [])
+        self.assertEqual(result['performance'], [])
+        self.assertIsNone(result['totalPoints'])
+
+    def test_current_season_chart_preserves_negative_points_and_no_appearance(self):
+        games = [
+            {'mi': 'old', 'md': '2026-05-01T12:00:00Z', 'mdst': 2, 'p': 100},
+            {'mi': '1', 'md': '2026-09-01T12:00:00Z', 'mdst': 2, 'p': -20},
+            {'mi': '2', 'md': '2026-09-08T12:00:00Z', 'mdst': 2, 'hp': False},
+            {'mi': '3', 'md': '2026-09-09T12:00:00Z', 'mdst': 2},
+            {'mi': 'future', 'md': '2026-09-15T12:00:00Z', 'mdst': 0},
+        ]
+        result = build_details({}, {'it': [{'n': 'Bundesliga', 'ph': games}]}, {'it': []},
+                               datetime(2026, 9, 12, tzinfo=timezone.utc))
+        self.assertEqual([row['points'] for row in result['performance']], [-20, 0])
+        self.assertEqual(result['l3'], -10)
