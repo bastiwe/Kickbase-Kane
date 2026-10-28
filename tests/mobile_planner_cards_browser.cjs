@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 
 (async () => {
-  const browser = await chromium.launch({channel: 'msedge', headless: true});
+  const browser = await chromium.launch({channel: process.env.BROWSER_CHANNEL || 'msedge', headless: true});
   try {
     const crest = process.env.PLANNER_REAL_ARTWORK
       ? 'https://kickbase.b-cdn.net/content/file/ff70df040a9f4179a7b45219225a2273.svg'
@@ -38,6 +38,24 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
       await page.locator('#best').click();
       if (width >= 900) await page.locator('[data-form="3-6-1"]').click();
       assert.equal(await page.locator('.slot .card').count(), 11);
+      const selectedIds = await page.locator('.slot .card').evaluateAll(cards => cards.map(card => card.dataset.player));
+      const averagePoints = selectedIds.reduce((sum, id) => sum + players.find(player => player.id === id).season, 0);
+      const activeFormation = await page.locator('#forms .active').getAttribute('data-form');
+      assert.equal(await page.locator('#forms .active').textContent(),
+        `${activeFormation} (${averagePoints.toLocaleString('de-DE', {maximumFractionDigits: 1})} Ø-Pkt.)`);
+      if (width < 900) {
+        for (const y of [800, 1600]) {
+          await page.evaluate(y => window.scrollTo(0, y), y);
+          const sticky = await page.evaluate(() => ({
+            position: getComputedStyle(document.querySelector('#overlay')).position,
+            top: document.querySelector('#overlay').getBoundingClientRect().top,
+            headerBottom: document.querySelector('.top').getBoundingClientRect().bottom,
+          }));
+          assert.equal(sticky.position, 'sticky');
+          assert.ok(Math.abs(sticky.top - sticky.headerBottom - 14) < 1, `budget must stick below header at ${width}px, scroll ${y}`);
+        }
+        await page.evaluate(() => window.scrollTo(0, 0));
+      }
       const metrics = await page.evaluate(() => ({
         overflow: document.documentElement.scrollWidth > innerWidth,
         slotsDisplay: getComputedStyle(document.querySelector('.slots')).display,

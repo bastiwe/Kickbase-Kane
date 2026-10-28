@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.86
+
+- Hält die Restbudgetkachel im mobilen Startelfplaner beim Scrollen wieder unter der Kopfzeile sichtbar.
+- Zeigt hinter jeder Formation in Klammern die Summe der Durchschnittspunkte ihrer vorgeschlagenen Startelf. Die Punkte beziehen sich auf die unter Berücksichtigung der Budgetgrenze ausgewählten Spieler.
+
 ## 0.2.85
 
 - Wählt im Startelfplaner die punktestärkste vollständige Elf innerhalb der erlaubten Budgetgrenze und übernimmt diese beim Anklicken einer Formation.

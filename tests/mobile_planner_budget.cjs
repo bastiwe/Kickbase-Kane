@@ -35,6 +35,7 @@ test('formation selects the highest scoring affordable alternative before turnin
   const state = p.formationState('4-4-2');
   assert.equal(state.kind, 'form-green');
   assert.equal(state.budget, 8000000);
+  assert.equal(state.averagePoints, 1100);
   assert.equal(state.choice.ids.includes('star'), false);
   p.selectFormation('4-4-2');
   assert.equal(p.selected().filter(Boolean).length, 11);
@@ -47,9 +48,11 @@ test('deficit option includes exactly minus five million and rejects values belo
   const p = planner(-6000000); // Keeping the star leaves exactly -5 million.
   assert.equal(p.formationState('4-4-2').choice.ids.includes('star'), true);
   assert.equal(p.formationState('4-4-2').budget, -5000000);
+  assert.equal(p.formationState('4-4-2').averagePoints, 1200);
   assert.equal(p.formationState('4-4-2').kind, 'form-green');
   p.deficit(false);
   assert.equal(p.formationState('4-4-2').choice.ids.includes('star'), false);
+  assert.equal(p.formationState('4-4-2').averagePoints, 1100);
   p.deficit(true);
   p.force('star');
   assert.equal(p.formationState('4-4-2').kind, 'form-green');
