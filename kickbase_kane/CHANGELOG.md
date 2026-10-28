@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.88
+
+- Ersetzt die feste 5-Mio.-Minus-Option im Startelfplaner durch ein frei wählbares erlaubtes Minus in Euro mit Übernehmen-Button. Der Startwert bleibt 5 Mio. €; 0 € erlaubt kein Minus.
+- Berücksichtigt die bestätigte Grenze bei Formationsfarben, vorgeschlagenen Aufstellungen und „Beste Elf“. Zeigt die aktuell aktive Grenze unter der Eingabe an; unbestätigte Eingaben verändern die Berechnung nicht.
+
 ## 0.2.87
 
 - Zeigt im Startelfplaner fünf Startelfsymbole im Kickbase-Stil mit LI-Prozentwert im Tooltip: Sicher ab 80 %, Erwartet ab 65 %, Unsicher ab 25 %, Unwahrscheinlich über 0 % und Ausgeschlossen bei 0 %.

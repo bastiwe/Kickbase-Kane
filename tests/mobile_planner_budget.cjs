@@ -24,7 +24,7 @@ function planner(budget = -12000000, extraPlayers = []) {
     window: {}, addEventListener() {}, setTimeout() {}, clearTimeout() {},
   });
   vm.runInContext(script + `globalThis.api={formationState, selectFormation, best, currentBudget, lineupProbability, lineupFinancials,
-    deficit: value=>{allowDeficit=value}, lock: id=>locked.add(id), force: id=>forced.add(id),
+    deficit: applyBudgetLimit, lock: id=>locked.add(id), force: id=>forced.add(id),
     buy: (id,cost)=>purchases.set(id,cost), selected: ()=>sel};})();`, context);
   return context.api;
 }
@@ -61,7 +61,7 @@ test('financial row formats signed forecasts and profit/loss with missing values
 
 test('formation selects the highest scoring affordable alternative before turning yellow', () => {
   const p = planner();
-  p.deficit(false);
+  p.deficit(0);
   const state = p.formationState('4-4-2');
   assert.equal(state.kind, 'form-green');
   assert.equal(state.budget, 8000000);
@@ -80,10 +80,10 @@ test('deficit option includes exactly minus five million and rejects values belo
   assert.equal(p.formationState('4-4-2').budget, -5000000);
   assert.equal(p.formationState('4-4-2').averagePoints, 1200);
   assert.equal(p.formationState('4-4-2').kind, 'form-green');
-  p.deficit(false);
+  p.deficit(0);
   assert.equal(p.formationState('4-4-2').choice.ids.includes('star'), false);
   assert.equal(p.formationState('4-4-2').averagePoints, 1100);
-  p.deficit(true);
+  p.deficit(5000000);
   p.force('star');
   assert.equal(p.formationState('4-4-2').kind, 'form-green');
   const below = planner(-6000001);
@@ -91,11 +91,43 @@ test('deficit option includes exactly minus five million and rejects values belo
   assert.equal(below.formationState('4-4-2').kind, 'form-yellow');
 });
 
+test('custom confirmed deficit controls formation choices and best eleven', () => {
+  const p = planner(-12000000);
+  assert.equal(p.deficit('11000000'), true);
+  assert.equal(p.formationState('4-4-2').choice.ids.includes('star'), true);
+  p.best();
+  assert.equal(p.currentBudget(), -11000000);
+  assert.equal(p.deficit('10999999'), true);
+  assert.equal(p.formationState('4-4-2').choice.ids.includes('star'), false);
+  p.selectFormation('4-4-2');
+  assert.equal(p.currentBudget(), 8000000);
+  p.best();
+  assert.equal(p.currentBudget(), 8000000);
+  const forced = planner(-12000000);
+  forced.force('star');
+  forced.deficit(11000000);
+  assert.equal(forced.formationState('4-4-2').kind, 'form-green');
+  forced.deficit(10999999);
+  assert.equal(forced.formationState('4-4-2').kind, 'form-yellow');
+});
+
+test('invalid deficit amounts preserve the active budget limit', () => {
+  const p = planner(-12000000);
+  p.force('star');
+  p.deficit(11000000);
+  for (const value of ['', ' ', 'invalid', -1, 1.5, Infinity, '9007199254740992']) {
+    assert.equal(p.deficit(value), false);
+    assert.equal(p.formationState('4-4-2').kind, 'form-green');
+  }
+  assert.equal(p.deficit(0), true);
+  assert.equal(p.formationState('4-4-2').kind, 'form-yellow');
+});
+
 test('budget search finds solutions requiring multiple replacements', () => {
   const p = planner(-32000000, [
     {id: 'star2', name: 'Second star', position: 2, mv: 15000000, season: 180, l3: 180},
   ]);
-  p.deficit(false);
+  p.deficit(0);
   const state = p.formationState('4-4-2');
   assert.equal(state.kind, 'form-green');
   assert.equal(state.budget, 3000000);
@@ -107,7 +139,7 @@ test('budget search finds solutions requiring multiple replacements', () => {
 
 test('zero budget is green and yellow means no affordable complete lineup exists', () => {
   const p = planner(-20000000);
-  p.deficit(false);
+  p.deficit(0);
   assert.equal(p.formationState('4-4-2').kind, 'form-green');
   assert.equal(p.formationState('4-4-2').budget, 0);
   const impossible = planner(-25000001);
@@ -132,7 +164,7 @@ test('held players and forced starters cannot be sold to fund an alternative', (
 
 test('simulated purchases are paid even when benched and never counted as sale proceeds', () => {
   const p = planner(20000000);
-  p.deficit(false);
+  p.deficit(0);
   p.buy('star', 22000000);
   const state = p.formationState('4-4-2');
   assert.equal(state.kind, 'form-yellow');

@@ -170,7 +170,38 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
       results.push({width, overflow: metrics.overflow, cards: metrics.cards.length});
       await page.close();
     }
-    console.log(JSON.stringify(results));
+    const budgetPage = await browser.newPage({viewport: {width: 390, height: 900}, hasTouch: true});
+    await budgetPage.route('http://planner.test/**', route => route.fulfill({
+      contentType: 'application/json', body: JSON.stringify({formation: '4-4-2', players: []}),
+    }));
+    await budgetPage.setContent(template.replace('"budget":5000000', '"budget":-50000001'));
+    const formation = budgetPage.locator('[data-form="4-4-2"]');
+    const limit = budgetPage.locator('#deficit');
+    const active = budgetPage.locator('#deficit-active');
+    const apply = budgetPage.locator('#deficit-form button');
+    assert.match(await formation.getAttribute('class'), /form-green/);
+    await limit.fill('2000000');
+    await formation.click(); // Re-rendering must not apply an unconfirmed draft.
+    assert.match(await formation.getAttribute('class'), /form-green/);
+    assert.match(await active.textContent(), /5\.000\.000/);
+    await apply.click();
+    assert.match(await formation.getAttribute('class'), /form-yellow/);
+    assert.match(await active.textContent(), /2\.000\.000/);
+    await limit.fill('3000000');
+    await limit.press('Enter');
+    assert.match(await formation.getAttribute('class'), /form-green/);
+    assert.match(await active.textContent(), /3\.000\.000/);
+    await limit.fill('0');
+    await apply.click();
+    assert.match(await formation.getAttribute('class'), /form-yellow/);
+    assert.match(await active.textContent(), /bis 0/);
+    for (const value of ['-1', '', '1.5']) {
+      await limit.fill(value);
+      await apply.click();
+      assert.match(await active.textContent(), /bis 0/);
+    }
+    await budgetPage.close();
+    console.log(JSON.stringify({layouts: results, customBudget: 'passed'}));
   } finally {
     await browser.close();
   }
