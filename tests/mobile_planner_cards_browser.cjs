@@ -18,7 +18,9 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
     const players = positions.map((position, i) => ({
       id: String(i), name: ['Alexander Lange', 'Maximilian Mittelstädt', 'Michael Olise'][i % 3],
       position, owned: true, mv: 12000000, season: 150 + i, l3: 110 + i,
-      li: 90, status: i === 2 ? 'Angeschlagen' : 'Fit', recentForm: [0, 271, 195],
+      li: [80, 79, 65, 64, 25, 24, 1, 0, null][i % 9], change: i % 2 ? -123456 : 123456,
+      profitLoss: i % 2 ? 12345678 : -12345678,
+      status: i === 2 ? 'Angeschlagen' : 'Fit', recentForm: [0, 271, 195],
       fixtures: [{opponent: 'Mönchengladbach', venue: 'Auswärts', rank: 12}], image: portraits[i % portraits.length], teamImage: crest,
     }));
     const template = fs.readFileSync('features/mobile_lineup_planner.html', 'utf8')
@@ -71,6 +73,12 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
           photoOrigin: getComputedStyle(card.querySelector('.lineup-photo img')).transformOrigin,
           photoTop: card.querySelector('.lineup-photo img').getBoundingClientRect().top -
                     card.querySelector('.lineup-photo').getBoundingClientRect().top,
+          financialsVisible: card.querySelector('.lineup-financials').getBoundingClientRect().height > 0,
+          financialsFit: [...card.querySelectorAll('.lineup-financials b')].every(value => value.scrollWidth <= value.clientWidth),
+          detailsInOrder: card.querySelector('.lineup-status').getBoundingClientRect().bottom <=
+            card.querySelector('.lineup-financials').getBoundingClientRect().top &&
+            card.querySelector('.lineup-financials').getBoundingClientRect().bottom <=
+            card.querySelector('.start-toggle').getBoundingClientRect().top,
         })),
         bankActions: getComputedStyle(document.querySelector('.bank .plan-actions')).display,
       }));
@@ -85,6 +93,12 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
                      right: el.getBoundingClientRect().right + scrollX})).slice(0, 30)})));
       assert.equal(metrics.overflow, false, `page overflow at ${width}`);
       assert.ok(metrics.cards.every(card => card.detailsVisible && card.oldTextHidden));
+      assert.ok(metrics.cards.every(card => card.financialsVisible && card.financialsFit && card.detailsInOrder), `financial row layout at ${width}: ${JSON.stringify(metrics.cards.filter(card => !card.financialsFit || !card.detailsInOrder))}`);
+      for (const player of players) {
+        const expected = player.li == null ? 'Unbekannt: – % LI' :
+          `${player.li >= 80 ? 'Sicher' : player.li >= 65 ? 'Erwartet' : player.li >= 25 ? 'Unsicher' : player.li > 0 ? 'Unwahrscheinlich' : 'Ausgeschlossen'}: ${player.li} % LI`;
+        assert.equal(await page.locator(`[data-player="${player.id}"] .lineup-prob`).getAttribute('title'), expected);
+      }
       assert.ok(metrics.cards.every(card => card.crestOpacity === '0.05' && card.crestIsBackground));
       assert.ok(metrics.cards.every(card => card.photoZoom > 1.5));
       assert.ok(metrics.cards.every(card => card.photoPosition === 'relative' && card.photoTop < 0));

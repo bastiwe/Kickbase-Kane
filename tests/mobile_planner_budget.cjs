@@ -23,11 +23,41 @@ function planner(budget = -12000000, extraPlayers = []) {
       getElementById: element, documentElement: element('root')},
     window: {}, addEventListener() {}, setTimeout() {}, clearTimeout() {},
   });
-  vm.runInContext(script + `globalThis.api={formationState, selectFormation, best, currentBudget,
+  vm.runInContext(script + `globalThis.api={formationState, selectFormation, best, currentBudget, lineupProbability, lineupFinancials,
     deficit: value=>{allowDeficit=value}, lock: id=>locked.add(id), force: id=>forced.add(id),
     buy: (id,cost)=>purchases.set(id,cost), selected: ()=>sel};})();`, context);
   return context.api;
 }
+
+test('LI symbols and short tooltips use the five requested boundaries', () => {
+  const p = planner();
+  for (const [rate, tone, label, icon] of [
+    [100, 'certain', 'Sicher', '✦'], [80, 'certain', 'Sicher', '✦'],
+    [79, 'expected', 'Erwartet', '✓'], [65, 'expected', 'Erwartet', '✓'],
+    [64, 'uncertain', 'Unsicher', '?'], [25, 'uncertain', 'Unsicher', '?'],
+    [24, 'unlikely', 'Unwahrscheinlich', '!'], [1, 'unlikely', 'Unwahrscheinlich', '!'],
+    [0, 'excluded', 'Ausgeschlossen', '×'],
+  ]) {
+    const status = p.lineupProbability(rate);
+    assert.equal(status.tone, tone);
+    assert.equal(status.icon, icon);
+    assert.equal(status.title, `${label}: ${rate} % LI`);
+  }
+  for (const rate of [null, undefined, '', 'invalid', -1, 101]) {
+    assert.equal(p.lineupProbability(rate).tone, 'unknown');
+  }
+});
+
+test('financial row formats signed forecasts and profit/loss with missing values preserved', () => {
+  const p = planner();
+  const html = p.lineupFinancials({change: 123456, profitLoss: -12345678});
+  assert.match(html, /Erw\. 1T/);
+  assert.match(html, /G\/V/);
+  assert.match(html, /class="green">\+123\.456/);
+  assert.match(html, /class="red">-12\.345\.678/);
+  const missing = p.lineupFinancials({change: null, profitLoss: null});
+  assert.equal((missing.match(/<b class="">–<\/b>/g) || []).length, 2);
+});
 
 test('formation selects the highest scoring affordable alternative before turning yellow', () => {
   const p = planner();

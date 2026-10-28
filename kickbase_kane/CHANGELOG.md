@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.87
+
+- Zeigt im Startelfplaner fünf Startelfsymbole im Kickbase-Stil mit LI-Prozentwert im Tooltip: Sicher ab 80 %, Erwartet ab 65 %, Unsicher ab 25 %, Unwahrscheinlich über 0 % und Ausgeschlossen bei 0 %.
+- Ergänzt unter dem Spielerstatus auf Startelf- und Bankkacheln eine kompakte Zeile mit Erw. 1T-Prognose und Gewinn/Verlust nebeneinander, ohne die Kacheln zu verbreitern.
+
 ## 0.2.86
 
 - Hält die Restbudgetkachel im mobilen Startelfplaner beim Scrollen wieder unter der Kopfzeile sichtbar.
