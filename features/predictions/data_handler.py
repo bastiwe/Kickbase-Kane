@@ -235,7 +235,7 @@ def save_player_data_to_db(token, competition_ids, last_mv_values, last_pfm_valu
                 return merged_df
 
             # Use ThreadPoolExecutor to parallelize player fetching
-            with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
                 comp_dfs = list(executor.map(process_player, players))
             
             comp_final_df = pd.concat(
@@ -335,7 +335,7 @@ def hydrate_missing_live_players(token, competition_id, player_df, player_ids,
 
     rows = []
     failures = 0
-    with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(missing_ids))) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(2, len(missing_ids))) as executor:
         futures = {executor.submit(fetch, player_id): player_id for player_id in missing_ids}
         for future in concurrent.futures.as_completed(futures):
             player_id = futures[future]
