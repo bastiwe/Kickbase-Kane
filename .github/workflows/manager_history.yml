@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '15,45 12-20 * * *'
   workflow_dispatch:
+    inputs:
+      history_payload:
+        description: Compressed HA history evidence
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -24,12 +29,17 @@ jobs:
           cache: pip
           cache-dependency-path: requirements.txt
       - name: Install dependencies
+        if: inputs.history_payload == ''
         run: pip install -r requirements.txt
+      - name: Install history sync dependencies
+        if: inputs.history_payload != ''
+        run: pip install requests
       - name: Restore cumulative manager history
         env:
           GH_TOKEN: ${{ github.token }}
         run: python .github/scripts/restore_manager_history.py
       - name: Capture locked squads after kickoff
+        if: inputs.history_payload == ''
         id: capture
         env:
           KICK_USER: ${{ secrets.KICK_USER }}
@@ -37,8 +47,13 @@ jobs:
           KICK_LEAGUE_NAME: ${{ secrets.KICK_LEAGUE_NAME }}
           LEAGUE_START_DATE: '2026-08-15'
         run: python manager_history.py --capture-only --after-kickoff-only
+      - name: Merge HA evidence
+        if: inputs.history_payload != ''
+        env:
+          HISTORY_PAYLOAD: ${{ inputs.history_payload }}
+        run: python .github/scripts/import_manager_evidence.py
       - name: Save cumulative manager history
-        if: ${{ !cancelled() && steps.capture.outputs.capture_due == 'true' && hashFiles('manager_history.sqlite3') != '' }}
+        if: ${{ !cancelled() && (steps.capture.outputs.capture_due == 'true' || inputs.history_payload != '') && hashFiles('manager_history.sqlite3') != '' }}
         uses: actions/upload-artifact@v6
         with:
           name: manager-history

@@ -51,4 +51,5 @@ else
   bashio::log.info "Kein GitHub-Prognose-Token konfiguriert; lokale Vollreports bleiben aktiv."
 fi
 python /app/addon_schedule_reports.py &
+PYTHONPATH=/app python -m features.manager_monitor &
 exec python /app/advisor_server.py --port 8099 --no-browser

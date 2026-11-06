@@ -10,8 +10,9 @@ from itertools import combinations
 import json
 import math
 from pathlib import Path
-import sqlite3
 import uuid
+
+from features.history_store import HistoryStore, history_lock
 
 import pandas as pd
 
@@ -28,64 +29,6 @@ def finite(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
-class HistoryStore:
-    def __init__(self, path):
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(path, timeout=60)
-        self.db.executescript('''
-            CREATE TABLE IF NOT EXISTS observations (
-                scope TEXT, run TEXT, kind TEXT, subject TEXT, observed_at TEXT,
-                payload TEXT, PRIMARY KEY(scope,run,kind,subject));
-            CREATE TABLE IF NOT EXISTS events (
-                scope TEXT, event_key TEXT, manager TEXT, kind TEXT, status TEXT,
-                amount REAL, amount_max REAL, payload TEXT, updated_at TEXT,
-                PRIMARY KEY(scope,event_key));
-            CREATE TABLE IF NOT EXISTS cache (
-                scope TEXT, cache_key TEXT, observed_at TEXT, payload TEXT,
-                PRIMARY KEY(scope,cache_key));
-        ''')
-
-    def observe(self, scope, run, kind, subject, now, payload):
-        self.db.execute('INSERT OR REPLACE INTO observations VALUES (?,?,?,?,?,?)',
-                        (scope, run, kind, str(subject), now.isoformat(), json.dumps(payload, ensure_ascii=False)))
-
-    def cached(self, scope, key, now, max_age):
-        row = self.db.execute('SELECT observed_at,payload FROM cache WHERE scope=? AND cache_key=?',
-                              (scope, key)).fetchone()
-        if row and now - timestamp(row[0]) < max_age:
-            return json.loads(row[1])
-        return None
-
-    def cache(self, scope, key, now, payload):
-        self.db.execute('INSERT OR REPLACE INTO cache VALUES (?,?,?,?)',
-                        (scope, key, now.isoformat(), json.dumps(payload, ensure_ascii=False)))
-
-    def replace_events(self, scope, events, now):
-        keys = [event['key'] for event in events]
-        duplicates = sorted({key for key in keys if keys.count(key) > 1})
-        if duplicates:
-            raise ValueError('Doppelte Ereignisschlüssel: ' + ', '.join(duplicates))
-        self.db.execute('DELETE FROM events WHERE scope=?', (scope,))
-        for event in events:
-            self.db.execute('INSERT INTO events VALUES (?,?,?,?,?,?,?,?,?)',
-                            (scope, event['key'], event['manager'], event['kind'], event['status'],
-                             event.get('amount'), event.get('amount_max'),
-                             json.dumps(event, ensure_ascii=False), now.isoformat()))
-
-    def kickoff_squad(self, scope, manager_id, day):
-        row = self.db.execute(
-            """SELECT payload FROM observations
-               WHERE scope=? AND kind='kickoff_squad' AND subject=?
-               ORDER BY observed_at DESC LIMIT 1""",
-            (scope, f'{manager_id}:{day}')).fetchone()
-        return json.loads(row[0]) if row else None
-
-    def close(self):
-        self.db.commit()
-        self.db.close()
-
-
 def current_season(performance):
     return max(performance.get('it', []), key=lambda s: int(s['sid']), default={})
 
@@ -95,7 +38,7 @@ def settled_matchday_days(activity_feed, start_date):
     days = set()
     for event in activity_feed.get('af', []) if isinstance(activity_feed, dict) else []:
         data = event.get('data') if isinstance(event, dict) else None
-        if event.get('t') != 17 or not isinstance(data, dict) or data.get('day') is None:
+        if not isinstance(data, dict) or str(event.get('t')) != '17' or data.get('day') is None:
             continue
         if event.get('dt') and timestamp(event['dt']) < timestamp(start_date):
             continue
@@ -284,6 +227,15 @@ def capture(get, league_id, start_date, store, now, run):
 def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
                    initial_squad_value=100_000_000, history_path='manager_history.sqlite3',
                    now=None, capture_only=False, output_dir='manager-history-output'):
+    with history_lock(history_path):
+        return _audit_managers(get, league_id, start_date, start_cash=start_cash,
+                               initial_squad_value=initial_squad_value, history_path=history_path,
+                               now=now, capture_only=capture_only, output_dir=output_dir)
+
+
+def _audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
+                   initial_squad_value=100_000_000, history_path='manager_history.sqlite3',
+                   now=None, capture_only=False, output_dir='manager-history-output'):
     now = now or datetime.now(BERLIN)
     scope, run = f'{league_id}:{start_date}', uuid.uuid4().hex
     confirmations = json.loads(Path(__file__).with_name('confirmed_lineups.json').read_text(encoding='utf-8')).get(scope, {})
@@ -299,7 +251,7 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
                     upcoming.append({'day': day.get('day'), 'kickoff': min(kickoffs).isoformat()})
             for name, data in managers.items():
                 for matchday in upcoming:
-                    if 'squad' in data:
+                    if 'squad' in data and not store.kickoff_squad(scope, data['id'], matchday['day']):
                         store.observe(scope, run, 'kickoff_squad',
                                       f"{data['id']}:{matchday['day']}", now,
                                       {'manager': name, **matchday, 'squad': data['squad']})
@@ -337,6 +289,8 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
             try:
                 trades = fetch_manager_transfers(get, league_id, data['id'], start_date)
                 store.observe(scope, run, 'transfers', data['id'], now, trades)
+                for trade in trades:
+                    store.transfer(scope, data['id'], now, trade)
                 audit = reconstruct_cash(trades, data['performance'], data['squad'],
                                          data['dashboard']['prft'], start_date=start_date,
                                          as_of=now.isoformat(), start_cash=start_cash,
@@ -541,7 +495,9 @@ def audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
         store.replace_events(scope, events, now)
         output = Path(output_dir)
         output.mkdir(parents=True, exist_ok=True)
-        (output / 'latest.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
+        temporary = output / f'.latest-{run}.tmp'
+        temporary.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
+        temporary.replace(output / 'latest.json')
         (output / 'latest.html').write_text(render_audit(summary), encoding='utf-8')
         frame = pd.DataFrame(rows).sort_values('Available Budget', ascending=False, ignore_index=True)
         frame.attrs['manager_audit'] = summary

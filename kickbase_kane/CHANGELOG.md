@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.94
+
+- Erfasst Transfers unabhängig vom Vollreport alle 30 Minuten im HA-Add-on. Sichert fixierte Kader zwischen 3 und 35 Minuten nach Spieltagsbeginn mit minütlicher Prüfung.
+- Prüft Abschlussmeldungen im Aktivitätenfeed alle 10 Minuten und aktualisiert anschließend Managerbudgets und Erfolgsprotokoll ohne Modelltraining oder Mailversand. Unvollständige Abrechnungen werden erneut geprüft.
+- Führt lokale und GitHub-Historien zusammen. Überträgt Transferbeobachtungen, Startelf-Snapshots und belegte API-Erfolge über den vorhandenen Actions-Token; bestätigt Pakete erst nach Wiederfinden im gemeinsamen Archiv.
+- Speichert Zeitgeberzustand und ausstehende Übertragungen dauerhaft, schützt parallele Datenbankzugriffe und verhindert, dass ältere GitHub-Budgetberichte neuere lokale Auswertungen überschreiben.
+
 ## 0.2.93
 
 - Behält Reihenfolge und Scrollposition der Bankliste beim Ändern der Halten-/Verkaufen-Flags bei.

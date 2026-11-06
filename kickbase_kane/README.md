@@ -137,3 +137,44 @@ und das Add-on neu starten. Der GitHub-Cron kann zusätzlich weiterhin Reports a
 Marktwertcache, Berichte, SQLite-Datenbank, gespeicherte Aufstellungen und lokale
 KI-Hinweise liegen dauerhaft im Add-on-Datenordner. Der Startelf-Optimierer und
 die Report-Ansicht bleiben ueber die Kickbase-App in Home Assistant erreichbar.
+
+
+## Automatische Manager-Erfassung ab 0.2.94
+
+Das HA-Add-on startet zusätzlich einen eigenen Hintergrunddienst. Er arbeitet
+unabhängig von Prognosen, Modelltraining und E-Mail-Versand:
+
+- Transferhistorien aller Manager werden alle 30 Minuten abgerufen. Einzelne
+  Transfers werden anhand ihres Inhalts und Managers eindeutig archiviert.
+- Der Spielplan wird stündlich aktualisiert. Zwischen 3 und 35 Minuten nach
+  dem ersten Anpfiff eines Spieltags werden die fixierten Kader mit ihren
+  Aufstellungspositionen gesichert. Die Prüfung läuft minütlich; erfolgreiche
+  Einzelabrufe bleiben bei Teilfehlern erhalten und werden nicht überschrieben.
+- Alle 10 Minuten wird nach der Spieltags-Abschlussmeldung (Feed-Typ 17)
+  gesucht. Neue Abschlüsse lösen eine Budget-/Erfolgsauswertung aus; fehlende
+  finale Managerdaten werden nach fünf Minuten erneut versucht. Es gibt keine
+  feste Montag-Uhrzeit. Zusätzlich wird mindestens alle sechs Stunden und bei
+  neuen Transfers bzw. importierten Snapshots neu gerechnet.
+
+Die Berechnung bleibt eine Schätzung der Mitmanagerbudgets. Nicht zuordenbare
+Erfolge bleiben offen. Wiederholte Auswertungen ersetzen abgeleitete Ergebnisse,
+statt Boni erneut zum vorherigen Budget zu addieren.
+
+Mit dem vorhandenen `github_forecast_token` (Actions: Read and write) wird das
+kumulative `manager-history`-Artifact in die lokale Datenbank zusammengeführt.
+Neue lokale Transferbeobachtungen, Startelf-Snapshots und belegte API-Erfolge
+werden komprimiert an den Workflow `manager_history.yml` übergeben. Dieser
+führt sie mit dem GitHub-Archiv zusammen. Ein angenommener Workflow-Start ist
+noch keine Bestätigung: Ein Paket bleibt vorgemerkt, bis seine Daten im
+heruntergeladenen Archiv stehen. Fehlgeschlagene oder verlorene Anforderungen
+werden erneut gesendet. Der bestehende GitHub-Anpfiff-Workflow bleibt als
+Absicherung aktiv; beide Wege verwenden dieselben Beobachtungs- und Ereignisschlüssel.
+Ohne Token funktioniert die lokale Erfassung weiterhin, nur der Abgleich entfällt.
+
+Status und ausstehende Aufgaben liegen in `/data/.manager-monitor-state.json`,
+das Protokoll in `/data/manager-monitor.log`, das gemeinsame Archiv in
+`/data/manager_history.sqlite3`. Die aktuellen Budgets werden atomar unter
+`/data/manager-history-output/latest.json` geschrieben und vom Dashboard gelesen.
+Nach Installation des Updates und Add-on-Neustart startet der Dienst automatisch.
+Verpasste Anpfiff-Fenster werden nicht als erfolgreiche Snapshots markiert;
+für diese Spieltage wird die bestehende historische Teamcenter-Abfrage verwendet.

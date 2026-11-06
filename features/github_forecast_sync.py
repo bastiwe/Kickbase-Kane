@@ -95,7 +95,7 @@ def _headers(token):
 def _latest_artifact(headers, repository, name):
     response = requests.get(
         f"{API_ROOT}/repos/{repository}/actions/artifacts",
-        headers=headers, params={"per_page": 100}, timeout=(5, 20),
+        headers=headers, params={"per_page": 100, "name": name}, timeout=(5, 20),
     )
     response.raise_for_status()
     candidates = [
@@ -106,13 +106,13 @@ def _latest_artifact(headers, repository, name):
     return max(candidates, key=lambda item: (item.get("updated_at") or "", item.get("id") or 0)) if candidates else None
 
 
-def dispatch_workflow(token, repository, workflow_file):
+def dispatch_workflow(token, repository, workflow_file, inputs=None):
     """Start one allow-listed workflow on main through GitHub Actions."""
     if not token:
         raise RuntimeError('GitHub-Token nicht konfiguriert.')
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository or ""):
         raise RuntimeError('Ungültiger GitHub-Repositoryname.')
-    if workflow_file not in {'actions_spaet.yml', 'actions_fast.yml'}:
+    if workflow_file not in {'actions_spaet.yml', 'actions_fast.yml', 'manager_history.yml'}:
         raise RuntimeError('Ungültiger Prognose-Workflow.')
     headers = {
         "Accept": "application/vnd.github+json",
@@ -122,7 +122,7 @@ def dispatch_workflow(token, repository, workflow_file):
     try:
         response = requests.post(
             f"{API_ROOT}/repos/{repository}/actions/workflows/{workflow_file}/dispatches",
-            headers=headers, json={"ref": "main"}, timeout=(5, 20),
+            headers=headers, json={"ref": "main", **({'inputs': inputs} if inputs else {})}, timeout=(5, 20),
         )
     except requests.RequestException as exc:
         raise RuntimeError('GitHub-Workflow konnte nicht gestartet werden.') from exc
@@ -217,9 +217,15 @@ def sync_latest_manager_audit(token, repository, data_root):
         if not _is_valid_manager_summary(payload):
             return {"status": "waiting", "message": "Manager-Audit stammt noch aus einer älteren Reportversion."}
 
-        temporary = destination.with_suffix(".tmp")
-        temporary.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-        temporary.replace(destination)
+        from features.history_store import history_lock
+        from features.history_sync import atomic_json
+        with history_lock(Path(data_root) / 'manager_history.sqlite3'):
+            current = _read_snapshot(destination)
+            current_time = _timestamp(current.get('generated_at')) if current else None
+            payload_time = _timestamp(payload.get('generated_at'))
+            if current_time and payload_time and current_time >= payload_time:
+                return {"status": "current", "message": "Lokaler Manager-Audit ist bereits aktueller."}
+            atomic_json(destination, payload)
         return {
             "status": "updated", "message": "Managerbudgets übernommen.",
             "generatedAt": payload.get("generated_at"),
