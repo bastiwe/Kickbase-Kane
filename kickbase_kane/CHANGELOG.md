@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.93
+
+- Behält Reihenfolge und Scrollposition der Bankliste beim Ändern der Halten-/Verkaufen-Flags bei.
+- Wechselt per Button und Wischgeste direkt zwischen Halten und Verkaufen. Erneutes Setzen desselben Flags hebt die Markierung auf.
+
 ## 0.2.92
 
 - Ergaenzt in Wertentwicklung den Spielermarktwert und das Startelfsymbol mit LI-Prozentwert sowie in Handlungsbedarf den Spielermarktwert.

@@ -60,7 +60,48 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
     assert(await page.locator('.bank .plan-actions button').first().isVisible());
     await page.screenshot({path: `test-output/planner-desktop-${width}.png`, style: '.toast{visibility:hidden!important}'});
   }
+  // Flags must change directly, without moving players or scrolling the bank.
+  const bankOrder = () => page.locator('#bank .card').evaluateAll(cards => cards.map(card => card.dataset.player));
+  const originalOrder = await bankOrder();
+  const playerId = await page.locator('.bank-group').nth(1).locator('.card').last().getAttribute('data-player');
+  const bankCard = () => page.locator(`#bank [data-player="${playerId}"]`);
+  const button = flag => page.locator(`[data-${flag}="${playerId}"]`);
+  const checkFlag = async (flag, enabled = true) => {
+    assert.equal(await button(flag).evaluate(el => el.classList.contains(el.dataset.sell ? 'active-sell' : 'active-lock')), enabled);
+    assert.deepEqual(await bankOrder(), originalOrder, 'Flag changes must preserve the complete bank order');
+  };
+  const cash = () => page.locator('#budget').innerText();
+  const saleBudget = await cash();
+  await page.locator('#bank').evaluate(el => {el.scrollTop = 250;});
+  const scrollTop = await page.locator('#bank').evaluate(el => el.scrollTop);
+  await button('lock').dispatchEvent('click');
+  await checkFlag('lock'); await checkFlag('sell', false);
+  assert.notEqual(await cash(), saleBudget, 'Holding a player removes the sale proceeds');
+  assert.equal(await page.locator('#bank').evaluate(el => el.scrollTop), scrollTop);
+  await button('sell').dispatchEvent('click');
+  await checkFlag('sell'); await checkFlag('lock', false);
+  assert.equal(await cash(), saleBudget, 'Selling again restores the projected budget');
+  await button('sell').dispatchEvent('click');
+  await checkFlag('sell', false);
+  await button('lock').dispatchEvent('click');
+  await checkFlag('lock');
+  await button('lock').dispatchEvent('click');
+  await checkFlag('lock', false);
   await page.setViewportSize({width: 390, height: 844});
+  const swipe = async dx => bankCard().evaluate((el, dx) => {
+    for (const [type, property, x] of [['touchstart', 'touches', 150], ['touchend', 'changedTouches', 150 + dx]]) {
+      const event = new Event(type, {bubbles: true});
+      Object.defineProperty(event, property, {value: [{clientX: x, clientY: 100}]});
+      el.dispatchEvent(event);
+    }
+  }, dx);
+  await swipe(-90); await checkFlag('lock');
+  await swipe(90); await checkFlag('sell'); await checkFlag('lock', false);
+  await swipe(-90); await checkFlag('lock'); await checkFlag('sell', false);
+  await swipe(-90); await checkFlag('lock', false);
+  await swipe(90); await checkFlag('sell');
+  await swipe(90); await checkFlag('sell', false);
+  await page.waitForTimeout(520); // The gesture intentionally suppresses a following tap.
   await page.locator('#deficit').fill('0');
   await page.locator('#deficit-form button').click();
   assert((await page.locator('#deficit-active').innerText()).includes('0'));
