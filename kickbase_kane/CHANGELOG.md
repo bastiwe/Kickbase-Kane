@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.92
+
+- Ergaenzt in Wertentwicklung den Spielermarktwert und das Startelfsymbol mit LI-Prozentwert sowie in Handlungsbedarf den Spielermarktwert.
+
+- Kompakte Desktop-Startelf mit Bank als vertikaler Liste links neben dem Spielfeld. Die Spielfeldhoehe richtet sich nach der Fensterhoehe; lange Banklisten scrollen separat.
+- Erhaelt Spielerdetails, Startelf-Fixierung und Verkauf-/Halten-Aktionen in den kompakten Kacheln.
+
 ## 0.2.91
 
 - Verkleinert die angeheftete Restbudgetanzeige im Startelfplaner und verschiebt die Einstellung „Erlaubtes Minus“ in den normalen Seitenbereich über der Formationsauswahl.

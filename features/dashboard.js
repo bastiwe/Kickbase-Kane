@@ -40,6 +40,19 @@
     const text=value===null?'–':Math.round(value)+' %';
     return '<span class="li-badge '+tone+'" title="LigaInsider-Startelfwahrscheinlichkeit">'+(label?escapeHtml(label)+' ':'')+text+'</span>';
   };
+  const lineupBadge = p => {
+    const value=li(p), known=value!==null && value>=0 && value<=100;
+    const [tone,label,icon]=!known?['unknown','Unbekannt','–']
+      :value>=80?['certain','Sicher','✦']:value>=65?['expected','Erwartet','✓']
+      :value>=25?['uncertain','Unsicher','?']:value>0?['unlikely','Unwahrscheinlich','!']
+      :['excluded','Ausgeschlossen','×'];
+    const text='LI '+(known?value.toLocaleString('de-DE',{maximumFractionDigits:2})+' %':'–');
+    return '<span class="li-badge lineup-li" title="'+escapeHtml('Startelf: '+label+' · '+text)+'"><span class="lineup-symbol '+tone+'" role="img" aria-label="'+escapeHtml('Startelf: '+label)+'">'+icon+'</span>'+escapeHtml(text)+'</span>';
+  };
+  const marketValueLabel = p => {
+    const value=number(field(p,'mv','marketValue','market_value'));
+    return '<span class="player-market-value">MW <strong>'+(value===null?'–':euros(value))+'</strong></span>';
+  };
   const playerLabel = (p,includeArt=true) => '<div class="player">'+(includeArt?avatar(p):'')+'<div><div class="name">'+escapeHtml(name(p))+'</div><div class="player-subline"><span class="sub">'+escapeHtml(club(p))+' · '+escapeHtml(position(p))+'</span>'+liBadge(p)+'</div></div></div>';
   const timeValue = value => { if (!value) return Infinity; if (typeof value === 'string' && Number.isNaN(Number(value))) { const parsed = Date.parse(value); return Number.isNaN(parsed) ? Infinity : parsed; } const numeric = Number(value); return numeric > 1e12 ? numeric : numeric * 1000; };
   const formatTime = value => { const stamp=timeValue(value); if(!Number.isFinite(stamp))return '–'; return new Date(stamp).toLocaleString('de-DE',{timeZone:'Europe/Berlin',dateStyle:'short',timeStyle:'short'});};
@@ -149,7 +162,7 @@
       const profitText=profit===null?'G/V –':'G/V '+signed(profit);
       const pointsText=total===null?'Pkt. –':'Pkt. '+Math.round(total).toLocaleString('de-DE');
       const averageText=average===null?'Ø –':'Ø '+average.toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1});
-      return '<div class="player">'+avatar(p)+'<div><div class="name">'+escapeHtml(name(p))+'</div><div class="sub">'+escapeHtml(club(p))+' · '+escapeHtml(position(p))+'</div><div class="roster-statline"><span class="'+(profit===null?'':cls(profit))+'">'+profitText+'</span><span>'+pointsText+'</span><span>'+averageText+'</span></div></div></div>';
+      return '<div class="player">'+avatar(p)+'<div><div class="name">'+escapeHtml(name(p))+'</div><div class="sub">'+escapeHtml(club(p))+' · '+escapeHtml(position(p))+'</div><div class="roster-marketline">'+marketValueLabel(p)+lineupBadge(p)+'</div><div class="roster-statline"><span class="'+(profit===null?'':cls(profit))+'">'+profitText+'</span><span>'+pointsText+'</span><span>'+averageText+'</span></div></div></div>';
     };
     $('roster-movers').innerHTML=chosen.length?chosen.map(p=>'<details class="roster-player" data-player-id="'+escapeHtml(p.id)+'"><summary><div class="list-row">'+rosterLabel(p)+'<div class="roster-values"><span class="sub">Erw. 1T</span><strong class="list-value '+cls(change(p))+'">'+forecastText(p)+trendArrow(p)+'</strong></div></div></summary><div class="player-history"><p class="empty">Aufklappen lädt die Tagesänderungen.</p></div></details>').join(''):'<p class="empty">Noch kein Kader geladen.</p>';
     document.querySelectorAll('.roster-player').forEach(details=>details.addEventListener('toggle',()=>{if(details.open)loadPlayerHistory(details);}));
@@ -167,7 +180,7 @@
     const overnight=[...market].filter(p=>prediction(p)!==null && change(p)>=TRADING_THRESHOLD && timeValue(deadline(p))>update && timeValue(deadline(p))<=nightEnd).sort((a,b)=>change(b)-change(a)).slice(0,2);
     const riskRow=(player, tone, label, dot) =>
       '<details class="risk-player market-history-player" data-player-id="'+escapeHtml(player.id)+'"><summary><div class="list-row">'
-      +playerLabel(player)+'<div class="risk-values"><span class="list-value '+tone+'"><span class="risk-dot '+dot+'"></span>'+label+' '+forecastText(player)+'</span>'+expiryDetails(player)+'</div></div></summary>'
+      +playerLabel(player)+'<div class="risk-values">'+marketValueLabel(player)+'<span class="list-value '+tone+'"><span class="risk-dot '+dot+'"></span>'+label+' '+forecastText(player)+'</span>'+expiryDetails(player)+'</div></div></summary>'
       +'<div class="player-history"><p class="empty">Aufklappen lädt die Tagesänderungen.</p></div></details>';
     const rows=[];
     risky.forEach(p=>rows.push(riskRow(p,'negative','Drohender MW-Verlust','red')));

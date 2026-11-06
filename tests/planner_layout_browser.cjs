@@ -42,6 +42,24 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
       await page.locator('.lineup-box').screenshot({path: `test-output/planner-pitch-${width}.png`, style: ".top,.overlay,.toast{visibility:hidden!important}"});
     }
   }
+  for (const [width, height] of [[1366, 768], [1440, 900], [1920, 1080]]) {
+    await page.setViewportSize({width, height});
+    await page.locator('[data-form="4-4-2"]').click();
+    await page.evaluate(() => scrollTo(0, 0));
+    const geometry = await page.evaluate(() => {
+      const box = selector => document.querySelector(selector).getBoundingClientRect();
+      const lineup = box('.lineup-box'), bank = box('.bank-box'), rows = document.querySelector('#bank');
+      return {top: lineup.top, bottom: lineup.bottom, height: lineup.height, sideBySide: bank.right <= lineup.left && Math.abs(bank.top - lineup.top) < 1,
+        fits: lineup.bottom <= innerHeight && bank.bottom <= innerHeight,
+        bankScrolls: rows.scrollHeight > rows.clientHeight && getComputedStyle(rows).overflowY === 'auto',
+        playerCount: rows.querySelectorAll('.card').length};
+    });
+    assert(geometry.sideBySide && geometry.fits, `Desktop lineup and bank must fit ${width}x${height}: ${JSON.stringify(geometry)}`);
+    assert(geometry.bankScrolls && geometry.playerCount === 9, 'Long bank list stays inside its panel');
+    await page.locator('.bank .plan-actions button').first().click();
+    assert(await page.locator('.bank .plan-actions button').first().isVisible());
+    await page.screenshot({path: `test-output/planner-desktop-${width}.png`, style: '.toast{visibility:hidden!important}'});
+  }
   await page.setViewportSize({width: 390, height: 844});
   await page.locator('#deficit').fill('0');
   await page.locator('#deficit-form button').click();
