@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.91
+
+- Verkleinert die angeheftete Restbudgetanzeige im Startelfplaner und verschiebt die Einstellung „Erlaubtes Minus“ in den normalen Seitenbereich über der Formationsauswahl.
+- Zeigt die mobile Startelf auf einem Spielfeld mit kompakten Spielerkacheln pro Positionsreihe. Die Breite passt sich an die Spielerzahl an; Bild, Name, Gegner, Punkte, Marktwert und Status bleiben sichtbar.
+
 ## 0.2.90
 
 - Ergänzt in „… für freien Platz wählen“ die nächsten drei Gegner mit Heim-/Auswärtsangabe, Tabellenplatz und Termin. Fehlende Spielpläne werden bei Bedarf geladen und pro Team zwischengespeichert.

@@ -281,7 +281,7 @@ class AdvisorHandler(BaseHTTPRequestHandler):
         elif path == '/api/dashboard-data':
             with self.server.lock:
                 self.reply(200, self.server.report)
-        elif path in ('/dashboard.js', '/dashboard.css', '/dashboard_layout.js', '/dashboard_editor.js', '/dashboard_editor.css', '/dashboard_preview.js', '/dashboard_native.js', '/planner_details.js', '/planner_details.css'):
+        elif path in ('/dashboard.js', '/dashboard.css', '/dashboard_layout.js', '/dashboard_editor.js', '/dashboard_editor.css', '/dashboard_preview.js', '/dashboard_native.js', '/planner_details.js', '/planner_details.css', '/planner_layout.css'):
             name = path.lstrip('/')
             content_type = 'text/javascript; charset=utf-8' if name.endswith('.js') else 'text/css; charset=utf-8'
             self.reply(200, (APP_ROOT / 'features' / name).read_text(encoding='utf-8'), content_type)
