@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Livespieltag · Kickbase Kane</title>
+  <link rel="stylesheet" href="./live_matchday.css">
+  <script src="./live_matchday.js" defer></script>
+</head>
+<body>
+  <header class="live-header">
+    <a class="brand" href="./"><span>K</span><div>KICKBASE KANE<small>← Trading Dashboard</small></div></a>
+    <div class="live-title"><span class="live-dot"></span> LIVESPIELTAG</div>
+    <nav class="tabs" aria-label="Spieltagansicht" role="tablist">
+      <button id="tab-league" role="tab" aria-selected="true" aria-controls="league-view" data-view="league">Liga</button>
+      <button id="tab-matchday" role="tab" aria-selected="false" aria-controls="matchday-view" data-view="matchday" tabindex="-1">Matchday</button>
+    </nav>
+  </header>
+  <main>
+    <section class="match-hero" aria-label="Begegnung"><div id="hero-content"><span>Spieltag wird geladen …</span></div></section>
+    <div class="section-bar"><label for="day-select">SPIELTAG <select id="day-select" aria-label="Spieltag wählen" disabled></select></label><h1 id="section-title">LIGA</h1><span id="league-name">–</span></div>
+    <div class="status-row"><span id="live-status" role="status">Verbinde mit Kickbase …</span><button id="refresh" type="button">Aktualisieren ↻</button></div>
+    <p id="live-error" class="error" role="alert" hidden></p>
+    <p id="data-notes" class="data-notes" hidden></p>
+    <section id="league-view" role="tabpanel" aria-labelledby="tab-league">
+      <div class="table-scroll"><table><thead><tr><th><button data-sort="seasonRank">RANG</button></th><th>MANAGER</th><th>KADER</th><th>FORMATION</th><th>KADERWERT</th><th>S11 Ø-PUNKTE</th><th>MW LETZTE 24H</th><th>ST-SIEGE</th><th><button data-sort="dayPoints">PUNKTE SPIELTAG</button></th><th><button data-sort="seasonPoints">GESAMTPUNKTE ↓</button></th></tr></thead><tbody id="league-rows"></tbody></table></div>
+      <p class="footnote">Größe, Marktwert und Ø-Punkte beziehen sich auf den aktuellen Kader bzw. die aktuellen Spielerwerte. Startelf und Spieltagspunkte gehören zum gewählten Spieltag.</p>
+    </section>
+    <section id="matchday-view" role="tabpanel" aria-labelledby="tab-matchday" hidden><div id="manager-rows" class="manager-rows"></div><p class="footnote">Spieler sind nach Spieltagspunkten sortiert, höchste Punktzahl links. Ein Klick öffnet die Punkteaktionen. Vor Anpfiff ist die Aufstellung vorläufig.</p></section>
+  </main>
+  <footer class="fixture-ticker" aria-label="Begegnungen und Spielstände"><button id="ticker-toggle" type="button" aria-label="Laufband pausieren" aria-pressed="false">Ⅱ</button><div class="ticker-window"><div id="ticker-track" class="ticker-track"></div></div></footer>
+  <dialog id="actions-dialog" aria-labelledby="actions-title">
+    <header class="dialog-header"><div><p class="eyebrow">PUNKTEAKTIONEN · <span id="actions-day"></span></p><h2 id="actions-title">Spieler</h2></div><button id="close-actions" type="button" aria-label="Spieleraktionen schließen">✕</button></header>
+    <div class="action-summary"><strong id="actions-points">–</strong><span>SPIELTAGSPUNKTE</span><small id="actions-status" role="status"></small></div>
+    <nav class="action-tabs" role="tablist" aria-label="Punkteaktionen"><button id="actions-chronological" role="tab" aria-selected="true" data-actions-view="chronological" aria-controls="actions-list">Chronologisch</button><button id="actions-grouped" role="tab" aria-selected="false" data-actions-view="grouped" aria-controls="actions-list" tabindex="-1">Nach Aktion</button></nav>
+    <div id="actions-list" role="tabpanel" aria-labelledby="actions-chronological"></div>
+  </dialog>
+</body></html>

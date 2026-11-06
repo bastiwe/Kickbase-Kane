@@ -178,3 +178,44 @@ das Protokoll in `/data/manager-monitor.log`, das gemeinsame Archiv in
 Nach Installation des Updates und Add-on-Neustart startet der Dienst automatisch.
 Verpasste Anpfiff-Fenster werden nicht als erfolgreiche Snapshots markiert;
 für diese Spieltage wird die bestehende historische Teamcenter-Abfrage verwendet.
+
+
+## Livespieltag ab 0.2.95
+
+Im Trading Dashboard öffnet **Livespieltag** die neue Seite mit den Reitern
+**Liga** und **Matchday**. Die Liga-Tabelle zeigt Kadergröße, Formation,
+Kaderwert, Summe der aktuellen Starter-Durchschnittspunkte, Marktwertänderung
+in 24 Stunden, Spieltagssiege sowie Spieltags- und Gesamtpunkte. Kaderkennzahlen
+sind aktuelle Werte und keine historischen Marktwert-Snapshots.
+
+Matchday zeigt je Manager die Startelf des gewählten Spieltags, innerhalb der
+Zeile nach Spielerpunkten absteigend sortiert. Auf dem Smartphone sind die
+Spielerreihen seitlich scrollbar. Vor Anpfiff wird die aktuelle Aufstellung
+als vorläufig gezeigt; nach Anpfiff wird die Teamcenter-Aufstellung verwendet.
+Falls diese fehlt, kann der gesicherte Anpfiff-Kader als gekennzeichneter
+Fallback dienen. Spieler ohne bestätigten Punktestand erscheinen mit „–“.
+
+Ein Klick auf einen Spieler öffnet seine **Punkteaktionen**. Die Reiter zeigen
+entweder die chronologische Buchungsliste oder Summen je Aktionsart.
+Korrekturbuchungen bleiben enthalten und werden gekennzeichnet; eine mögliche
+Differenz zwischen Buchungssumme und Spielerpunkten wird sichtbar ausgewiesen.
+Aktionsnamen stammen aus Kickbases Katalog; häufige englische Begriffe werden
+übersetzt. Unbekannte Codes werden ausdrücklich als „Aktion <Code>“ gezeigt.
+
+Die Seite verwendet ausschließlich serverseitige Lesezugriffe mit dem vorhandenen
+Kickbase-Zugang:
+
+- `/v4/leagues/{leagueId}/ranking?dayNumber=…`
+- `/v4/leagues/{leagueId}/users/{managerId}/teamcenter?dayNumber=…`
+- `/v4/competitions/1/playercenter/{playerId}?dayNumber=…&leagueId=…`
+- `/v4/competitions/1/matchdays`
+- `/v4/live/eventtypes`
+
+Punkte/Spielstände werden bei sichtbarer Seite alle 20 Sekunden abgefragt,
+Spieleraktionen nur im geöffneten Dialog. Liga- und Teamcenter-Abfragen werden
+20 Sekunden, Aktionen 10 Sekunden, Kaderkennzahlen fünf Minuten und der
+Aktionskatalog einen Tag serverseitig gecached. Es gibt keinen direkten
+Kickbase-Aufruf aus dem Browser und keinen zusätzlichen API-Schlüssel.
+Bei Abruffehlern bleibt der vorherige Datenstand mit Fehlerhinweis und
+Abrufzeit sichtbar. Das Laufband lässt sich pausieren und respektiert die
+Systemeinstellung für reduzierte Animationen.

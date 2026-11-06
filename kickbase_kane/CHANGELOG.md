@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.95
+
+- Neue Livespieltag-Seite mit Liga-Tabelle und Matchday-Ansicht aller Manager-Startelfs, nach Livepunkten sortierten Spielern und Spieltagsauswahl. Über den neuen Dashboard-Link erreichbar.
+- Begegnungs-Laufband mit Anstoßzeiten, Live-Spielständen und Spielminuten sowie Vorschau/Countdown zur nächsten Begegnung.
+- Spieler-Klick öffnet chronologische Punkteaktionen oder nach Aktionsart summierte Buchungen inklusive Korrekturen und Abgleich mit den offiziellen Spielerpunkten.
+- Liest Kickbase-Teamcenter, Playercenter, Spielplan und Aktionskatalog serverseitig. Aktualisiert sichtbare Seiten alle 20 Sekunden, cached gemeinsame Abfragen und hält bei Fehlern den letzten erfolgreichen Stand gekennzeichnet sichtbar.
+- Markiert Aufstellungen vor Anpfiff als vorläufig. Übernimmt keine Punkte oder Aktionen aus anderen Spieltagen; fehlende Daten bleiben als solche erkennbar. Responsive Darstellung und HA-Ingress-Pfade geprüft.
+
 ## 0.2.94
 
 - Erfasst Transfers unabhängig vom Vollreport alle 30 Minuten im HA-Add-on. Sichert fixierte Kader zwischen 3 und 35 Minuten nach Spieltagsbeginn mit minütlicher Prüfung.

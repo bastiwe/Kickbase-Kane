@@ -24,6 +24,7 @@ from features.predictions.snapshot import forecast_metadata, multi_day_predictio
 from features.report_jobs import ReportJobs
 from features.github_forecast_sync import dispatch_workflow
 from features.dashboard_layout import load_design, validate_design
+from features.live_matchday import LiveMatchday
 
 
 APP_ROOT = Path(__file__).resolve().parent
@@ -120,6 +121,9 @@ class AdvisorServer(ThreadingHTTPServer):
         self.request_lock = threading.Lock()
         self.layout_path = DATA_ROOT / '.advisor-dashboard-layout.json'
         self.kickbase = None
+        self.live_matchday = LiveMatchday(lambda: self.kickbase,
+                                         DATA_ROOT / 'manager_history.sqlite3',
+                                         os.getenv('KICK_LEAGUE_START_DATE', '2026-08-15'))
         self.report_jobs = ReportJobs(self, APP_ROOT, DATA_ROOT)
 
     def _persist_mtime_ns(self):
@@ -260,6 +264,43 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             template = (APP_ROOT / 'features/trading_dashboard.html').read_text(encoding='utf-8')
             page = template.replace('__PAYLOAD__', payload).replace('__SETTINGS__', settings)
             self.reply(200, page, 'text/html; charset=utf-8')
+        elif path == '/matchday':
+            self.reply(200, (APP_ROOT / 'features/live_matchday.html').read_text(encoding='utf-8'), 'text/html; charset=utf-8')
+        elif path == '/api/live-matchday' or path.startswith('/api/live-matchday/player/'):
+            with self.server.lock:
+                client = self.server.kickbase
+                league_id = self.server.report.get('league')
+            if not client:
+                self.reply(409, {'error': 'Kickbase-Livezugriff ist nicht aktiviert.'})
+                return
+            try:
+                query = parse_qs(urlsplit(self.path).query)
+                try:
+                    day = int(query['day'][0]) if 'day' in query else None
+                except ValueError:
+                    self.reply(400, {'error': 'Ungültiger Spieltag.'})
+                    return
+                player_id = path.rsplit('/', 1)[-1] if '/player/' in path else None
+                if ((day is not None and not 1 <= day <= 34)
+                        or (player_id is not None and (not player_id.isdigit() or day is None))):
+                    self.reply(400, {'error': 'Ungültiger Spieltag oder Spieler.'})
+                    return
+                if not league_id or league_id == 'local':
+                    leagues = client.get('/leagues/selection').get('it', [])
+                    selected = next((league for league in leagues if league.get('n') == os.getenv('KICK_LEAGUE_NAME')), None)
+                    if selected is None and len(leagues) == 1:
+                        selected = leagues[0]
+                    if selected is None:
+                        raise RuntimeError('Liga nicht eindeutig gefunden')
+                    league_id = selected['i']
+                service = self.server.live_matchday
+                result = service.player(league_id, day, player_id) if player_id else service.snapshot(league_id, day)
+                self.reply(200, result)
+            except PermissionError:
+                self.reply(404, {'error': 'Spieler gehört nicht zu einer Startelf dieses Spieltags.'})
+            except (ValueError, KeyError, TypeError, RuntimeError, requests.RequestException) as error:
+                self.server.log_event('ERROR Livespieltag: ' + type(error).__name__)
+                self.reply(502, {'error': 'Kickbase-Livespieltag derzeit nicht abrufbar. Bitte erneut versuchen.'})
         elif path == '/planner':
             with self.server.lock:
                 payload = json.dumps(self.server.report, ensure_ascii=True, allow_nan=False).replace('<', '\\u003c')
@@ -281,7 +322,7 @@ class AdvisorHandler(BaseHTTPRequestHandler):
         elif path == '/api/dashboard-data':
             with self.server.lock:
                 self.reply(200, self.server.report)
-        elif path in ('/dashboard.js', '/dashboard.css', '/dashboard_layout.js', '/dashboard_editor.js', '/dashboard_editor.css', '/dashboard_preview.js', '/dashboard_native.js', '/planner_details.js', '/planner_details.css', '/planner_layout.css'):
+        elif path in ('/dashboard.js', '/dashboard.css', '/dashboard_layout.js', '/dashboard_editor.js', '/dashboard_editor.css', '/dashboard_preview.js', '/dashboard_native.js', '/planner_details.js', '/planner_details.css', '/planner_layout.css', '/live_matchday.js', '/live_matchday.css'):
             name = path.lstrip('/')
             content_type = 'text/javascript; charset=utf-8' if name.endswith('.js') else 'text/css; charset=utf-8'
             self.reply(200, (APP_ROOT / 'features' / name).read_text(encoding='utf-8'), content_type)
