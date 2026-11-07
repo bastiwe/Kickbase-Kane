@@ -46,7 +46,7 @@ cd /data
 
 if [ -n "$GITHUB_FORECAST_TOKEN" ] && [ "$GITHUB_FORECAST_TOKEN" != "null" ]; then
   bashio::log.info "GitHub-Prognose-Sync aktiv; der HA-Timer fordert Vollreports direkt in GitHub an."
-  python /app/features/github_forecast_sync.py &
+  PYTHONPATH=/app python -m features.github_forecast_sync &
 else
   bashio::log.info "Kein GitHub-Prognose-Token konfiguriert; lokale Vollreports bleiben aktiv."
 fi

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.96
+
+- Behebt einen Importfehler beim Abruf des Manager-Audits, der den GitHub-Sync für Prognosen und Dashboard-Reports beendete.
+
 ## 0.2.95
 
 - Neue Livespieltag-Seite mit Liga-Tabelle und Matchday-Ansicht aller Manager-Startelfs, nach Livepunkten sortierten Spielern und Spieltagsauswahl. Über den neuen Dashboard-Link erreichbar.
