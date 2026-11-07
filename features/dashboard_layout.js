@@ -21,6 +21,7 @@ window.KaneLayout = (() => {
   const pick=(row,...keys)=>keys.map(k=>row?.[k]).find(v=>v!==undefined&&v!==null&&v!=='')??null;
   const numeric=v=>v===null||v===undefined||v===''||typeof v==='boolean'||!Number.isFinite(Number(v))?null:Number(v);
   const forecast=p=>numeric(pick(p,'change','predicted_mv_target','prediction1T','predictedChange'));
+  const ownedPlayers=report=>(report.players||[]).filter(p=>p.owned===true);
   function stamp(value){if(value==null||value==='')return Infinity;const n=Number(value);return Number.isFinite(n)?n*(n<1e12?1000:1):Date.parse(value)||Infinity;}
   function nextUpdate(now=Date.now()){
     const formatter=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Berlin',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
@@ -54,7 +55,7 @@ window.KaneLayout = (() => {
   }
   function placeholderItem(){return Object.fromEntries(aliases.map(name=>[name,'{'+name+'}']));}
   function sectionItems(data,section,now=Date.now()){
-    const players=data.report.players||[],market=(data.report.marketPlayers||[]).filter(p=>!p.owned),update=nextUpdate(now);
+    const players=ownedPlayers(data.report),market=(data.report.marketPlayers||[]).filter(p=>!p.owned),update=nextUpdate(now);
     let rows=[];
     if(section==='transfers')rows=data.api.transfers?.transfers||[];
     if(section==='roster')rows=[...players].sort((a,b)=>(forecast(b)||0)-(forecast(a)||0));
@@ -68,7 +69,7 @@ window.KaneLayout = (() => {
     return rows.map(row=>normalizeItem(row,section,data));
   }
   function enrich(data) {
-    const report=data.report||{},players=report.players||[],market=report.marketPlayers||[];
+    const report=data.report||{},players=ownedPlayers(report),market=report.marketPlayers||[];
     const number=value=>value==null||value===''||typeof value==='boolean'||!Number.isFinite(Number(value))?null:Number(value);
     const field=(row,keys)=>number(keys.map(key=>row[key]).find(v=>v!=null&&v!==''));
     const total=keys=>{const values=players.map(p=>field(p,keys)).filter(v=>v!==null);return values.length?values.reduce((a,b)=>a+b,0):null;};

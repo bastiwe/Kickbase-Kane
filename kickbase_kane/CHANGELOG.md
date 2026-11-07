@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.97
+
+- Zählt im Trading-Dashboard nur eigene Spieler für Kadergröße, Kaderwert und Wertentwicklung. Offene Gebote bleiben im Transfermarkt und in der Planung verfügbar.
+
 ## 0.2.96
 
 - Behebt einen Importfehler beim Abruf des Manager-Audits, der den GitHub-Sync für Prognosen und Dashboard-Reports beendete.

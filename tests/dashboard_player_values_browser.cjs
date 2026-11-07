@@ -9,6 +9,17 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
   page.on('pageerror', e => errors.push(e.message));
   await page.route('**/api/**', r => r.fulfill({json: {series: [], managers: [], transfers: []}}));
   await page.goto(process.env.DASHBOARD_TEST_URL);
+
+  assert.equal(await page.locator('#metric-roster-count').innerText(), '8/16 Spieler');
+  assert.equal(await page.locator('#roster-movers [data-player-id="open-bid"]').count(), 0);
+  assert.equal(await page.locator('#market-table [data-player-id="open-bid"]').count(), 1);
+  const layoutRoster = await page.evaluate(() => {
+    const source = {report: JSON.parse(document.getElementById('data').textContent), api: {}};
+    window.KaneLayout.enrich(source);
+    return {count: source.dashboard['Kadergröße'], value: source.dashboard['Kaderwert'],
+            rows: window.KaneLayout.sectionItems(source, 'roster').length};
+  });
+  assert.deepEqual(layoutRoster, {count: 8, value: 86419746, rows: 8});
   const tones = ['certain', 'expected', 'uncertain', 'unlikely', 'excluded', 'unknown', 'unknown', 'certain'];
   for (let index = 0; index < tones.length; index++) {
     const row = page.locator(`#roster-movers [data-player-id="${index}"]`);

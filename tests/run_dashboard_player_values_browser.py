@@ -15,7 +15,9 @@ def main():
                     change=-150000, li=li, season=123.4, profitLoss=123456,
                     totalPoints=1234)
                for index, li in enumerate([80, 65, 25, 1, 0, None, 101, 85])]
-    server = create_server(0, dict(players=players, marketPlayers=[], budget=1000000))
+    bid = dict(id='open-bid', name='Offenes Gebot', team='Stuttgart', position=2,
+               owned=False, mv=9000000, change=-500000, bid=10000000)
+    server = create_server(0, dict(players=[*players, bid], marketPlayers=[bid], budget=1000000))
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:

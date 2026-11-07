@@ -9,7 +9,8 @@
   const number = value => value === null || value === undefined || value === '' || typeof value === 'boolean'
     ? null : Number.isFinite(Number(value)) ? Number(value) : null;
   const field = (player,...names) => { for(const name of names){if(player && player[name] !== undefined && player[name] !== null && player[name] !== '') return player[name];} return null; };
-  const players = Array.isArray(data.players) ? data.players : [];
+  const ownedPlayers = report => (Array.isArray(report.players) ? report.players : []).filter(p => p.owned === true);
+  let players = ownedPlayers(data);
   const market = (Array.isArray(data.marketPlayers) ? data.marketPlayers : []).filter(p => !p.owned);
   const TRADING_THRESHOLD = 100000;
   const mv = p => number(field(p,'mv','marketValue','market_value')) || 0;
@@ -360,7 +361,14 @@
       let refreshing=false;
       setInterval(async()=>{if(document.hidden||!custom||refreshing)return;refreshing=true;
         try{source.report=await L.json('api/dashboard-data');
-          if(layout().native){nativeSession?.update(null);players.splice(0,players.length,...(source.report.players||[]));market.splice(0,market.length,...(source.report.marketPlayers||[]).filter(p=>!p.owned));Object.assign(data,source.report,{players});source.report=data;renderForecastStatus();render();renderValueHistory();renderManagerBudgets();renderRecentTransfers();}
+          if(layout().native){
+            nativeSession?.update(null);
+            players=ownedPlayers(source.report);
+            market.splice(0,market.length,...(source.report.marketPlayers||[]).filter(p=>!p.owned));
+            Object.assign(data,source.report);
+            source.report=data;
+            renderForecastStatus();render();renderValueHistory();renderManagerBudgets();renderRecentTransfers();
+          }
           await L.liveData(source);await L.boundData(source,layout());paint();}
         catch{/* Keep the last successful data if the add-on is temporarily offline. */}finally{refreshing=false;}
       },60000);
