@@ -244,6 +244,27 @@
       $('value-chart').innerHTML='<svg viewBox="0 0 '+width+' '+height+'" preserveAspectRatio="none" aria-hidden="true"><line class="chart-grid" x1="0" x2="'+width+'" y1="'+(height-pad.bottom)+'" y2="'+(height-pad.bottom)+'"/><polygon class="chart-area" points="'+area+'"/><polyline class="chart-line" points="'+line+'"/><text class="chart-label" x="'+pad.left+'" y="'+(height-4)+'">'+labelDate(first.date)+'</text><text class="chart-label" text-anchor="end" x="'+(width-pad.right)+'" y="'+(height-4)+'">'+labelDate(last.date)+'</text><text class="chart-label" text-anchor="end" x="'+(width-pad.right)+'" y="12">'+euros(last.value)+'</text></svg>';
     }catch(error){$('value-chart').innerHTML='<div class="chart-empty">Kaderwertverlauf derzeit nicht verfügbar.</div>';}
   }
+  function managerMoney(label, raw, colored = false) {
+    const value = number(raw);
+    const amount = value === null ? '–' : euros(value);
+    const tone = colored && value !== null ? cls(value) : '';
+    return '<div class="manager-budget-value"><span>'+label+'</span><strong class="'+tone+'" title="'+escapeHtml(amount)+'">'+amount+'</strong></div>';
+  }
+  function managerRoster(manager) {
+    const size = number(manager.squadSize), limit = number(manager.squadLimit);
+    const count = size === null ? '–' : size + (limit ? '/'+limit : '');
+    const tone = size !== null && limit ? (size > limit ? 'negative' : size === limit ? 'neutral' : '') : '';
+    const metric = '<div class="manager-budget-value"><span>Kadergröße</span><strong class="'+tone+'">'+count+'</strong></div>';
+    let limits = '';
+    if (manager.clubLimits?.length) {
+      limits = '<ul class="manager-club-limits" aria-label="Erreichte Vereinslimits">'+manager.clubLimits.map(club =>
+        '<li><strong>'+escapeHtml(club.count+'/'+club.limit)+'</strong> '+escapeHtml(club.name)+'</li>'
+      ).join('')+'</ul>';
+    } else if (size !== null && manager.clubLimits == null) {
+      limits = '<p class="manager-limits-unavailable">Vereinslimits derzeit nicht verfügbar.</p>';
+    }
+    return {metric, limits};
+  }
   async function renderManagerBudgets(){
     try{
       const response=await fetch(apiPath('/api/manager-budgets'),{cache:'no-store'});
@@ -256,12 +277,13 @@
         $('manager-budget-updated').textContent=Number.isNaN(stamp.getTime())?'':((cashLive?'Eigener Cash live · ':'Stand ')+stamp.toLocaleString('de-DE',{timeZone:'Europe/Berlin',dateStyle:'short',timeStyle:'short'}));
       }
       $('manager-budgets').innerHTML=managers.length?managers.map(manager=>{
-        const cash=number(manager.cash)||0, buyingPower=number(manager.buyingPower)||0;
-        const basis=String(manager.basis||'').startsWith('API')?'API':'Schätzung';
-        return '<article class="manager-budget-card"><div class="manager-budget-head"><span class="name">'+escapeHtml(manager.name)+'</span><span class="manager-budget-basis">'+basis+'</span></div>'
-          +'<div class="manager-budget-values"><div class="manager-budget-value"><span>Cash</span><strong class="'+cls(cash)+'" title="'+escapeHtml(euros(cash))+'">'+euros(cash)+'</strong></div>'
-          +'<div class="manager-budget-value"><span>Kaderwert</span><strong title="'+escapeHtml(euros(manager.squadValue))+'">'+euros(manager.squadValue)+'</strong></div>'
-          +'<div class="manager-budget-value"><span>Kaufkraft</span><strong class="'+cls(buyingPower)+'" title="'+escapeHtml(euros(buyingPower))+'">'+euros(buyingPower)+'</strong></div></div></article>';
+        const basis=manager.basis?(manager.basis.startsWith('API')?'API':'Schätzung'):'';
+        const roster=managerRoster(manager);
+        return '<article class="manager-budget-card"><div class="manager-budget-head"><span class="name">'+escapeHtml(manager.name)+'</span>'
+          +(basis?'<span class="manager-budget-basis">'+basis+'</span>':'')+'</div>'
+          +'<div class="manager-budget-values">'+managerMoney('Cash',manager.cash,true)
+          +managerMoney('Kaderwert',manager.squadValue)+managerMoney('Kaufkraft',manager.buyingPower,true)
+          +roster.metric+'</div>'+roster.limits+'</article>';
       }).join(''):'<p class="empty">Noch kein Managerbudget vorhanden. Bitte einmal einen Vollreport ausführen.</p>';
     }catch(error){
       $('manager-budget-note').textContent='Stand des letzten Vollreports';

@@ -8,10 +8,22 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   await page.route('**/api/**', r => r.fulfill({json: {series: [], managers: [], transfers: []}}));
+  await page.route('**/api/manager-budgets', r => r.fulfill({json: {managers: [
+    {name: 'Voller Kader', cash: 5123456, squadValue: 199999999, buyingPower: 71123456, squadSize: 16, squadLimit: 16,
+      clubLimits: [{name: 'Bayern München', count: 3, limit: 3}, {name: 'Stuttgart', count: 4, limit: 3}]},
+    {name: 'Freie Plätze', squadSize: 14, squadLimit: 16, clubLimits: []},
+  ]}}));
   await page.route('**/api/big-market-players', r => r.fulfill({json: {players: [
     {id: 'live-elite', name: 'Live Transferangebot', team: 'Stuttgart', position: 4, mv: 42500000},
   ]}}));
   await page.goto(process.env.DASHBOARD_TEST_URL);
+  const managerCards = page.locator('.manager-budget-card');
+  await managerCards.last().waitFor();
+  assert.match(await managerCards.first().innerText(), /Kadergröße\s+16\/16/);
+  assert.match(await managerCards.last().innerText(), /Kadergröße\s+14\/16/);
+  assert.deepEqual(await managerCards.first().locator('.manager-club-limits li').allTextContents(),
+    ['3/3 Bayern München', '4/3 Stuttgart']);
+  assert.equal(await managerCards.last().locator('.manager-club-limits').count(), 0);
   await page.locator('#big-market-players .big-boy-card').waitFor();
   assert.match(await page.locator('#big-market-players').innerText(), /Live Transferangebot[\s\S]*42\.500\.000/);
   assert.equal(await page.locator('#market-table [data-player-id="live-elite"]').count(), 0);

@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 from zipfile import ZipFile
 
-from advisor_server import read_manager_budgets
+from advisor_server import add_live_manager_rosters, read_manager_budgets
 from features.github_forecast_sync import sync_latest_manager_audit
 
 
@@ -23,6 +23,21 @@ class Response:
 
 
 class ManagerBudgetTests(unittest.TestCase):
+    def test_live_members_merge_by_id_or_legacy_name_even_without_a_budget(self):
+        budgets = {'note': '', 'managers': [
+            {'id': 'a', 'name': 'Alter Name', 'cash': 1, 'buyingPower': 10},
+            {'name': 'Ben', 'cash': 2, 'buyingPower': 20},
+            {'id': 'left', 'name': 'Chris', 'cash': 3, 'buyingPower': 30},
+        ]}
+        rosters = [
+            {'id': 'a', 'name': 'Anna', 'squadSize': 16},
+            {'id': 'b', 'name': 'Ben', 'squadSize': 14},
+            {'id': 'c', 'name': 'Chris', 'squadSize': 0},
+        ]
+        result = add_live_manager_rosters(budgets, rosters)['managers']
+        self.assertEqual([(row['id'], row['squadSize'], row.get('cash')) for row in result],
+                         [('b', 14, 2), ('a', 16, 1), ('c', 0, None)])
+
     def test_reader_exposes_only_valid_budget_rows(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'latest.json'

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.100
+
+- Zeigt in den Managerbudget-Kacheln die aktuelle Kadergröße und erreichte Vereinslimits. Kader, Ligaregeln und Vereinsnamen kommen live aus Kickbase.
+
 ## 0.2.99
 
 - Ergänzt „Big Boys auf Transfermarkt“ mit live geladenen Angeboten über 20 Mio. € Marktwert im Stil der Marktchancen. Die Kachel sitzt am Desktop links neben dem halb so breiten Kaderwert.

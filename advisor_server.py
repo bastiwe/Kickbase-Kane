@@ -1,6 +1,7 @@
 """Local-only host for the Kickbase trading dashboard and report jobs."""
 
 import argparse
+from collections import Counter
 from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -50,6 +51,7 @@ def read_manager_budgets(path, own_cash=None, own_name=None, cash_fetched_at=Non
             continue
         rows.append({
             'name': str(item.get('name') or 'Unbekannt'),
+            **({'id': str(item['id'])} if item.get('id') is not None else {}),
             **values,
             'basis': str(item.get('basis') or 'Schätzung'),
         })
@@ -72,6 +74,21 @@ def read_manager_budgets(path, own_cash=None, own_name=None, cash_fetched_at=Non
         'managers': rows,
         'note': note,
     }
+
+
+def add_live_manager_rosters(budgets, rosters):
+    rows = budgets['managers']
+    by_id = {row['id']: row for row in rows if 'id' in row}
+    live_names = Counter(row['name'] for row in rosters)
+    legacy = [row for row in rows if 'id' not in row]
+    legacy_names = Counter(row['name'] for row in legacy)
+    by_name = {row['name']: row for row in legacy
+               if live_names[row['name']] == legacy_names[row['name']] == 1}
+    merged = [{**by_id.get(roster['id'], by_name.get(roster['name'], {})), **roster}
+              for roster in rosters]
+    merged.sort(key=lambda row: row.get('buyingPower', float('-inf')), reverse=True)
+    return {**budgets, 'managers': merged,
+            'note': 'Kadergröße und Vereinslimits live aus Kickbase. ' + budgets['note']}
 
 
 class ReportParser(HTMLParser):
@@ -385,6 +402,7 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                 client = self.server.kickbase
                 league_id = self.server.report.get('league')
             own_cash = own_name = cash_fetched_at = None
+            rosters = None
             if client and league_id:
                 try:
                     user = client.get('/user/settings').get('u', {})
@@ -394,9 +412,14 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                     cash_fetched_at = datetime.now(ZoneInfo('Europe/Berlin')).isoformat()
                 except (requests.RequestException, RuntimeError, ValueError, KeyError, TypeError):
                     self.server.log_event('ERROR Live-Cash für Managerbudgets nicht geladen')
-            self.reply(200, read_manager_budgets(
+                try:
+                    rosters = client.manager_rosters(league_id)
+                except (requests.RequestException, RuntimeError, ValueError, KeyError, TypeError):
+                    self.server.log_event('ERROR Live-Kader für Managerbudgets nicht geladen')
+            budgets = read_manager_budgets(
                 DATA_ROOT / 'manager-history-output' / 'latest.json',
-                own_cash, own_name, cash_fetched_at))
+                own_cash, own_name, cash_fetched_at)
+            self.reply(200, budgets if rosters is None else add_live_manager_rosters(budgets, rosters))
         elif path == '/api/big-market-players':
             with self.server.lock:
                 client = self.server.kickbase

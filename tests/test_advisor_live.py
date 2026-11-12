@@ -11,6 +11,31 @@ from test_ai_advisor import fixture
 
 
 class LiveTests(unittest.TestCase):
+    def test_manager_rosters_count_current_squad_and_use_live_league_limits(self):
+        client = LiveKickbase('PRIVATE_EMAIL', 'PRIVATE_PASSWORD')
+        responses = {
+            '/leagues/league/ranking': {'us': [{'i': 'a', 'n': 'Anna'}, {'i': 'b', 'n': 'Ben'}]},
+            '/leagues/league/me': {'mppu': 17, 'mpst': 2, 'cpi': '2'},
+            '/competitions/2/table': {'it': [{'tid': '12', 'tn': 'Bayern München'},
+                                             {'tid': '8', 'tn': 'Stuttgart'}]},
+            '/leagues/league/managers/a/squad': {'it': [
+                {'pi': '1', 'tid': '12', 'lo': 1}, {'pi': '2', 'tid': 12, 'lo': 11},
+                {'pi': '3', 'tid': '8', 'lo': 12},
+            ]},
+        }
+
+        def get(path):
+            if path == '/leagues/league/managers/b/squad':
+                raise requests.HTTPError('unavailable')
+            return responses[path]
+
+        client.get = Mock(side_effect=get)
+        anna, ben = client.manager_rosters('league')
+        self.assertEqual((anna['squadSize'], anna['squadLimit']), (3, 17))
+        self.assertEqual(anna['clubLimits'], [{'name': 'Bayern München', 'count': 2, 'limit': 2}])
+        self.assertIsNone(ben['squadSize'])
+        self.assertIsNone(ben['clubLimits'])
+
     def test_big_market_players_use_live_values_strictly_above_threshold(self):
         client = LiveKickbase('PRIVATE_EMAIL', 'PRIVATE_PASSWORD')
         client.get = Mock(return_value={'it': [

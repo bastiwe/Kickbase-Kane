@@ -466,6 +466,7 @@ def _audit_managers(get, league_id, start_date, *, start_cash=80_000_000,
                          'Available Budget': budget + 0.33 * team_value})
 
         manager_budgets = [{
+            'id': managers[row['User']]['id'],
             'name': row['User'],
             'cash': row['Budget'],
             'squadValue': row['Team Value'],

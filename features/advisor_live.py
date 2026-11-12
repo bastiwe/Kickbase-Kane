@@ -1,5 +1,6 @@
 """Bounded, read-only Kickbase snapshots for the local adviser."""
 
+from collections import Counter
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -391,6 +392,51 @@ class LiveKickbase:
                          if not item.get(key) and profile.get(key)})
         players = market_context(offers, set(), user_id, {}, None, None)
         return sorted(players, key=lambda player: player['mv'], reverse=True)
+
+    def manager_rosters(self, league_id):
+        base = '/leagues/' + quote(str(league_id), safe='')
+        managers = self.get(base + '/ranking')['us']
+        if not isinstance(managers, list):
+            raise ValueError('Kickbase lieferte keine Managerliste.')
+        if not managers:
+            return []
+
+        def optional(path):
+            try:
+                payload = self.get(path)
+                return payload if isinstance(payload, dict) else {}
+            except (requests.RequestException, RuntimeError, ValueError):
+                return {}
+
+        rules = optional(base + '/me')
+        squad_limit, club_limit = rules.get('mppu'), rules.get('mpst')
+        competition = rules.get('cpi')
+        clubs = {}
+        if type(club_limit) is int and club_limit > 0 and competition:
+            table = optional('/competitions/' + quote(str(competition), safe='') + '/table')
+            clubs = {str(row['tid']): row['tn'] for row in table.get('it') or []
+                     if isinstance(row, dict) and row.get('tid') is not None and row.get('tn')}
+
+        def roster(manager):
+            manager_id = str(manager['i'])
+            squad = optional(base + '/managers/' + quote(manager_id, safe='') + '/squad').get('it')
+            row = {'id': manager_id, 'name': manager['n'], 'squadSize': None, 'clubLimits': None,
+                   'squadLimit': squad_limit if type(squad_limit) is int and squad_limit > 0 else None}
+            if not isinstance(squad, list) or not all(isinstance(player, dict) for player in squad):
+                return row
+            row['squadSize'] = len(squad)
+            if type(club_limit) is not int or club_limit < 0:
+                return row
+            counts = Counter(str(player['tid']) for player in squad if player.get('tid'))
+            reached = [(club, count) for club, count in counts.items() if club_limit and count >= club_limit]
+            if all(club in clubs for club, _ in reached):
+                row['clubLimits'] = sorted(
+                    ({'name': clubs[club], 'count': count, 'limit': club_limit} for club, count in reached),
+                    key=lambda limit: (-limit['count'], limit['name'].casefold()))
+            return row
+
+        with ThreadPoolExecutor(max_workers=min(4, len(managers))) as executor:
+            return list(executor.map(roster, managers))
 
     def player_market_histories(self, player_ids):
         """Load historical player market values directly from Kickbase, cached for an hour."""
