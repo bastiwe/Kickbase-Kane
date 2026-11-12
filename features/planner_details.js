@@ -27,6 +27,16 @@
   const details = id => cached(detailCache, id, 'player-details/' + encodeURIComponent(id));
   const market = id => cached(marketCache, id, 'player-market-history/' + encodeURIComponent(id) + '?limit=365');
 
+  async function nextFixture(id) {
+    try {
+      const {fixtures} = await details(id);
+      const fixture = fixtures?.[0];
+      if (fixture?.opponent && fixture.opponent !== 'Unbekannt') return fixture;
+    } catch {
+      // Keep the opponent already available in the planner.
+    }
+  }
+
   function updateCandidate(player, fixtures, error = false) {
     for (const target of document.querySelectorAll('[data-fixtures-id]')) {
       if (target.dataset.fixturesId !== player.id) continue;
@@ -196,5 +206,5 @@
     const candidate = event.target.closest('[data-candidate]');
     if (detail || candidate) { event.preventDefault(); event.target.click(); }
   });
-  window.KICKBASE_PLAYER_DETAILS = {loadCandidates};
+  window.KICKBASE_PLAYER_DETAILS = {loadCandidates, nextFixture};
 })();

@@ -18,6 +18,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
     totalPoints: 1331, li: 80, status: 'Fit', profitLoss: -1800000, change: 21000,
     fixtures: i === 0 ? fixtures : [],
   }));
+  const marketPlayer = {...players[0], id: '2000', name: 'Testkauf', owned: false, fixtures: []};
   const performance = Array.from({length: 18}, (_, i) => ({
     date: `${String(i + 1).padStart(2, '0')}.10.2026`, points: [303, 254, 92, 216, 195, 271, 0, -20, 111][i % 9],
     minutes: i % 3 ? 96 : null, goals: i % 3 ? 0 : 1, assists: 0,
@@ -29,13 +30,15 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
   })).reverse();
   const html = fs.readFileSync('features/mobile_lineup_planner.html', 'utf8')
     .replace('<head>', '<head><base href="http://planner.test/api/hassio_ingress/test/">')
-    .replace('__PAYLOAD__', JSON.stringify({players, budget: 5000000, marketPlayers: []}))
+    .replace('__PAYLOAD__', JSON.stringify({players, budget: 5000000, marketPlayers: [marketPlayer]}))
     .replace('__SETTINGS__', '{}');
   fs.mkdirSync('test-output', {recursive: true});
   try {
     for (const width of [320, 390, 768, 1280]) {
       const page = await browser.newPage({viewport: {width, height: 950}});
       const errors = [], requests = [], detailCalls = new Map();
+      let releasePurchaseDetails;
+      const purchaseDetailsReady = new Promise(resolve => { releasePurchaseDetails = resolve; });
       let failId = null;
       page.on('pageerror', error => errors.push(error.message));
       await page.route('http://planner.test/**', async route => {
@@ -47,6 +50,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
         });
         if (url.pathname.includes('/player-details/')) {
           detailCalls.set(file, (detailCalls.get(file) || 0) + 1);
+          if (file === marketPlayer.id) await purchaseDetailsReady;
           if (file === failId) return route.fulfill({status: 502, json: {error: 'Test failure'}});
           return route.fulfill({json: {fixtures, performance, history: performance.slice(-8).reverse(),
             seasonLabel: '2026/2027', totalPoints: 1331, season: 222, l3: 180, minutes: 516,
@@ -128,9 +132,27 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
       await picker.locator('.candidate-copy').first().click();
       assert.equal(await page.locator('.slot .card').count(), 11);
       assert.equal(await picker.getAttribute('open'), null);
+
+      await page.locator('#market-player').selectOption(marketPlayer.id);
+      await page.locator('#simulate').click();
+      const purchasedCard = page.locator('.card[data-player="' + marketPlayer.id + '"]');
+      await purchasedCard.locator('.lineup-name').click();
+      await firstSlot.locator('.lineup-name').click();
+      const purchasedFixture = firstSlot.locator('.lineup-fixture');
+      assert.equal(await purchasedFixture.textContent(), 'vs. Gegner offen');
+      releasePurchaseDetails();
+      await purchasedFixture.filter({hasText: 'vs. Borussia Dortmund (H) · Pl. 2'}).waitFor();
+      assert.equal(await firstSlot.locator('.card').getAttribute('data-player'), marketPlayer.id);
+
+      await purchasedCard.locator('[data-player-details]').click();
+      await dialog.locator('.pd-data-status').filter({hasText: 'Verfügbare Kickbase-Daten'}).waitFor();
+      assert.equal(await dialog.locator('.pd-fixtures article').count(), 3);
+      assert.equal(detailCalls.get(marketPlayer.id), 1, 'the purchase card and details share the request');
+      await dialog.locator('[data-close-details]').click();
+
       assert.ok(requests.every(path => path.startsWith('/api/hassio_ingress/test/')), 'all requests preserve HA ingress path');
       assert.deepEqual(errors, []);
-      console.log(`details, ranges, fallback, picker, cache and ingress passed at ${width}px`);
+      console.log(`details, ranges, fallback, picker, simulated purchase, cache and ingress passed at ${width}px`);
       await page.close();
     }
   } finally { await browser.close(); }

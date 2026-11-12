@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.98
+
+- Lädt bei simulierten Käufen den nächsten Gegner aus der Kickbase-API und aktualisiert die Spielerkachel auf der Bank und in der Startelf.
+
 ## 0.2.97
 
 - Zählt im Trading-Dashboard nur eigene Spieler für Kadergröße, Kaderwert und Wertentwicklung. Offene Gebote bleiben im Transfermarkt und in der Planung verfügbar.
