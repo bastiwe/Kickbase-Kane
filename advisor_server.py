@@ -397,6 +397,19 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             self.reply(200, read_manager_budgets(
                 DATA_ROOT / 'manager-history-output' / 'latest.json',
                 own_cash, own_name, cash_fetched_at))
+        elif path == '/api/big-market-players':
+            with self.server.lock:
+                client = self.server.kickbase
+                league_id = self.server.report.get('league')
+                user_id = self.server.report.get('user')
+            if not client or not league_id:
+                self.reply(409, {'error': 'Kickbase-Livezugriff ist nicht aktiviert.'})
+            else:
+                try:
+                    self.reply(200, {'players': client.big_market_players(league_id, user_id)})
+                except (requests.RequestException, RuntimeError, ValueError, KeyError, TypeError):
+                    self.server.log_event('ERROR Big Boys auf Transfermarkt nicht geladen')
+                    self.reply(502, {'error': 'Transfermarkt derzeit nicht abrufbar.'})
         elif path == '/api/recent-transfers':
             with self.server.lock:
                 client = self.server.kickbase

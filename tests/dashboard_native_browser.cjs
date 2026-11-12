@@ -7,7 +7,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   const art={image:'https://editor.test/player.png',teamImage:'https://editor.test/crest.png'};
   const transfers=[{...art,playerId:'kane',playerName:'Harry Kane',marketValue:10001,price:11001,overpay:1000,from:'Kickbase',to:'Sebastian',transferredAt:'2026-10-27T10:00:00Z'},
     {...art,playerId:'kimmich',playerName:'Joshua Kimmich',marketValue:20000,price:22000,isKickbaseSale:true,profitLoss:500,from:'Johannes',to:'Kickbase',transferredAt:'2026-10-27T09:00:00Z'}];
-  const mocks={'manager-budgets':{managers:[{name:'Sebastian',cash:11480895,squadValue:100000000,buyingPower:44480895}]},'recent-transfers':{transfers,fetchedAt:'2026-10-27T12:00:00Z'},'squad-value-history':{series:[{date:'2026-10-25',value:123000000},{date:'2026-10-26',value:124800000}]},'current-lineup':{players:[]}};
+  const mocks={'big-market-players':{players:[{...art,id:'kane',name:'Harry Kane',mv:45000000},{...art,id:'kimmich',name:'Joshua Kimmich',mv:30000000}]},'manager-budgets':{managers:[{name:'Sebastian',cash:11480895,squadValue:100000000,buyingPower:44480895}]},'recent-transfers':{transfers,fetchedAt:'2026-10-27T12:00:00Z'},'squad-value-history':{series:[{date:'2026-10-25',value:123000000},{date:'2026-10-26',value:124800000}]},'current-lineup':{players:[]}};
   await context.route('**/api/**',r=>{const key=new URL(r.request().url()).pathname.replace('/api/','');return mocks[key]?r.fulfill({contentType:'application/json',body:JSON.stringify(mocks[key])}):r.continue();});
   const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
   const prop=key=>page.locator('[data-property="'+key+'"]');const value=async(key,v)=>{await prop(key).fill(String(v));await prop(key).dispatchEvent('change');};
@@ -16,13 +16,24 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   const selectElement=async label=>page.locator('.property-elements button').filter({hasText:new RegExp('\\. '+label+'$')}).click();
   const drag=async(loc,dx,dy)=>{await loc.scrollIntoViewIfNeeded();const box=await loc.boundingBox();assert(box);await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2+dx,box.y+box.height/2+dy,{steps:8});await page.mouse.up();};
   try{
-    await page.goto(origin+'/editor');await frame().locator('.native-block-grip').nth(9).waitFor();
-    assert.equal(await page.locator('#tile-list button').count(),10,'Every standard block is editable');
-    for(const sel of ['#recent-transfers .recent-transfer-card','#top-chances .chance','#roster-movers .roster-player','#timing-risks .risk-player','#market-table .market-row'])assert.equal(await frame().locator(sel+':visible').count(),1,'One template per player section: '+sel);
+    await page.goto(origin+'/editor');await frame().locator('.native-block-grip').nth(10).waitFor();
+    assert.equal(await page.locator('#tile-list button').count(),11,'Every standard block is editable');
+    await frame().locator('#big-market-players .big-boy-card[data-player-id="kane"]').waitFor();
+    for(const sel of ['#big-market-players .big-boy-card','#recent-transfers .recent-transfer-card','#top-chances .chance','#roster-movers .roster-player','#timing-risks .risk-player','#market-table .market-row'])assert.equal(await frame().locator(sel+':visible').count(),1,'One template per player section: '+sel);
     await page.waitForFunction(()=>[...document.querySelector('#native-editor-frame').contentDocument.querySelectorAll('.roster-player img')].some(n=>n.complete&&n.naturalWidth>0));
     const baseline=await context.newPage();await baseline.setViewportSize({width:1480,height:1000});baseline.on('pageerror',e=>errors.push(e.message));await baseline.goto(origin+'/');await baseline.locator('#recent-transfers .recent-transfer-card').nth(1).waitFor();
-    const geometry=locator=>locator.evaluate(n=>{const r=n.getBoundingClientRect(),c=getComputedStyle(n);return{w:r.width,h:r.height,font:c.fontSize,color:c.color,bg:c.background,padding:c.padding,border:c.borderRadius};});
-    for(const sel of ['.metric-budget','.metric-squad','.metric-forecast','.value-history','.manager-budget-panel','#recent-transfers .recent-transfer-card:first-child','#roster-movers .roster-player:first-child'])assert.deepEqual(await geometry(frame().locator(sel)),await geometry(baseline.locator(sel)),'Original styling: '+sel);
+    const migrated=await baseline.evaluate(()=>{
+      const layout=window.KaneNative.seed(null);
+      delete layout.nativeVersion;
+      layout.tiles=layout.tiles.filter(tile=>tile.nativeKey!=='bigBoys');
+      layout.tiles.find(tile=>tile.nativeKey==='squad').w=4;
+      const {desktop}=window.KaneNative.upgrade({desktop:layout});
+      return desktop.tiles.slice(0,4).map(tile=>[tile.nativeKey,tile.w]);
+    });
+    assert.deepEqual(migrated,[['budget',4],['bigBoys',2],['squad',2],['forecast',4]]);
+    const geometry=(locator,includeHeight=true)=>locator.evaluate((n,includeHeight)=>{const r=n.getBoundingClientRect(),c=getComputedStyle(n);return{w:r.width,h:includeHeight?r.height:null,font:c.fontSize,color:c.color,bg:c.background,padding:c.padding,border:c.borderRadius};},includeHeight);
+    // The editor shows one example in Big Boys, so its shared metrics row is shorter.
+    for(const sel of ['.metric-budget','.metric-squad','.metric-forecast','.value-history','.manager-budget-panel','#recent-transfers .recent-transfer-card:first-child','#roster-movers .roster-player:first-child'])assert.deepEqual(await geometry(frame().locator(sel),!sel.startsWith('.metric')),await geometry(baseline.locator(sel),!sel.startsWith('.metric')),'Original styling: '+sel);
     // A pristine preview must use the original DOM and match the standard page.
     await page.bringToFront();await page.locator('#preview').click();await preview().locator('#recent-transfers .recent-transfer-card').nth(1).waitFor();
     for(const sel of ['.metric-budget','.metric-squad','.value-history','.manager-budget-panel','.recent-transfers-panel','.roster-panel','.action-panel'])assert.deepEqual(await geometry(preview().locator(sel)),await geometry(baseline.locator(sel)),'Pristine preview matches standard: '+sel);
@@ -54,20 +65,20 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
     await page.locator('#mode-mobile').click();await page.waitForFunction(()=>document.querySelector('#dashboard-preview-frame').getBoundingClientRect().width===390);
     await preview().locator('#roster-movers .roster-player').first().waitFor();await page.waitForFunction(()=>{const doc=document.querySelector('#dashboard-preview-frame').contentDocument;return getComputedStyle(doc.querySelector('#metric-budget')).color!=='rgb(255, 221, 68)';});
     await page.locator('#mode-desktop').click();await page.locator('#preview').click();await page.locator('#design-enabled').check();await page.locator('#save-design').click();await page.waitForFunction(()=>document.querySelector('#editor-status').textContent.includes('Beide Ansichten gespeichert'));
-    const stored=await page.evaluate(()=>fetch('api/dashboard-layout').then(r=>r.json()));assert(stored.desktop.native);assert.equal(stored.desktop.tiles.length,10);assert(stored.desktop.tiles.every(t=>!t.record&&!t.collection));assert(stored.desktop.tiles.find(t=>t.nativeKey==='budget').elements.find(e=>e.nativeKey==='value').changed.includes('color'));
+    const stored=await page.evaluate(()=>fetch('api/dashboard-layout').then(r=>r.json()));assert(stored.desktop.native);assert.equal(stored.desktop.tiles.length,11);assert(stored.desktop.tiles.every(t=>!t.record&&!t.collection));assert(stored.desktop.tiles.find(t=>t.nativeKey==='budget').elements.find(e=>e.nativeKey==='value').changed.includes('color'));
     await selectTile('Kaderwert');await value('tile-w',6);await frame().locator('.native-custom-flow').waitFor();assert(await frame().locator('.native-custom-flow .metric-squad').count());await page.locator('#undo').click();await page.waitForFunction(()=>!document.querySelector('#native-editor-frame').contentDocument.querySelector('.native-custom-flow'));await page.locator('#save-design').click();await page.waitForFunction(()=>document.querySelector('#editor-status').textContent.includes('Beide Ansichten gespeichert'));
     fs.mkdirSync('test-output',{recursive:true});await page.screenshot({path:'test-output/native-editor-desktop.png'});
     await page.goto(origin+'/');await page.waitForFunction(()=>getComputedStyle(document.querySelector('#metric-budget')).color==='rgb(255, 221, 68)');
     assert.equal(await page.getByText('Meine Notiz',{exact:true}).count(),2);await page.locator('#toggle-custom-layout').click();assert.equal(await page.getByText('Meine Notiz',{exact:true}).count(),0);await page.locator('#toggle-custom-layout').click();
     for(const width of [1480,1280,1024,900,899,768,390,320]){await page.setViewportSize({width,height:900});await page.waitForTimeout(80);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'No overflow at '+width);}
     await context.route(origin+'/ingress/test/**',async r=>{const u=new URL(r.request().url());const response=await r.fetch({url:origin+u.pathname.replace('/ingress/test','')+u.search});await r.fulfill({response});});
-    await page.goto(origin+'/ingress/test/editor');await frame().locator('.native-block-grip').nth(9).waitFor();await page.locator('#mode-mobile').click();await frame().locator('.metric-budget').waitFor();assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    await page.goto(origin+'/ingress/test/editor');await frame().locator('.native-block-grip').nth(10).waitFor();await page.locator('#mode-mobile').click();await frame().locator('.metric-budget').waitFor();assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
     await page.locator('#preview').click();await preview().locator('.metric-budget').waitFor();assert.equal(new URL(await page.locator('#dashboard-preview-frame').evaluate(n=>n.contentWindow.location.href)).pathname,'/ingress/test/preview');
     // Older free layouts remain on disk while the new standard layout opens
     // as a reversible draft, so upgrading never silently overwrites them.
     await page.locator('#preview').click();
     await page.evaluate(async()=>{const stored=await fetch('api/dashboard-layout').then(r=>r.json());const tile=KaneLayout.tile({w:4,h:3,elements:[KaneLayout.element('text',{text:'Altes Layout'})]});const layout={columns:12,rowHeight:32,gap:12,tiles:[tile]};const result=await fetch('api/dashboard-layout',{method:'POST',headers:{'Content-Type':'application/json','X-Advisor-Token':KICKBASE_DASHBOARD.csrf},body:JSON.stringify({version:1,revision:stored.revision,enabled:true,desktop:layout,mobile:{...layout,columns:4}})});if(!result.ok)throw Error(await result.text());});
-    await page.reload();await frame().locator('.native-block-grip').nth(9).waitFor();assert.equal(await page.locator('#tile-list button').count(),10);assert.equal(await page.evaluate(()=>fetch('api/dashboard-layout').then(r=>r.json()).then(d=>d.desktop.tiles[0].elements[0].text)),'Altes Layout');await page.locator('#undo').click();assert(await page.locator('#editor-canvas').innerText().then(s=>s.includes('Altes Layout')));
+    await page.reload();await frame().locator('.native-block-grip').nth(10).waitFor();assert.equal(await page.locator('#tile-list button').count(),11);assert.equal(await page.evaluate(()=>fetch('api/dashboard-layout').then(r=>r.json()).then(d=>d.desktop.tiles[0].elements[0].text)),'Altes Layout');await page.locator('#undo').click();assert(await page.locator('#editor-canvas').innerText().then(s=>s.includes('Altes Layout')));
     assert.deepEqual(errors,[]);await baseline.close();console.log('Native dashboard editor OK: original metrics/cards/styles and pristine preview identical; one real-image template per section; metric/chart/text/graphic editing; shared player styles; unsaved preview; persistence; standard restore; responsive widths and Ingress.');
   }catch(error){console.error('Editor status:',await page.locator('#editor-status').textContent().catch(()=>''),'Errors:',errors);fs.mkdirSync('test-output',{recursive:true});await page.screenshot({path:'test-output/native-editor-failure.png'});throw error;}finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exit(1);});

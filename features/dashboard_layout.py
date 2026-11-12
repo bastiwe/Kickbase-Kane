@@ -64,6 +64,7 @@ def validate_design(body):
         native = layout.get('native') is True
         if native:
             clean['native'] = True
+            clean['nativeVersion'] = number(layout.get('nativeVersion', 1), 1, 2, True)
         tile_ids = set()
         sections = set()
         native_keys = set()
@@ -81,13 +82,13 @@ def validate_design(body):
             tile_ids.add(item['id'])
             if native:
                 key = tile.get('nativeKey')
-                if key not in ('budget', 'squad', 'forecast', 'history', 'managers', 'transfers', 'chances', 'roster', 'risks', 'market') or key in native_keys:
+                if key not in ('budget', 'bigBoys', 'squad', 'forecast', 'history', 'managers', 'transfers', 'chances', 'roster', 'risks', 'market') or key in native_keys:
                     raise ValueError('Ungültiger oder doppelter Standardbereich.')
                 native_keys.add(key)
                 item.update(nativeKey=key, order=number(tile.get('order'), 0, 79, True), changed=changed(tile.get('changed', [])))
             if tile.get('section') is not None:
                 section = tile['section']
-                if section not in ('transfers', 'chances', 'roster', 'risks', 'market') or section in sections:
+                if section not in ('transfers', 'chances', 'roster', 'risks', 'market', 'bigBoys') or section in sections:
                     raise ValueError('Jeder Dashboard-Bereich darf nur eine Spielerkachel-Vorlage haben.')
                 sections.add(section)
                 item.update(section=section,

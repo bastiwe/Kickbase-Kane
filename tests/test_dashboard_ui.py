@@ -24,8 +24,8 @@ class DashboardUiTests(unittest.TestCase):
     def test_li_probability_badges_are_used_across_player_views(self):
         self.assertIn("const liBadge = (p,label='LI') =>", self.javascript)
         self.assertIn("value>=85?'high':value>=45?'medium':'low'", self.javascript)
-        self.assertIn("const playerLabel = (p,includeArt=true) =>", self.javascript)
-        self.assertIn("+liBadge(p)+", self.javascript)
+        self.assertIn("const playerLabel = (p,includeArt=true,includeLi=true) =>", self.javascript)
+        self.assertIn("includeLi?liBadge(p)", self.javascript)
         self.assertIn("+liBadge(p,'')+", self.javascript)
         self.assertIn('.li-badge.high', self.styles)
         self.assertIn('.li-badge.medium', self.styles)

@@ -8,7 +8,13 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   await page.route('**/api/**', r => r.fulfill({json: {series: [], managers: [], transfers: []}}));
+  await page.route('**/api/big-market-players', r => r.fulfill({json: {players: [
+    {id: 'live-elite', name: 'Live Transferangebot', team: 'Stuttgart', position: 4, mv: 42500000},
+  ]}}));
   await page.goto(process.env.DASHBOARD_TEST_URL);
+  await page.locator('#big-market-players .big-boy-card').waitFor();
+  assert.match(await page.locator('#big-market-players').innerText(), /Live Transferangebot[\s\S]*42\.500\.000/);
+  assert.equal(await page.locator('#market-table [data-player-id="live-elite"]').count(), 0);
 
   assert.equal(await page.locator('#metric-roster-count').innerText(), '8/16 Spieler');
   assert.equal(await page.locator('#roster-movers [data-player-id="open-bid"]').count(), 0);
@@ -38,13 +44,21 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
       const visible = [...document.querySelectorAll('#roster-movers .lineup-li,#roster-movers .player-market-value,#timing-risks .player-market-value')];
       return {
         pageFits: document.documentElement.scrollWidth <= innerWidth,
+        bigBoysPosition: (() => {
+          const big = document.querySelector('.big-boys-panel').getBoundingClientRect();
+          const squad = document.querySelector('.metric-squad').getBoundingClientRect();
+          const budget = document.querySelector('.metric-budget').getBoundingClientRect();
+          if (innerWidth <= 820) return big.bottom <= squad.top;
+          return big.right <= squad.left && big.top === squad.top &&
+            (innerWidth <= 900 || Math.abs(squad.width * 2 - budget.width) < 1);
+        })(),
         valuesFit: visible.every(el => {
           const bounds = el.getBoundingClientRect(), parent = el.closest('.list-row').getBoundingClientRect();
           return el.scrollWidth <= el.clientWidth + 1 && bounds.right <= parent.right && bounds.left >= parent.left;
         }),
       };
     });
-    assert(geometry.pageFits && geometry.valuesFit, `Values must fit at ${width}: ${JSON.stringify(geometry)}`);
+    assert(geometry.pageFits && geometry.valuesFit && geometry.bigBoysPosition, `Dashboard layout at ${width}: ${JSON.stringify(geometry)}`);
     if (width === 390 || width === 1440) {
       await page.locator('.roster-player').first().screenshot({path: `test-output/dashboard-roster-values-${width}.png`});
       await page.locator('.risk-player').first().screenshot({path: `test-output/dashboard-risk-values-${width}.png`});

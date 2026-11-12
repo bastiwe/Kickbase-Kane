@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.99
+
+- Ergänzt „Big Boys auf Transfermarkt“ mit live geladenen Angeboten über 20 Mio. € Marktwert im Stil der Marktchancen. Die Kachel sitzt am Desktop links neben dem halb so breiten Kaderwert.
+
 ## 0.2.98
 
 - Lädt bei simulierten Käufen den nächsten Gegner aus der Kickbase-API und aktualisiert die Spielerkachel auf der Bank und in der Startelf.

@@ -8,7 +8,8 @@ window.KaneNative=(()=>{
   const player=[...art,field('name','Name','.name','data','/item/Name','row')];
   const defs={
     budget:{title:'Verfügbares Budget',selector:'.metric-budget',span:4,fields:[field('label','Titel','.metric-label'),field('value','Budget','#metric-budget','data','/dashboard/Budget'),field('note','Kaufkraft / Hinweis','#metric-budget-note','data')]},
-    squad:{title:'Kaderwert',selector:'.metric-squad',span:4,fields:[field('label','Titel','.metric-label'),field('value','Kaderwert','#metric-roster-value','data','/dashboard/Kaderwert'),field('note','Kadergröße / Hinweis','#metric-roster-count','data')]},
+    bigBoys:{title:'Big Boys auf Transfermarkt',selector:'.big-boys-panel',span:2,rows:'.big-boy-card',grid:'#big-market-players',fields:[...heading,...player,field('club','Verein / Position','.player-subline .sub','data','/item/Verein','row'),field('mv','Marktwert','.chance-change strong','data','/item/Marktwert','row'),field('expiry','Ablauf','.chance-details span','data','/item/Ablauf','row')]},
+    squad:{title:'Kaderwert',selector:'.metric-squad',span:2,fields:[field('label','Titel','.metric-label'),field('value','Kaderwert','#metric-roster-value','data','/dashboard/Kaderwert'),field('note','Kadergröße / Hinweis','#metric-roster-count','data')]},
     forecast:{title:'Erw. Kader-MW in 1T',selector:'.metric-forecast',span:4,fields:[field('label','Titel','.metric-label'),field('value','Erw. Kader-MW in 1T','#metric-roster-change','data','/dashboard/Erwartete MW-Änderung (1T)'),field('note','Letztes MW-Update / Hinweis','#metric-roster-change-note','data')]},
     history:{title:'Entwicklung seit Saisonstart',selector:'.value-history',span:12,fields:[...heading,field('chart','Kaderwertgrafik','#value-chart','data','/api/squadHistory/series'),field('summary','Zusammenfassung','#history-summary','data'),field('note','Hinweis','#history-note','data')]},
     managers:{title:'Managerbudgets',selector:'.manager-budget-panel',span:12,fields:[...heading,field('budgets','Managerbudgets','#manager-budgets','data','/api/managerBudgets/managers')]},
@@ -19,11 +20,30 @@ window.KaneNative=(()=>{
     market:{title:'Transfermarkt',selector:'#market-table',parent:'.panel',span:12,rows:'#market-table .market-row',grid:'#market-table',fields:[...heading,...player,field('club','Verein','.table-player .sub','data','/item/Verein','row'),field('position','Position','td:nth-child(2)','data','/item/Position','row'),field('mv','Marktwert','td:nth-child(3)','data','/item/Marktwert','row'),field('change','Erw. 1T','td:nth-child(4)','data','/item/Erw. 1T','row'),field('li','LI','td:nth-child(5) .li-badge','data','/item/LI','row'),field('expiry','Ablauf','td:nth-child(6)','data','/item/Ablauf','row')]}
   };
   function seed(data,mobile=false){
-    return {native:true,columns:12,rowHeight:32,gap:18,tiles:Object.entries(defs).map(([key,def],order)=>L.tile({
+    return {native:true,nativeVersion:2,columns:12,rowHeight:32,gap:18,tiles:Object.entries(defs).map(([key,def],order)=>L.tile({
       id:'standard-'+key,title:def.title,nativeKey:key,order,changed:[],w:mobile?12:def.span,h:3,
-      ...(L.sections[key]?{section:key,cardColumns:mobile?1:['transfers','chances'].includes(key)?3:1,cardHeight:220,cardGap:12,cardColor:'#0b1927',cardOpacity:1}:{}),
+      ...(def.rows?{section:key,cardColumns:mobile?1:['transfers','chances'].includes(key)?3:1,cardHeight:key==='bigBoys'?92:220,cardGap:key==='bigBoys'?8:12,cardColor:'#0b1927',cardOpacity:1}:{}),
       elements:def.fields.map(f=>L.element(f.type,{id:key+'-'+f.key,nativeKey:f.key,label:f.label,scope:f.scope,changed:[],source:f.source,text:f.type==='text'?(f.key==='title'||f.key==='label'?def.title:''):'',x:0,y:0,w:100,h:100,fontSize:14}))
     }))};
+  }
+  function upgrade(design) {
+    for (const mode of ['desktop','mobile']) {
+      const layout = design[mode];
+      if (!layout?.native || layout.nativeVersion >= 2) continue;
+      if (!layout.tiles.some(tile=>tile.nativeKey==='bigBoys')) {
+        const tile = seed(null, mode==='mobile').tiles.find(tile=>tile.nativeKey==='bigBoys');
+        tile.w = Math.min(tile.w,layout.columns);
+        const ordered = [...layout.tiles].sort((a,b)=>a.order-b.order);
+        const index = ordered.findIndex(tile=>tile.nativeKey==='squad');
+        const squad = ordered[index];
+        if (mode==='desktop' && squad?.w===4 && !(squad.changed||[]).includes('w')) squad.w = 2;
+        ordered.splice(index<0?ordered.length:index,0,tile);
+        ordered.forEach((tile,order)=>{tile.order=order;});
+        layout.tiles = ordered;
+      }
+      layout.nativeVersion = 2;
+    }
+    return design;
   }
   function block(doc,def){const n=doc.querySelector(def.selector);return def.parent?n?.closest(def.parent):n;}
   function create(doc,data,send=()=>{}){
@@ -173,5 +193,5 @@ window.KaneNative=(()=>{
     doc.addEventListener('pointerdown',click,true);doc.addEventListener('click',event=>{if(editor&&!event.target.closest('.native-edit-overlay')){event.preventDefault();event.stopPropagation();}},true);win.addEventListener('resize',schedule);
     return {update(next,options={}){layout=next;editor=!!options.editor;selection=options.selection||selection;redraw();},dispose(){disposed=true;layout=null;observer.disconnect();overlay?.remove();while(restore.length)restore.pop()();doc.removeEventListener('pointerdown',click,true);win.removeEventListener('resize',schedule);}};
   }
-  return {defs,seed,create};
+  return {defs,seed,upgrade,create};
 })();

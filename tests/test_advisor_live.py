@@ -11,6 +11,24 @@ from test_ai_advisor import fixture
 
 
 class LiveTests(unittest.TestCase):
+    def test_big_market_players_use_live_values_strictly_above_threshold(self):
+        client = LiveKickbase('PRIVATE_EMAIL', 'PRIVATE_PASSWORD')
+        client.get = Mock(return_value={'it': [
+            {'i': 1, 'mv': 20_000_000, 'prc': 30_000_000},
+            {'i': 2, 'mv': '20000001', 'exs': 600},
+            {'i': 3, 'mv': 30_000_000, 'fn': 'Live', 'ln': 'Name'},
+            {'i': 4, 'mv': 35_000_000, 'ui': 'me'},
+            {'i': 5, 'prc': 50_000_000},
+        ]})
+        client.player_profiles = Mock(return_value={
+            '2': {'fn': 'Profile', 'ln': 'Name', 'mv': 40_000_000},
+        })
+        players = client.big_market_players('league', 'me')
+        client.get.assert_called_once_with('/leagues/league/market')
+        self.assertEqual([(p['id'], p['name'], p['mv']) for p in players], [
+            ('3', 'Live Name', 30_000_000), ('2', 'Profile Name', 20_000_001),
+        ])
+
     def test_profile_form_is_read_newest_first(self):
         profile = {'ph': [{'p': 90}, {'p': 345}, {'p': 214}, {'p': 294}, {'p': 209}]}
         self.assertEqual(recent_form_points(profile), [90.0, 345.0, 214.0])

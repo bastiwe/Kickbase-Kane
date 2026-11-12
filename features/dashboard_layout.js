@@ -58,6 +58,7 @@ window.KaneLayout = (() => {
     const players=ownedPlayers(data.report),market=(data.report.marketPlayers||[]).filter(p=>!p.owned),update=nextUpdate(now);
     let rows=[];
     if(section==='transfers')rows=data.api.transfers?.transfers||[];
+    if(section==='bigBoys')rows=data.api.bigBoys?.players||[];
     if(section==='roster')rows=[...players].sort((a,b)=>(forecast(b)||0)-(forecast(a)||0));
     if(section==='market')rows=[...market].sort((a,b)=>(forecast(b)||0)-(forecast(a)||0));
     if(section==='chances')rows=market.filter(p=>forecast(p)!==null&&forecast(p)>=100000&&stamp(pick(p,'expiresAt','expires_at','expiry','expiration'))<update).sort((a,b)=>forecast(b)-forecast(a));
@@ -225,8 +226,9 @@ window.KaneLayout = (() => {
     const response=await fetch(path,{cache:'no-store',...options});const body=await response.json();
     if(!response.ok)throw new Error(body.error||'Daten konnten nicht geladen werden.');return body;
   }
-  async function liveData(data) {
+  async function liveData(data, includeBigBoys=false) {
     const sources={'managerBudgets':'api/manager-budgets','transfers':'api/recent-transfers','squadHistory':'api/squad-value-history','lineup':'api/current-lineup'};
+    if(includeBigBoys)sources.bigBoys='api/big-market-players';
     const errors=[];await Promise.all(Object.entries(sources).map(async([name,path])=>{try{data.api[name]=await json(path);}catch(error){errors.push(name+': '+error.message);}}));return errors;
   }
   async function boundData(data,layout) {

@@ -12,6 +12,7 @@
   const ownedPlayers = report => (Array.isArray(report.players) ? report.players : []).filter(p => p.owned === true);
   let players = ownedPlayers(data);
   const market = (Array.isArray(data.marketPlayers) ? data.marketPlayers : []).filter(p => !p.owned);
+  const liveApi = {};
   const TRADING_THRESHOLD = 100000;
   const mv = p => number(field(p,'mv','marketValue','market_value')) || 0;
   const prediction = p => number(field(p,'change','predicted_mv_target','prediction1T','predictedChange'));
@@ -54,7 +55,7 @@
     const value=number(field(p,'mv','marketValue','market_value'));
     return '<span class="player-market-value">MW <strong>'+(value===null?'–':euros(value))+'</strong></span>';
   };
-  const playerLabel = (p,includeArt=true) => '<div class="player">'+(includeArt?avatar(p):'')+'<div><div class="name">'+escapeHtml(name(p))+'</div><div class="player-subline"><span class="sub">'+escapeHtml(club(p))+' · '+escapeHtml(position(p))+'</span>'+liBadge(p)+'</div></div></div>';
+  const playerLabel = (p,includeArt=true,includeLi=true) => '<div class="player">'+(includeArt?avatar(p):'')+'<div><div class="name">'+escapeHtml(name(p))+'</div><div class="player-subline"><span class="sub">'+escapeHtml(club(p))+' · '+escapeHtml(position(p))+'</span>'+(includeLi?liBadge(p):'')+'</div></div></div>';
   const timeValue = value => { if (!value) return Infinity; if (typeof value === 'string' && Number.isNaN(Number(value))) { const parsed = Date.parse(value); return Number.isNaN(parsed) ? Infinity : parsed; } const numeric = Number(value); return numeric > 1e12 ? numeric : numeric * 1000; };
   const formatTime = value => { const stamp=timeValue(value); if(!Number.isFinite(stamp))return '–'; return new Date(stamp).toLocaleString('de-DE',{timeZone:'Europe/Berlin',dateStyle:'short',timeStyle:'short'});};
   const relativeTime = value => {
@@ -115,6 +116,37 @@
     if(settings.nativeEditor&&!chosen.length&&(market[0]||players[0]))chosen.push(market[0]||players[0]);
     $('top-chances').innerHTML=chosen.length?chosen.map(p=>'<details class="chance market-history-player" data-player-id="'+escapeHtml(p.id)+'"><summary>'+avatar(p)+'<div class="chance-content"><div class="chance-top">'+playerLabel(p,false)+'<span class="tag">'+escapeHtml(position(p))+'</span></div><div class="chance-change"><span>Erw. MW in 1T</span><strong class="positive">'+forecastText(p)+'</strong></div><div class="chance-details"><span>MW '+euros(mv(p))+'</span><span>Ablauf '+escapeHtml(formatTime(deadline(p)))+'</span></div></div></summary><div class="player-history"><p class="empty">Aufklappen lädt die Tagesänderungen.</p></div></details>').join(''):'<p class="empty">Keine passende Chance vor dem nächsten MW-Update.</p>';
     document.querySelectorAll('.market-history-player').forEach(details=>details.addEventListener('toggle',()=>{if(details.open)loadPlayerHistory(details);}));
+  }
+  function renderBigBoys(offers, error) {
+    const grid = $('big-market-players');
+    const sample = market[0] || players[0];
+    const visible = offers.length || !settings.nativeEditor || !sample ? offers : [sample];
+    grid.innerHTML = visible.length ? visible.map(p =>
+      '<article class="chance big-boy-card" data-player-id="'+escapeHtml(p.id)+'">'+avatar(p)
+      +'<div class="chance-content">'+playerLabel(p,false,false)
+      +'<div class="chance-change"><strong>'+euros(mv(p))+'</strong></div>'
+      +'<div class="chance-details"><span>Ablauf '+escapeHtml(formatTime(deadline(p)))+'</span></div></div></article>'
+    ).join('') : '<p class="empty" role="status">'+(error ? 'Transfermarkt derzeit nicht abrufbar.' : 'Keine Spieler über 20 Mio. € auf dem Markt.')+'</p>';
+  }
+  let loadingBigBoys = false;
+  async function loadBigBoys() {
+    if (loadingBigBoys) return;
+    loadingBigBoys = true;
+    try {
+      const response = await fetch(apiPath('/api/big-market-players'), {cache:'no-store'});
+      if (!response.ok) throw new Error('Transfermarkt nicht verfügbar');
+      const payload = await response.json();
+      if (!Array.isArray(payload.players)) throw new Error('Transfermarktliste fehlt');
+      if (JSON.stringify(liveApi.bigBoys) !== JSON.stringify(payload)) {
+        liveApi.bigBoys = payload;
+        renderBigBoys(payload.players, false);
+      }
+    } catch {
+      delete liveApi.bigBoys;
+      renderBigBoys([], true);
+    } finally {
+      loadingBigBoys = false;
+    }
   }
   const historyCache=new Map();
   const berlinDay=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Berlin'}).format(new Date());
@@ -327,15 +359,16 @@
   $('run-full-report').onclick=()=>startGitHubReport('full',$('run-full-report'));
   $('run-fast-report').onclick=()=>startGitHubReport('fast',$('run-fast-report'));
   $('live-status').textContent=settings.liveMessage||data.generated||'Reportstand geladen';
-  renderForecastStatus();render();renderValueHistory();renderManagerBudgets();renderRecentTransfers();
+  renderForecastStatus();render();renderValueHistory();renderManagerBudgets();renderRecentTransfers();loadBigBoys();
+  if (!settings.preview) setInterval(()=>{if (!document.hidden) loadBigBoys();},60000);
   // Custom designs use exactly the same renderer as the editor preview.
   (async()=>{
     const L=window.KaneLayout, host=$('custom-dashboard'),toggle=$('toggle-custom-layout');
     if(!L||!host||!toggle)return;
     try{
       const channel=window.KANE_PREVIEW;let previewState=channel?await channel.ready:null;
-      let design=previewState?previewState.design:await L.json('api/dashboard-layout');if(!channel&&!design.enabled)return;
-      const source={report:data,api:{}},mobile=matchMedia('(max-width:899px)');let custom=true;
+      let design=window.KaneNative.upgrade(previewState?previewState.design:await L.json('api/dashboard-layout'));if(!channel&&!design.enabled)return;
+      const source={report:data,api:liveApi},mobile=matchMedia('(max-width:899px)');let custom=true;
       let nativeSession=null;
       const layout=()=>design[channel?previewState.mode:mobile.matches?'mobile':'desktop'];
       const paint=()=>{if(!layout())return;const sections=layout().tiles.some(t=>t.section),shell=document.querySelector('.app-shell');

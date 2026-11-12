@@ -18,7 +18,7 @@ from features.player_details import build_details
 
 from kickbase_api.config import BASE_URL, get_cdn_url
 from features.cash_reconstruction import fetch_manager_transfers
-from features.lineup_optimizer import forecast_horizon_from_matchdays, market_context
+from features.lineup_optimizer import forecast_horizon_from_matchdays, market_context, number
 from features.predictions.predictions import normalize_player_status
 
 
@@ -377,6 +377,20 @@ class LiveKickbase:
 
     def lineup(self, league_id):
         return self.get('/leagues/' + quote(str(league_id), safe='') + '/lineup')
+
+    def big_market_players(self, league_id, user_id):
+        market = self.get('/leagues/' + quote(str(league_id), safe='') + '/market')['it']
+        if not isinstance(market, list):
+            raise ValueError('Kickbase lieferte keine Transfermarktliste.')
+        offers = [dict(item) for item in market
+                  if isinstance(item, dict) and item.get('i') and (number(item.get('mv')) or 0) > 20_000_000]
+        profiles = self.player_profiles({item.get('i') for item in offers})
+        for item in offers:
+            profile = profiles.get(str(item['i']), {})
+            item.update({key: profile[key] for key in ('fn', 'ln', 'tn', 'tid', 'pim', 'tim', 'pos')
+                         if not item.get(key) and profile.get(key)})
+        players = market_context(offers, set(), user_id, {}, None, None)
+        return sorted(players, key=lambda player: player['mv'], reverse=True)
 
     def player_market_histories(self, player_ids):
         """Load historical player market values directly from Kickbase, cached for an hour."""

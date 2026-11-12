@@ -186,7 +186,7 @@
   function showSource(){const path=$('source-picker').value,t=selectedTile();$('source-value').textContent=path?(t?.section&&path.startsWith('/item/')?'Platzhalter: '+path.slice(6).replace(/~1/g,'/').replace(/~0/g,'~')+' · Wird je Spielerkachel automatisch ersetzt.':'Pfad: '+path+' · Wert: '+L.format(L.valueAt(t?L.context(data,t):data,path),'auto').slice(0,500)):$('source-picker').options.length?'Eine Datenquelle aus der Liste auswählen.':'Keine passende Quelle im aktuellen Datenstand.';}
   async function refresh(){
     $('refresh-sources').disabled=true;status('Datenquellen werden aktualisiert …');
-    try{data.report=await L.json('api/dashboard-data');const errors=await L.liveData(data);buildCatalog();render();status(errors.length?'Report geladen; einzelne Live-Quellen nicht verfügbar: '+errors.join(' · '):(dirty?'Daten aktualisiert · Entwurf noch nicht gespeichert.':'Datenquellen aktualisiert.'));}
+    try{data.report=await L.json('api/dashboard-data');const errors=await L.liveData(data,true);buildCatalog();render();status(errors.length?'Report geladen; einzelne Live-Quellen nicht verfügbar: '+errors.join(' · '):(dirty?'Daten aktualisiert · Entwurf noch nicht gespeichert.':'Datenquellen aktualisiert.'));}
     catch(error){status(error.message,true);}finally{$('refresh-sources').disabled=false;}
   }
   function gesture(event){
@@ -248,7 +248,7 @@
   $('export-design').onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(design,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='kickbase-dashboard-layout.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
   $('import-design').onclick=()=>$('import-file').click();
   $('import-file').onchange=async()=>{const file=$('import-file').files[0];if(!file)return;try{if(file.size>1_800_000)throw new Error('Layout-Datei ist zu groß.');
-    const imported=await request('api/dashboard-layout/validate',JSON.parse(await file.text()));edit(()=>{imported.revision=design.revision;design=imported;for(const m of ['desktop','mobile'])design[m] ||= L.seed(data,m==='mobile');tileId=null;elementId=null;});status('Layout importiert. Zum Übernehmen speichern.');
+    const imported=await request('api/dashboard-layout/validate',JSON.parse(await file.text()));edit(()=>{imported.revision=design.revision;design=window.KaneNative.upgrade(imported);for(const m of ['desktop','mobile'])design[m] ||= L.seed(data,m==='mobile');tileId=null;elementId=null;});status('Layout importiert. Zum Übernehmen speichern.');
     }catch(error){status('Import fehlgeschlagen: '+error.message,true);}finally{$('import-file').value='';}};
   $('copy-layout').onclick=()=>{if(!confirm('Aktuelles '+(mode==='mobile'?'Mobil':'Desktop')+'-Layout mit der anderen Ansicht ersetzen?'))return;
     edit(()=>{const source=L.clone(design[mode==='mobile'?'desktop':'mobile']);design[mode]=source;tileId=null;elementId=null;});};
@@ -262,7 +262,7 @@
     }catch(error){status(error.message,true);}finally{$('image-file').value='';}};
   $('refresh-sources').onclick=refresh;
   window.addEventListener('beforeunload',event=>{if(dirty){event.preventDefault();event.returnValue='';}});
-  try{design=await L.json('api/dashboard-layout');const fresh=!design.desktop&&!design.mobile;
+  try{design=window.KaneNative.upgrade(await L.json('api/dashboard-layout'));const fresh=!design.desktop&&!design.mobile;
     $('preview-width').value=Math.max(280,Math.min(1480,innerWidth));canvas.style.width=$('preview-width').value+'px';
     const previous=L.clone(design),upgrade=['desktop','mobile'].filter(m=>design[m]&&!design[m].native);
     for(const m of upgrade)design[m]=window.KaneNative.seed(data,m==='mobile');
@@ -270,7 +270,7 @@
     design.desktop ||= L.seed(data);design.mobile ||= L.seed(data,true);buildCatalog();
     tileId=(current().native?current().tiles[0]:current().tiles.find(t=>t.section))?.id||null;render();
     status(upgrade.length?'Original-Standardansicht als Entwurf geladen. Der bisher gespeicherte Stand bleibt bis zum Speichern erhalten und ist über Rückgängig erreichbar.':fresh?'Original-Standardansicht geladen. Alle Hauptkacheln und je eine Spielervorlage mit echten Bildern sind bearbeitbar.':'Gespeichertes Layout der Standardansicht geladen.');
-    const errors=await L.liveData(data);await Promise.all([L.boundData(data,design.desktop),L.boundData(data,design.mobile)]);buildCatalog();properties();sourceOptions();
+    const errors=await L.liveData(data,true);await Promise.all([L.boundData(data,design.desktop),L.boundData(data,design.mobile)]);buildCatalog();properties();sourceOptions();
     if(errors.length)$('source-status').textContent+=' Einige API-Quellen sind momentan nicht verfügbar; der Report bleibt nutzbar.';
   }catch(error){status('Editor konnte nicht geladen werden: '+error.message,true);document.querySelectorAll('button,input,select').forEach(c=>c.disabled=true);}
 })();
