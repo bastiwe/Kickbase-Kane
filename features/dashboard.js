@@ -223,10 +223,12 @@
     $('timing-risks').innerHTML=rows.length?rows.join(''):'<p class="empty">Kein unmittelbarer Handlungsbedarf erkannt.</p>';
     document.querySelectorAll('.risk-player').forEach(details=>details.addEventListener('toggle',()=>{if(details.open)loadPlayerHistory(details);}));
   }
-  async function renderValueHistory(){
+  async function renderValueHistory(history){
     try{
-      const response=await fetch(apiPath('/api/squad-value-history'),{cache:'no-store'});
-      const history=await response.json();
+      if(!history){
+        const response=await fetch(apiPath('/api/squad-value-history'),{cache:'no-store'});
+        history=await response.json();
+      }
       const series=Array.isArray(history.series)?history.series:[];
       $('history-note').textContent=history.note||'';
       if(series.length<2){$('value-chart').innerHTML='<div class="chart-empty">Noch nicht genügend historische Daten verfügbar.</div>';return;}
@@ -265,11 +267,13 @@
     }
     return {metric, limits};
   }
-  async function renderManagerBudgets(){
+  async function renderManagerBudgets(payload){
     try{
-      const response=await fetch(apiPath('/api/manager-budgets'),{cache:'no-store'});
-      if(!response.ok)throw new Error('Abruf fehlgeschlagen');
-      const payload=await response.json();
+      if(!payload){
+        const response=await fetch(apiPath('/api/manager-budgets'),{cache:'no-store'});
+        if(!response.ok)throw new Error('Abruf fehlgeschlagen');
+        payload=await response.json();
+      }
       const managers=Array.isArray(payload.managers)?payload.managers:[];
       $('manager-budget-note').textContent=payload.note||'';
       if(payload.cashFetchedAt||payload.generatedAt){
@@ -290,12 +294,14 @@
       $('manager-budgets').innerHTML='<p class="empty">Managerbudgets derzeit nicht verfügbar.</p>';
     }
   }
-  async function renderRecentTransfers(){
+  async function renderRecentTransfers(payload){
     const container=$('recent-transfers');
     try{
-      const response=await fetch(apiPath('/api/recent-transfers'),{cache:'no-store'});
-      let payload=await response.json();
-      if(!response.ok&&!settings.nativeEditor)throw new Error(payload.error||'Abruf fehlgeschlagen');
+      if(!payload){
+        const response=await fetch(apiPath('/api/recent-transfers'),{cache:'no-store'});
+        payload=await response.json();
+        if(!response.ok&&!settings.nativeEditor)throw new Error(payload.error||'Abruf fehlgeschlagen');
+      }
       if(settings.nativeEditor&&!payload.transfers?.length){const sample=players[0]||market[0];if(sample)payload={transfers:[{playerId:sample.id,playerName:name(sample),image:image(sample),teamImage:teamImage(sample),price:mv(sample),marketValue:mv(sample),overpay:0,from:'Beispiel',to:'Beispiel',transferredAt:Date.now()}]};}
       const transfers=Array.isArray(payload.transfers)?payload.transfers.slice(0,5):[];
       const stamp=new Date(payload.fetchedAt);
@@ -414,18 +420,35 @@
       await L.liveData(source);await Promise.all([design.desktop&&L.boundData(source,design.desktop),design.mobile&&L.boundData(source,design.mobile)]);paint();
       // Refresh visible bindings without disturbing the stored layout.
       let refreshing=false;
-      setInterval(async()=>{if(document.hidden||!custom||refreshing)return;refreshing=true;
-        try{source.report=await L.json('api/dashboard-data');
-          if(layout().native){
-            nativeSession?.update(null);
-            players=ownedPlayers(source.report);
-            market.splice(0,market.length,...(source.report.marketPlayers||[]).filter(p=>!p.owned));
-            Object.assign(data,source.report);
-            source.report=data;
-            renderForecastStatus();render();renderValueHistory();renderManagerBudgets();renderRecentTransfers();
+      setInterval(async()=>{
+        const activeLayout=layout();
+        if(document.hidden||!custom||refreshing||!activeLayout)return;
+        refreshing=true;
+        try{
+          const next={report:await L.json('api/dashboard-data'),api:{}};
+          await Promise.all([L.liveData(next),L.boundData(next,activeLayout)]);
+          for(const key of ['playerDetails','playerMarketHistory']){
+            if(next.api[key])next.api[key]={...source.api[key],...next.api[key]};
           }
-          await L.liveData(source);await L.boundData(source,layout());paint();}
-        catch{/* Keep the last successful data if the add-on is temporarily offline. */}finally{refreshing=false;}
+          Object.assign(source.api,next.api);
+          source.report=next.report;
+          try{
+            if(layout()?.native){
+              // Restore and reapply DOM overrides in the same browser task.
+              nativeSession?.update(null);
+              players=ownedPlayers(next.report);
+              market.splice(0,market.length,...(next.report.marketPlayers||[]).filter(p=>!p.owned));
+              Object.assign(data,next.report);
+              source.report=data;
+              renderForecastStatus();
+              render();
+              if(next.api.squadHistory)renderValueHistory(next.api.squadHistory);
+              if(next.api.managerBudgets)renderManagerBudgets(next.api.managerBudgets);
+              if(next.api.transfers)renderRecentTransfers(next.api.transfers);
+            }
+          }finally{paint();}
+        }catch{/* Keep the last successful data if the add-on is temporarily offline. */}
+        finally{refreshing=false;}
       },60000);
     }catch(error){$('live-status').textContent+=' · Eigenes Layout nicht geladen: '+error.message;}
   })();

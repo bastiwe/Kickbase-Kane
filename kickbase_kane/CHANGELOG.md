@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.101
+
+- Hält das eigene Dashboard-Design beim automatischen Datenabruf sichtbar und übernimmt aktualisierte Daten ohne Rücksprung zur Standardansicht.
+
 ## 0.2.100
 
 - Zeigt in den Managerbudget-Kacheln die aktuelle Kadergröße und erreichte Vereinslimits. Kader, Ligaregeln und Vereinsnamen kommen live aus Kickbase.

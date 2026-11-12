@@ -68,8 +68,45 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
     const stored=await page.evaluate(()=>fetch('api/dashboard-layout').then(r=>r.json()));assert(stored.desktop.native);assert.equal(stored.desktop.tiles.length,11);assert(stored.desktop.tiles.every(t=>!t.record&&!t.collection));assert(stored.desktop.tiles.find(t=>t.nativeKey==='budget').elements.find(e=>e.nativeKey==='value').changed.includes('color'));
     await selectTile('Kaderwert');await value('tile-w',6);await frame().locator('.native-custom-flow').waitFor();assert(await frame().locator('.native-custom-flow .metric-squad').count());await page.locator('#undo').click();await page.waitForFunction(()=>!document.querySelector('#native-editor-frame').contentDocument.querySelector('.native-custom-flow'));await page.locator('#save-design').click();await page.waitForFunction(()=>document.querySelector('#editor-status').textContent.includes('Beide Ansichten gespeichert'));
     fs.mkdirSync('test-output',{recursive:true});await page.screenshot({path:'test-output/native-editor-desktop.png'});
+    await page.addInitScript(()=>{
+      const setInterval=window.setInterval.bind(window);
+      window.dashboardMinuteTimers=[];
+      window.setInterval=(callback,delay,...args)=>{
+        if(delay===60000)window.dashboardMinuteTimers.push(callback);
+        return setInterval(callback,delay,...args);
+      };
+    });
     await page.goto(origin+'/');await page.waitForFunction(()=>getComputedStyle(document.querySelector('#metric-budget')).color==='rgb(255, 221, 68)');
     assert.equal(await page.getByText('Meine Notiz',{exact:true}).count(),2);await page.locator('#toggle-custom-layout').click();assert.equal(await page.getByText('Meine Notiz',{exact:true}).count(),0);await page.locator('#toggle-custom-layout').click();
+    await page.waitForFunction(()=>window.dashboardMinuteTimers.length===2);
+    let releaseBudgetResponse;
+    const budgetResponseReady=new Promise(resolve=>{releaseBudgetResponse=resolve;});
+    let budgetRequests=0;
+    const updateManagerBudgets=async route=>{
+      budgetRequests++;
+      await budgetResponseReady;
+      await route.fulfill({json:{managers:[{name:'Live aktualisiert',cash:12500000}]}});
+    };
+    const updateReport=async route=>{
+      const original=await route.fetch();
+      await route.fulfill({json:{...await original.json(),budget:12345678}});
+    };
+    await page.route('**/api/manager-budgets',updateManagerBudgets);
+    await page.route('**/api/dashboard-data',updateReport);
+    const pendingBudget=page.waitForRequest('**/api/manager-budgets');
+    await page.evaluate(()=>{void window.dashboardMinuteTimers.at(-1)();});
+    try{
+      await pendingBudget;
+      assert.equal(await page.locator('#metric-budget').evaluate(n=>getComputedStyle(n).color),'rgb(255, 221, 68)');
+      assert.match(await page.locator('.metric-squad').innerText(),/Mein Kaderwert/);
+      assert.equal(await page.getByText('Meine Notiz',{exact:true}).count(),2);
+    }finally{releaseBudgetResponse();}
+    await page.getByText('Live aktualisiert',{exact:true}).waitFor();
+    assert.match(await page.locator('#metric-budget').innerText(),/12\.345\.678/);
+    assert.equal(await page.locator('#metric-budget').evaluate(n=>getComputedStyle(n).color),'rgb(255, 221, 68)');
+    assert.equal(budgetRequests,1);
+    await page.unroute('**/api/manager-budgets',updateManagerBudgets);
+    await page.unroute('**/api/dashboard-data',updateReport);
     for(const width of [1480,1280,1024,900,899,768,390,320]){await page.setViewportSize({width,height:900});await page.waitForTimeout(80);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'No overflow at '+width);}
     await context.route(origin+'/ingress/test/**',async r=>{const u=new URL(r.request().url());const response=await r.fetch({url:origin+u.pathname.replace('/ingress/test','')+u.search});await r.fulfill({response});});
     await page.goto(origin+'/ingress/test/editor');await frame().locator('.native-block-grip').nth(10).waitFor();await page.locator('#mode-mobile').click();await frame().locator('.metric-budget').waitFor();assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
