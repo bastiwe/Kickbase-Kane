@@ -290,6 +290,36 @@ class LeanReportTests(unittest.TestCase):
             self.assertIn('Spieler3', html)
             self.assertNotIn('"expectedChange": 0', html)
 
+    def test_overpay_email_contains_opponent_summary_and_interactive_report(self):
+        from overpay_forecast import send_overpay_mail
+
+        budgets = pd.DataFrame([
+            {'User': 'Eigener Manager', 'Avg Overpay': 100000},
+            {'User': 'Gegner <A>', 'Avg Overpay': -50000},
+        ])
+        budgets.attrs['own_user'] = 'Eigener Manager'
+        budgets.attrs['overpay_profiles'] = {
+            'Gegner <A>': {'samples': 7, 'archetype': 'Marktwertnah'},
+        }
+        with tempfile.TemporaryDirectory() as folder, \
+                patch.dict(os.environ, {'EMAIL_USER': 'report@example.test', 'EMAIL_PASS': 'test'}), \
+                patch('overpay_forecast.deliver_report_message') as deliver:
+            path = write_overpay_tool(None, budgets, Path(folder) / 'overpay_forecast.html')
+            send_overpay_mail(budgets, path, 'token')
+
+            deliver.assert_called_once()
+            message = deliver.call_args.args[0]
+            self.assertEqual(message['To'], 'report@example.test')
+            plain = message.get_body(preferencelist=('plain',)).get_content()
+            self.assertIn('Gegner <A> | -50.000 € | 7 | Marktwertnah', plain)
+            self.assertNotIn('Eigener Manager', plain)
+            html = message.get_body(preferencelist=('html',)).get_content()
+            self.assertIn('Gegner &lt;A&gt;', html)
+            self.assertNotIn('Eigener Manager', html)
+            attachment, = message.iter_attachments()
+            self.assertEqual(attachment.get_filename(), 'overpay_forecast.html')
+            self.assertEqual(attachment.get_payload(decode=True), path.read_bytes())
+
 
 if __name__ == '__main__':
     unittest.main()

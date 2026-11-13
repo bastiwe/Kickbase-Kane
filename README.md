@@ -232,7 +232,9 @@ Overpay separat starten:
 
 1. GitHub: **Actions > Run Overpay Forecast > Run workflow**. Anschließend das
    Artefakt **overpay-forecast-tool** herunterladen und `overpay_forecast.html`
-   im Browser oeffnen. Der Workflow laeuft nur manuell und versendet keine Mail.
+   im Browser oeffnen. Bei jedem manuellen Lauf mit `EMAIL_USER` und `EMAIL_PASS`
+   schickt der Workflow zusätzlich eine Zusammenfassung der Gegnerprofile an
+   `EMAIL_USER` und hängt `overpay_forecast.html` an.
 2. Lokal: `Start-Overpay.cmd` doppelklicken oder `python overpay_forecast.py --open`
    ausfuehren. Zugangsdaten stehen wie beim Optimierer in `.env`: `KICK_USER`
    und `KICK_PASS`. Es werden keine Gebote oder Transfers ausgefuehrt.

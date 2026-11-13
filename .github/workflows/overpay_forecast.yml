@@ -33,12 +33,15 @@ jobs:
             ${{ runner.os }}-kickbase-1t-forecast-
       - name: Install dependencies
         run: python -m pip install -r requirements-optimizer.txt
-      - name: Generate overpay forecast
+      - name: Generate and email overpay forecast
         env:
           KICK_USER: ${{ secrets.KICK_USER }}
           KICK_PASS: ${{ secrets.KICK_PASS }}
-        run: python -u overpay_forecast.py
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+        run: python -u overpay_forecast.py --email
       - uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() && hashFiles('overpay_forecast.html') != '' }}
         with:
           name: overpay-forecast-tool
           path: overpay_forecast.html

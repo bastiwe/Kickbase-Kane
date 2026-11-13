@@ -2,6 +2,8 @@
 
 import argparse
 from datetime import datetime
+from email.message import EmailMessage
+from html import escape
 import os
 from pathlib import Path
 import webbrowser
@@ -12,7 +14,8 @@ import pandas as pd
 from dotenv import load_dotenv
 
 from features.budgets import calc_manager_budgets
-from features.overpay_tool import write_overpay_tool
+from features.fast_notifier import deliver_report_message
+from features.overpay_tool import build_manager_payload, html_signed_money, write_overpay_tool
 from features.predictions.predictions import (
     add_player_quality_signals, enrich_market_decisions_with_context,
     join_current_market, join_current_squad,
@@ -20,7 +23,7 @@ from features.predictions.predictions import (
 from features.predictions.snapshot import read_prediction_snapshot, market_cycle
 from kickbase_api.league import get_league_id
 from kickbase_api.config import BASE_URL, get_json_with_token, get_cdn_url
-from kickbase_api.user import login, get_user_id
+from kickbase_api.user import get_user_id, get_username, login
 from startelf_optimizer import load_cached_players
 
 
@@ -47,9 +50,49 @@ def cached_predictions(history, latest, snapshot, season_start, now=None):
     return result
 
 
+def send_overpay_mail(budgets, path, token):
+    address = os.getenv('EMAIL_USER')
+    if not address or not os.getenv('EMAIL_PASS'):
+        print('Overpay-Mail übersprungen. EMAIL_USER oder EMAIL_PASS fehlt.')
+        return
+
+    own_user = budgets.attrs.get('own_user') or get_username(token)
+    summary = [
+        (manager['name'], html_signed_money(manager['avgOverpay']),
+         str(int(manager['samples'] or 0)), manager['archetype'] or 'Keine Daten')
+        for manager in build_manager_payload(budgets)
+        if manager['name'] != own_user
+    ]
+    heading = 'Overpay-Verhalten der anderen Manager'
+    note = 'Der Overpay ist die Differenz zwischen Kaufpreis und Marktwert zum Transferzeitpunkt.'
+    attachment_note = 'Den interaktiven Forecast findest du im HTML-Anhang.'
+    columns = ('Manager', 'Ø Overpay', 'Ausgewertete Käufe', 'Bietverhalten')
+    empty_note = 'Für die anderen Manager sind keine Daten verfügbar.'
+
+    message = EmailMessage()
+    message['Subject'] = 'Kickbase – Overpay-Verhalten der anderen Manager'
+    message['From'] = address
+    message['To'] = address
+    plain_summary = '\n'.join(' | '.join(row) for row in [columns, *summary]) if summary else empty_note
+    message.set_content(f'{heading}\n\n{note}\n\n{plain_summary}\n\n{attachment_note}')
+    headers = ''.join(f'<th scope="col" align="left">{column}</th>' for column in columns)
+    rows = ''.join('<tr>' + ''.join(f'<td>{escape(value)}</td>' for value in row) + '</tr>' for row in summary)
+    table = f'<table cellpadding="6"><thead><tr>{headers}</tr></thead><tbody>{rows}</tbody></table>'
+    html_summary = table if summary else f'<p>{empty_note}</p>'
+    message.add_alternative(
+        f'<html><body><h2>{heading}</h2><p>{note}</p>'
+        f'{html_summary}<p>{attachment_note}</p></body></html>',
+        subtype='html',
+    )
+    message.add_attachment(path.read_bytes(), maintype='text', subtype='html', filename=path.name)
+    deliver_report_message(message)
+    print('Overpay-Mail versendet.')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--open', action='store_true', help='HTML nach Erstellung im Browser oeffnen')
+    parser.add_argument('--email', action='store_true', help='Overpay-Analyse per E-Mail versenden')
     args = parser.parse_args()
     load_dotenv()
     username, password = os.getenv('KICK_USER'), os.getenv('KICK_PASS')
@@ -78,7 +121,9 @@ def main():
         if not availability.get(row['player_id'], False):
             market.loc[index, ['predicted_mv_target', 'max_bid', 'bid_gap']] = np.nan
     path = write_overpay_tool(market, budgets)
-    print('Keine Modelle trainiert, keine Mail versendet. Fehlende/veraltete Prognosen erscheinen als unbekannt.')
+    print('Keine Modelle trainiert. Fehlende/veraltete Prognosen erscheinen als unbekannt.')
+    if args.email:
+        send_overpay_mail(budgets, path, token)
     if args.open:
         webbrowser.open(Path(path).resolve().as_uri())
 
