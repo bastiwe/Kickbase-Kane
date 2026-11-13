@@ -1170,16 +1170,21 @@ def join_current_squad(token, league_id, today_df_results, current_user_id=None,
 
     # Keep every current squad player. Some newly bought players can be missing from
     # today's prediction rows or use a player id that does not match our historical data.
+    predictions = today_df_results.assign(
+        player_join_id=pd.to_numeric(today_df_results["player_id"], errors="coerce")
+    ).dropna(subset=["player_join_id"])
+    squad_df["player_join_id"] = pd.to_numeric(
+        squad_df.get("i", pd.Series(index=squad_df.index, dtype="object")), errors="coerce"
+    )
     squad_df = (
         pd.merge(
             squad_df,
-            today_df_results,
-            left_on="i",
-            right_on="player_id",
+            predictions,
+            on="player_join_id",
             how="left",
             suffixes=("_squad", ""),
         )
-        .drop(columns=["i"], errors="ignore")
+        .drop(columns=["i", "player_join_id"], errors="ignore")
     )
     # Use the same live squad market value that supplied mvgl and acquisition cost.
     if 'mv_squad' in squad_df:
@@ -1569,10 +1574,14 @@ def join_current_market(token, league_id, today_df_results, current_user_id=None
         own_squad_mask = market_df["id"].astype(str).isin(own_squad_ids) if "id" in market_df else pd.Series(False, index=market_df.index)
         market_df = market_df[~(own_listing_mask | own_squad_mask)].copy()
 
-    # Join market_df ("id") with today_df ("player_id")
+    # Kickbase can return player IDs as strings, while predictions use numeric IDs.
+    predictions = today_df_results.assign(
+        player_join_id=pd.to_numeric(today_df_results["player_id"], errors="coerce")
+    ).dropna(subset=["player_join_id"])
+    market_df["player_join_id"] = pd.to_numeric(market_df["id"], errors="coerce")
     bid_df = (
-        pd.merge(today_df_results, market_df, left_on="player_id", right_on="id")
-        .drop(columns=["id"])
+        pd.merge(predictions, market_df, on="player_join_id")
+        .drop(columns=["id", "player_join_id"])
     )
     if "market_mv" in bid_df:
         bid_df["mv"] = pd.to_numeric(bid_df["market_mv"], errors="coerce").combine_first(

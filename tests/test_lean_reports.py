@@ -263,8 +263,8 @@ class LeanReportTests(unittest.TestCase):
     def test_standalone_overpay_runs_without_forecasts_or_training(self):
         history = players().drop(columns=['mv_change_yesterday']).assign(
             date='2026-09-09', md='2026-08-30', p=100, team_id=1)
-        market = [{'id': 3, 'has_open_bid': True, 'is_own_listing': False, 'exp': 3600, 'player_status': 0}]
-        squad = {'it': [{'i': 0, 'mv': 10000000, 'fn': 'Test', 'ln': 'Spieler0', 'pos': 1, 'tn': 'Team0'}]}
+        market = [{'id': '3', 'has_open_bid': True, 'is_own_listing': False, 'exp': 3600, 'player_status': 0}]
+        squad = {'it': [{'i': '0', 'mv': 10000000, 'fn': 'Test', 'ln': 'Spieler0', 'pos': 1, 'tn': 'Team0'}]}
         budgets = pd.DataFrame([{'User': 'Opponent', 'Budget': 80000000, 'Available Budget': 113000000, 'Team Value': 100000000, 'Avg Overpay': 50000}])
         with tempfile.TemporaryDirectory() as folder, ExitStack() as stack:
             output = Path(folder) / 'overpay.html'
@@ -276,7 +276,7 @@ class LeanReportTests(unittest.TestCase):
                 'overpay_forecast.read_prediction_snapshot': None,
                 'overpay_forecast.login': 'token', 'overpay_forecast.get_league_id': 'league',
                 'overpay_forecast.get_user_id': 'me',
-                'overpay_forecast.get_json_with_token': {'it': [{'i': 3, 'mv': 10000000}]},
+                'overpay_forecast.get_json_with_token': {'it': [{'i': '3', 'mv': 10000000}]},
                 'overpay_forecast.calc_manager_budgets': budgets,
                 'features.predictions.predictions.get_league_players_on_market': market,
                 'features.predictions.predictions.get_players_in_squad': squad,
