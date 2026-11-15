@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.102
+
+- Ermöglicht im Startelfplaner die Simulation von Mitmanager-Aufstellungen mit aktuellem Kader und geschätztem Kontostand. Aufstellungen, Käufe und Verkäufe werden nur im aktuellen Tab simuliert.
+
 ## 0.2.101
 
 - Hält das eigene Dashboard-Design beim automatischen Datenabruf sichtbar und übernimmt aktualisierte Daten ohne Rücksprung zur Standardansicht.

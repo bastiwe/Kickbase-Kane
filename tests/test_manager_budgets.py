@@ -3,10 +3,10 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from zipfile import ZipFile
 
-from advisor_server import add_live_manager_rosters, read_manager_budgets
+from advisor_server import AdvisorHandler, add_live_manager_rosters, create_server, read_manager_budgets
 from features.github_forecast_sync import sync_latest_manager_audit
 
 
@@ -23,6 +23,40 @@ class Response:
 
 
 class ManagerBudgetTests(unittest.TestCase):
+    def test_planner_uses_estimate_for_selected_manager_and_rejects_its_save(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            budget_file = root / 'manager-history-output' / 'latest.json'
+            budget_file.parent.mkdir()
+            report = {'league_id': 'league', 'manager_budgets': [
+                {'id': 'other', 'name': 'Alter Name', 'cash': -2_000_000,
+                 'squadValue': 100_000_000, 'buyingPower': 31_000_000},
+            ]}
+            budget_file.write_text(json.dumps(report))
+            with create_server(0, {'league': 'league', 'user': 'own', 'players': []}) as server:
+                server.kickbase = Mock()
+                server.kickbase.league_managers.return_value = [
+                    {'id': 'own', 'name': 'Ich'}, {'id': 'other', 'name': 'Mitmanager'},
+                ]
+                server.kickbase.manager_squad.return_value = ([{'id': '101'}], {'players': ['101']})
+                handler = AdvisorHandler.__new__(AdvisorHandler)
+                handler.server = server
+                handler.reply = Mock()
+                with (patch('advisor_server.DATA_ROOT', root),
+                      patch('advisor_server.read_prediction_snapshot', return_value=None)):
+                    handler.planner_managers(None)
+                    handler.reply.assert_called_with(200, {'managers': [{'id': 'other', 'name': 'Mitmanager'}]})
+                    handler.planner_managers('other')
+                    self.assertEqual(handler.reply.call_args.args[1]['budget'], -2_000_000)
+                    self.assertTrue(handler.is_planner_player('101', server.report))
+                    self.assertFalse(handler.is_planner_player('101', {**server.report, 'league': 'another'}))
+                    budget_file.write_text(json.dumps({**report, 'league_id': 'another'}))
+                    handler.planner_managers('other')
+                    self.assertIsNone(handler.reply.call_args.args[1]['budget'])
+                with self.assertRaisesRegex(ValueError, 'nur simuliert'):
+                    handler.apply_lineup({'state': {'manager': 'other', 'selection': []}})
+                server.kickbase.apply_lineup.assert_not_called()
+
     def test_live_members_merge_by_id_or_legacy_name_even_without_a_budget(self):
         budgets = {'note': '', 'managers': [
             {'id': 'a', 'name': 'Alter Name', 'cash': 1, 'buyingPower': 10},

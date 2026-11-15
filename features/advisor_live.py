@@ -19,7 +19,7 @@ from features.player_details import build_details
 
 from kickbase_api.config import BASE_URL, get_cdn_url
 from features.cash_reconstruction import fetch_manager_transfers
-from features.lineup_optimizer import forecast_horizon_from_matchdays, market_context, number
+from features.lineup_optimizer import forecast_horizon_from_matchdays, market_context, number, player_key
 from features.predictions.predictions import normalize_player_status
 
 
@@ -393,11 +393,49 @@ class LiveKickbase:
         players = market_context(offers, set(), user_id, {}, None, None)
         return sorted(players, key=lambda player: player['mv'], reverse=True)
 
-    def manager_rosters(self, league_id):
+    def league_managers(self, league_id):
         base = '/leagues/' + quote(str(league_id), safe='')
         managers = self.get(base + '/ranking')['us']
         if not isinstance(managers, list):
             raise ValueError('Kickbase lieferte keine Managerliste.')
+        return [{'id': str(manager['i']), 'name': manager['n']} for manager in managers]
+
+    def manager_squad(self, league_id, manager_id):
+        base = '/leagues/' + quote(str(league_id), safe='')
+        items = self.get(base + '/managers/' + quote(str(manager_id), safe='') + '/squad')['it']
+        if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
+            raise ValueError('Kickbase lieferte keinen gültigen Kader.')
+        squad = [dict(item, i=player_key(item.get('pi') or item['i'])) for item in items]
+        profiles = self.player_profiles([item['i'] for item in squad])
+        metadata = local_player_metadata(item['i'] for item in squad)
+        enriched = []
+        for item in squad:
+            player_id = item['i']
+            profile = profiles.get(player_id, {})
+            cached = metadata.get(player_id, {})
+            # Listed players remain part of this manager's squad.
+            item = {key: value for key, value in item.items()
+                    if key not in ('isOwn', 'is_own', 'own', 'mine', 'isMine', 'selling')}
+            enriched.append({**item, 'ln': item.get('pn') or item.get('ln'), **{
+                key: value for key, value in profile.items()
+                if key in ('fn', 'ln', 'pos', 'tid', 'tn', 'tim', 'pim', 'st', 'mv', 'ap', 'tp', 'ph')
+                and value not in (None, '')
+            }, 'image_url': cached.get('image_url'), 'team_image_url': cached.get('team_image_url')})
+        by_id = {item['i']: item for item in enriched}
+        players = market_context(enriched, set(), None, metadata, None, None)
+        for player in players:
+            item = by_id[player['id']]
+            recent = recent_form_points(item)
+            player.update(owned=True, season=number(item.get('ap')), recentForm=recent,
+                          l3=sum(recent) / len(recent) if recent else None,
+                          totalPoints=number(item.get('tp')))
+        lineup = normalize_lineup({'it': [dict(by_id[p['id']], pos=p['position']) for p in players
+                                          if p['position'] in (1, 2, 3, 4)]})
+        return players, lineup
+
+    def manager_rosters(self, league_id):
+        base = '/leagues/' + quote(str(league_id), safe='')
+        managers = self.league_managers(league_id)
         if not managers:
             return []
 
@@ -418,9 +456,9 @@ class LiveKickbase:
                      if isinstance(row, dict) and row.get('tid') is not None and row.get('tn')}
 
         def roster(manager):
-            manager_id = str(manager['i'])
+            manager_id = manager['id']
             squad = optional(base + '/managers/' + quote(manager_id, safe='') + '/squad').get('it')
-            row = {'id': manager_id, 'name': manager['n'], 'squadSize': None, 'clubLimits': None,
+            row = {**manager, 'squadSize': None, 'clubLimits': None,
                    'squadLimit': squad_limit if type(squad_limit) is int and squad_limit > 0 else None}
             if not isinstance(squad, list) or not all(isinstance(player, dict) for player in squad):
                 return row

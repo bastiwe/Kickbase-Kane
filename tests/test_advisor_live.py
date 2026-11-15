@@ -11,6 +11,22 @@ from test_ai_advisor import fixture
 
 
 class LiveTests(unittest.TestCase):
+    def test_manager_squad_keeps_listed_players_and_uses_live_lineup_slots(self):
+        client = LiveKickbase('PRIVATE_EMAIL', 'PRIVATE_PASSWORD')
+        client.get = Mock(return_value={'it': [
+            {'pi': '101', 'pn': 'Torwart', 'lo': 0, 'pos': 1, 'mv': 5_000_000},
+            {'pi': '102', 'pn': 'Verteidiger', 'lo': 2, 'pos': '2', 'selling': True},
+            {'pi': '103', 'pn': 'Bankspieler', 'lo': 11, 'pos': 3, 'ap': 70},
+        ]})
+        client.player_profiles = Mock(return_value={'102': {'ap': 125, 'mv': 8_000_000}})
+        with patch('features.advisor_live.local_player_metadata', return_value={}):
+            players, lineup = client.manager_squad('league', 'manager')
+        client.get.assert_called_once_with('/leagues/league/managers/manager/squad')
+        self.assertEqual([(p['id'], p['name'], p['season']) for p in players],
+                         [('101', 'Torwart', None), ('102', 'Verteidiger', 125), ('103', 'Bankspieler', 70)])
+        self.assertTrue(all(p['owned'] for p in players))
+        self.assertEqual(lineup['slots'], {'0': '101', '2': '102'})
+
     def test_manager_rosters_count_current_squad_and_use_live_league_limits(self):
         client = LiveKickbase('PRIVATE_EMAIL', 'PRIVATE_PASSWORD')
         responses = {

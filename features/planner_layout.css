@@ -8,6 +8,11 @@
 .deficit label{grid-column:auto}
 .deficit small{grid-column:2/-1}
 .deficit input,.deficit button{min-height:34px;padding:6px 8px}
+.manager-controls{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;margin:4px 0 8px;font-size:13px}
+.manager-controls select{max-width:100%;min-width:min(160px,100%);min-height:34px;padding:6px 8px}
+.manager-controls .sub{margin:0;overflow-wrap:anywhere}
+.forms .form-unknown{--form-color:#9fb4ab}
+#apply[hidden],#deficit-form[hidden]{display:none}
 
 @media(min-width:900px){
   .wrap{max-width:1600px;padding:8px 16px 32px}

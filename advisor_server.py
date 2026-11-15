@@ -33,14 +33,18 @@ DATA_ROOT = Path(os.getenv('KICKBASE_DATA_DIR', APP_ROOT)).resolve()
 MAX_BODY = 2_000_000
 
 
-def read_manager_budgets(path, own_cash=None, own_name=None, cash_fetched_at=None):
+def read_manager_budgets(path, own_cash=None, own_name=None, cash_fetched_at=None, league_id=None):
     """Return the display-safe budget summary produced by the full report."""
     try:
         payload = json.loads(Path(path).read_text(encoding='utf-8'))
     except (OSError, ValueError, TypeError):
         return {'managers': [], 'note': 'Noch kein Managerbudget aus einem Vollreport verfügbar.'}
+    if not isinstance(payload, dict) or not isinstance(payload.get('manager_budgets'), list):
+        return {'managers': [], 'note': 'Noch kein Managerbudget aus einem Vollreport verfügbar.'}
+    if league_id is not None and str(payload.get('league_id') or league_id) != str(league_id):
+        return {'managers': [], 'note': 'Noch kein Managerbudget für diese Liga verfügbar.'}
     rows = []
-    for item in payload.get('manager_budgets', []):
+    for item in payload['manager_budgets']:
         if not isinstance(item, dict):
             continue
         try:
@@ -138,6 +142,7 @@ class AdvisorServer(ThreadingHTTPServer):
         self.request_lock = threading.Lock()
         self.layout_path = DATA_ROOT / '.advisor-dashboard-layout.json'
         self.kickbase = None
+        self.planner_roster_ids = {}
         self.live_matchday = LiveMatchday(lambda: self.kickbase,
                                          DATA_ROOT / 'manager_history.sqlite3',
                                          os.getenv('KICK_LEAGUE_START_DATE', '2026-08-15'))
@@ -226,6 +231,43 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             # the per-page CSRF token below.
             return True
         return self.headers.get('Host') == f'127.0.0.1:{self.server.server_port}'
+
+    def planner_managers(self, manager_id):
+        with self.server.lock:
+            client, report = self.server.kickbase, self.server.report
+        league_id = report.get('league')
+        own_id = report.get('user')
+        if not client or not league_id or league_id == 'local' or not own_id or own_id == 'local':
+            self.reply(409, {'error': 'Für die Mitmanager-Simulation wird eine aktive Kickbase-Liga benötigt.'})
+            return
+        members = client.league_managers(league_id)
+        managers = [manager for manager in members if manager['id'] != str(own_id)]
+        if manager_id is None:
+            self.reply(200, {'managers': managers})
+            return
+        manager = next((row for row in managers if row['id'] == manager_id), None)
+        if manager is None:
+            self.reply(404, {'error': 'Mitmanager ist in dieser Liga nicht verfügbar.'})
+            return
+        budgets = read_manager_budgets(DATA_ROOT / 'manager-history-output' / 'latest.json',
+                                       league_id=league_id)
+        estimate = next(row for row in add_live_manager_rosters(budgets, members)['managers']
+                        if row['id'] == manager_id)
+        budget = None if estimate.get('basis', '').startswith('API') else estimate.get('cash')
+        players, lineup = client.manager_squad(league_id, manager_id)
+        snapshot = read_prediction_snapshot(DATA_ROOT / 'prediction_snapshot_1t.json')
+        if snapshot:
+            for player in players:
+                player['change'] = snapshot['predictions'].get(player['id'])
+        with self.server.lock:
+            self.server.planner_roster_ids[(league_id, own_id, manager_id)] = {p['id'] for p in players}
+        self.reply(200, {'players': players, 'lineup': lineup, 'budget': budget,
+                         'generatedAt': budgets.get('generatedAt')})
+
+    def is_planner_player(self, player_id, report):
+        scope = (report.get('league'), report.get('user'))
+        return any(key[:2] == scope and player_id in ids
+                   for key, ids in self.server.planner_roster_ids.items())
 
     def do_GET(self):
         if not self.valid_host():
@@ -339,6 +381,12 @@ class AdvisorHandler(BaseHTTPRequestHandler):
         elif path == '/api/dashboard-data':
             with self.server.lock:
                 self.reply(200, self.server.report)
+        elif path == '/api/planner-managers':
+            try:
+                self.planner_managers(parse_qs(urlsplit(self.path).query).get('manager', [None])[0])
+            except (requests.RequestException, RuntimeError, ValueError, KeyError, TypeError) as exc:
+                self.server.log_event('ERROR Mitmanager-Simulation: ' + type(exc).__name__)
+                self.reply(502, {'error': 'Mitmanager-Daten derzeit nicht abrufbar. Bitte erneut versuchen.'})
         elif path in ('/dashboard.js', '/dashboard.css', '/dashboard_layout.js', '/dashboard_editor.js', '/dashboard_editor.css', '/dashboard_preview.js', '/dashboard_native.js', '/planner_details.js', '/planner_details.css', '/planner_layout.css', '/live_matchday.js', '/live_matchday.css'):
             name = path.lstrip('/')
             content_type = 'text/javascript; charset=utf-8' if name.endswith('.js') else 'text/css; charset=utf-8'
@@ -347,10 +395,12 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             player_id = path.rsplit('/', 1)[-1]
             with self.server.lock:
                 client = self.server.kickbase
-                known = {str(p['id']) for p in self.server.report['players'] + self.server.report.get('marketPlayers', [])}
+                report = self.server.report
+                known = (any(str(p['id']) == player_id for p in report['players'] + report.get('marketPlayers', []))
+                         or self.is_planner_player(player_id, report))
             if not client:
                 self.reply(409, {'error': 'Kickbase-Livezugriff ist nicht aktiviert.'})
-            elif player_id not in known:
+            elif not known:
                 self.reply(404, {'error': 'Spieler nicht im aktuellen Kader oder Markt.'})
             else:
                 try:
@@ -369,14 +419,12 @@ class AdvisorHandler(BaseHTTPRequestHandler):
                 return
             with self.server.lock:
                 client = self.server.kickbase
-                known = {
-                    str(p['id']) for p in (
-                        self.server.report.get('players', []) + self.server.report.get('marketPlayers', [])
-                    )
-                }
+                report = self.server.report
+                known = (any(str(p['id']) == player_id for p in report['players'] + report.get('marketPlayers', []))
+                         or self.is_planner_player(player_id, report))
             if not client:
                 self.reply(409, {'error': 'Kickbase-Livezugriff ist nicht aktiviert.'})
-            elif player_id not in known:
+            elif not known:
                 self.reply(404, {'error': 'Spieler nicht im aktuellen Kader oder Markt.'})
             else:
                 try:
@@ -626,6 +674,8 @@ class AdvisorHandler(BaseHTTPRequestHandler):
             raise ValueError('Ungültige Aufstellung.')
         with self.server.lock:
             kickbase, report = self.server.kickbase, self.server.report
+        if 'manager' in state and str(state['manager']) != str(report.get('user')):
+            raise ValueError('Mitmanager-Aufstellungen können nur simuliert werden.')
         if not kickbase:
             raise RuntimeError('Kickbase-Livezugriff ist nicht aktiviert.')
         selected = [str(player_id) for player_id in state['selection'] if player_id]
