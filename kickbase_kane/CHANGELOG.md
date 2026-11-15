@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.103
+
+- Zeigt im Startelfplaner bei allen Managern dieselben Transfermarktangebote. Spieler im jeweiligen Kader und bereits eingeplante Käufe bleiben sichtbar und sind für weitere Käufe gesperrt.
+
 ## 0.2.102
 
 - Ermöglicht im Startelfplaner die Simulation von Mitmanager-Aufstellungen mit aktuellem Kader und geschätztem Kontostand. Aufstellungen, Käufe und Verkäufe werden nur im aktuellen Tab simuliert.
